@@ -15,55 +15,84 @@ import torrentService from "./services/torrentService.js";
 const app = express();
 app.use(cors());
 
-// Create WebTorrent client
-const torrentClient = new WebTorrent();
+// Create a single WebTorrent client instance
+const torrentClient = new WebTorrent({
+  maxConns: config.torrent.maxConnections,
+  downloadLimit: config.torrent.downloadLimit,
+  uploadLimit: config.torrent.uploadLimit,
+});
+
+// Set the WebTorrent client in the torrent service
+torrentService.client = torrentClient;
 
 // Streaming server routes
 app.get("/stream/:mediaId", async (req, res) => {
   try {
     const { mediaId } = req.params;
-    const { quality } = req.query;
     const range = req.headers.range;
 
-    const mediaInfo = await mediaService.getMediaInfo(mediaId);
-    if (!mediaInfo) {
-      return res.status(404).send("Media not found");
+    // Check if it's a local file first
+    const localPath = path.join(config.media.localPath, mediaId);
+    try {
+      await fs.promises.access(localPath);
+      // Handle local file streaming
+      const stat = await fs.promises.stat(localPath);
+      if (!range) {
+        res.writeHead(200, {
+          "Content-Length": stat.size,
+          "Content-Type": "video/mp4",
+        });
+        fs.createReadStream(localPath).pipe(res);
+        return;
+      }
+
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+      res.writeHead(206, {
+        "Content-Range": `bytes ${start}-${end}/${stat.size}`,
+        "Accept-Ranges": "bytes",
+        "Content-Length": end - start + 1,
+        "Content-Type": "video/mp4",
+      });
+      fs.createReadStream(localPath, { start, end }).pipe(res);
+      return;
+    } catch (err) {
+      logger.debug(`Local file not found for ${mediaId}, trying torrent`);
     }
 
-    // Get the appropriate file path based on quality
-    let filePath = mediaInfo.path;
-    if (quality) {
-      const qualityPath = await mediaService.getQualityPath(mediaId, quality);
-      if (qualityPath) {
-        filePath = qualityPath;
-      } else {
-        logger.warn(`Quality ${quality} not found for ${mediaId}, using default`);
-      }
+    // If not local, try to get the torrent stream
+    const stream = await torrentService.getTorrentStream(mediaId);
+    if (!stream) {
+      throw new Error("Stream not found");
     }
+
+    const { file, createStream } = stream;
 
     if (!range) {
-      return res.status(400).send("Requires Range header");
+      res.writeHead(200, {
+        "Content-Length": file.length,
+        "Content-Type": "video/mp4",
+      });
+      createStream(0, file.length - 1).pipe(res);
+      return;
     }
 
-    const videoSize = await mediaService.getFileSize(filePath);
-    const CHUNK_SIZE = 10 ** 6; // 1MB
-    const start = Number(range.replace(/\D/g, ""));
-    const end = Math.min(start + CHUNK_SIZE, videoSize - 1);
+    const parts = range.replace(/bytes=/, "").split("-");
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : file.length - 1;
 
-    const contentLength = end - start + 1;
-    const headers = {
-      "Content-Range": `bytes ${start}-${end}/${videoSize}`,
+    res.writeHead(206, {
+      "Content-Range": `bytes ${start}-${end}/${file.length}`,
       "Accept-Ranges": "bytes",
-      "Content-Length": contentLength,
+      "Content-Length": end - start + 1,
       "Content-Type": "video/mp4",
-    };
+    });
 
-    res.writeHead(206, headers);
-    const videoStream = await mediaService.createReadStream(filePath, start, end);
-    videoStream.pipe(res);
+    createStream(start, end).pipe(res);
   } catch (error) {
-    logger.error("Stream error:", error);
-    res.status(500).send("Internal Server Error");
+    logger.error("Error streaming media:", error);
+    res.status(500).json({ error: "Error streaming media" });
   }
 });
 
@@ -106,8 +135,6 @@ app.get("/torrent/stream", async (req, res) => {
     // Handle client disconnect
     res.on("close", () => {
       stream.destroy();
-      // Don't destroy the torrent immediately as other clients might be streaming
-      // The torrent will be destroyed when all clients disconnect
     });
 
     // Handle stream errors
@@ -117,7 +144,6 @@ app.get("/torrent/stream", async (req, res) => {
         res.status(500).send("Stream error");
       }
     });
-
   } catch (error) {
     logger.error("Torrent stream error:", error);
     if (!res.headersSent) {
@@ -181,11 +207,39 @@ app.post("/torrent/stop/:infoHash", async (req, res) => {
   }
 });
 
-// Start streaming server
-const streamingPort = config.server.port;
-app.listen(streamingPort, () => {
-  logger.info(`Streaming server running on port ${streamingPort}`);
-});
+// Initialize servers
+const startServers = async () => {
+  try {
+    // Create temp directory if it doesn't exist
+    if (!fs.existsSync(config.media.tempPath)) {
+      fs.mkdirSync(config.media.tempPath);
+    }
 
-// Start addon server
-serveAddon(config.server.addonPort);
+    // Create media directory if it doesn't exist
+    if (!fs.existsSync(config.media.libraryPath)) {
+      fs.mkdirSync(config.media.libraryPath);
+    }
+
+    // Start streaming server
+    const port = config.server.port;
+    app.listen(port, "0.0.0.0", () => {
+      logger.info(`Streaming server running on port ${port}`);
+    });
+
+    // Start Stremio addon server
+    const addonPort = config.server.addonPort;
+    serveAddon(addonPort, torrentService);
+
+    // Log server URLs
+    logger.info(`Streaming server URL: ${config.server.baseUrl}`);
+    logger.info(
+      `Addon manifest URL: http://0.0.0.0:${addonPort}/manifest.json`
+    );
+  } catch (error) {
+    logger.error("Error starting servers:", error);
+    process.exit(1);
+  }
+};
+
+// Start servers
+startServers();

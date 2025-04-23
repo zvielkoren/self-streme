@@ -7,35 +7,39 @@ import { createReadStream } from "fs";
 class MediaService {
   constructor() {
     this.mediaPath = config.media.libraryPath;
-    this.supportedFormats = [".mp4", ".mkv", ".avi"];
-    this.qualityPaths = {
-      "1080p": path.join(this.mediaPath, "1080p"),
-      "720p": path.join(this.mediaPath, "720p"),
-      "480p": path.join(this.mediaPath, "480p"),
-      "xvid": path.join(this.mediaPath, "xvid"),
-    };
+    this.supportedFormats = config.media.supportedVideoFormats;
   }
 
-  async scanDirectory() {
+  async scanDirectory(dir = this.mediaPath) {
     try {
-      const files = await fs.readdir(this.mediaPath);
+      logger.debug(`Scanning directory: ${dir}`);
+      const entries = await fs.readdir(dir, { withFileTypes: true });
       const mediaFiles = [];
 
-      for (const file of files) {
-        const filePath = path.join(this.mediaPath, file);
-        const stats = await fs.stat(filePath);
-        
-        if (stats.isFile() && this.supportedFormats.includes(path.extname(file))) {
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+
+        if (entry.isDirectory()) {
+          // If it's a directory, scan it recursively
+          const subDirFiles = await this.scanDirectory(fullPath);
+          mediaFiles.push(...subDirFiles);
+        } else if (entry.isFile() && this.isSupportedFormat(entry.name)) {
+          const stats = await fs.stat(fullPath);
+          const relativePath = path.relative(this.mediaPath, fullPath);
+          const type = this.getMediaType(relativePath);
+
           mediaFiles.push({
-            id: Buffer.from(file).toString("base64url"),
-            name: path.parse(file).name,
-            path: filePath,
+            id: this.generateId(relativePath),
+            name: this.getDisplayName(relativePath),
+            path: fullPath,
+            type,
             size: stats.size,
             modified: stats.mtime,
           });
         }
       }
 
+      logger.debug(`Found ${mediaFiles.length} media files in ${dir}`);
       return mediaFiles;
     } catch (error) {
       logger.error("Error scanning directory:", error);
@@ -43,14 +47,37 @@ class MediaService {
     }
   }
 
+  getMediaType(relativePath) {
+    const parts = relativePath.split(path.sep);
+    if (parts.length >= 2 && parts[1].toLowerCase().startsWith("season")) {
+      return "series";
+    } else if (parts.length === 2) {
+      return "movie";
+    }
+    return "other";
+  }
+
+  getDisplayName(relativePath) {
+    const parts = relativePath.split(path.sep);
+    if (parts.length === 0) return "";
+
+    // For series, use the series name
+    if (this.getMediaType(relativePath) === "series") {
+      return parts[0];
+    }
+
+    // For movies and others, use the directory name or file name without extension
+    return parts.length > 1 ? parts[0] : path.parse(parts[0]).name;
+  }
+
   async searchMedia(query) {
     try {
       const mediaFiles = await this.scanDirectory();
       const searchTerms = query.toLowerCase().split(" ");
-      
-      return mediaFiles.filter(file => {
+
+      return mediaFiles.filter((file) => {
         const fileName = file.name.toLowerCase();
-        return searchTerms.every(term => fileName.includes(term));
+        return searchTerms.every((term) => fileName.includes(term));
       });
     } catch (error) {
       logger.error("Error searching media:", error);
@@ -61,7 +88,7 @@ class MediaService {
   async getMediaInfo(mediaId) {
     try {
       const mediaFiles = await this.scanDirectory();
-      return mediaFiles.find(file => file.id === mediaId);
+      return mediaFiles.find((file) => file.id === mediaId);
     } catch (error) {
       logger.error("Error getting media info:", error);
       return null;
@@ -99,9 +126,9 @@ class MediaService {
     }
   }
 
-  async createReadStream(filePath, start, end) {
+  createReadStream(filePath, start, end) {
     try {
-      return fs.createReadStream(filePath, { start, end });
+      return createReadStream(filePath, { start, end });
     } catch (error) {
       logger.error("Error creating read stream:", error);
       throw error;
@@ -115,13 +142,18 @@ class MediaService {
 
       const dir = path.dirname(mediaInfo.path);
       const name = path.parse(mediaInfo.path).name;
-      const subtitlePath = path.join(dir, `${name}.vtt`);
 
-      try {
-        return await fs.readFile(subtitlePath, "utf8");
-      } catch {
-        return null;
+      // Try all supported subtitle formats
+      for (const format of config.media.supportedSubtitleFormats) {
+        const subtitlePath = path.join(dir, `${name}${format}`);
+        try {
+          return await fs.readFile(subtitlePath, "utf8");
+        } catch {
+          continue;
+        }
       }
+
+      return null;
     } catch (error) {
       logger.error("Error getting subtitles:", error);
       return null;
@@ -129,8 +161,7 @@ class MediaService {
   }
 
   isSupportedFormat(filename) {
-    const supportedFormats = [".mp4", ".mkv", ".avi"];
-    return supportedFormats.includes(path.extname(filename).toLowerCase());
+    return this.supportedFormats.includes(path.extname(filename).toLowerCase());
   }
 
   generateId(filename) {

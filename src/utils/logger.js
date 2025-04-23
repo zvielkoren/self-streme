@@ -1,11 +1,13 @@
-import winston from 'winston';
-import { config } from '../config/index.js';
+import winston from "winston";
+import { config } from "../config/index.js";
 
 const logger = winston.createLogger({
   level: config.logging.level,
   format: winston.format.combine(
     winston.format.timestamp(),
-    winston.format.json()
+    winston.format.printf(({ level, message, timestamp }) => {
+      return `${timestamp} ${level}: ${message}`;
+    })
   ),
   transports: [
     new winston.transports.Console({
@@ -15,13 +17,15 @@ const logger = winston.createLogger({
       ),
     }),
     new winston.transports.File({
-      filename: 'error.log',
-      level: 'error',
+      filename: "error.log",
+      level: "error",
+      options: { flags: "w" },
     }),
     new winston.transports.File({
-      filename: 'combined.log',
+      filename: "combined.log",
+      options: { flags: "w" },
     }),
   ],
 });
 
-export default logger; 
+export default logger;

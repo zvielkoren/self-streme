@@ -1,309 +1,295 @@
 import pkg from "stremio-addon-sdk";
-const { addonBuilder } = pkg;
+const { addonBuilder, serveHTTP } = pkg;
+import path from "path";
+import fs from "fs/promises";
 import { config } from "../config/index.js";
-import mediaService from "../services/mediaService.js";
-import torrentService from "../services/torrentService.js";
 import logger from "../utils/logger.js";
-import express from "express";
-import cors from "cors";
-import axios from "axios";
 
-// Create the builder with manifest
-const builder = new addonBuilder({
-  id: config.addon.id,
-  version: config.addon.version,
-  name: config.addon.name,
-  description: config.addon.description,
-  catalogs: config.addon.catalogs,
-  resources: config.addon.resources,
-  types: config.addon.types,
-  idPrefixes: config.addon.idPrefixes,
-  background: config.addon.background,
-});
-
-// Helper function to generate a Stremio ID
-function generateStremioId(mediaInfo) {
-  return Buffer.from(mediaInfo.name).toString("base64url");
-}
-
-// Helper function to search Stremio
-async function searchStremio(query, type) {
-  try {
-    const response = await axios.get(`https://v3-cinemeta.strem.io/catalog/${type}/top/search=${encodeURIComponent(query)}.json`);
-    return response.data.metas || [];
-  } catch (error) {
-    logger.error("Stremio search error:", error);
-    return [];
-  }
-}
-
-// Define catalog handler
-builder.defineCatalogHandler(async ({ type, id, extra }) => {
-  try {
-    if (type !== "movie" && type !== "series") {
-      return { metas: [] };
-    }
-
-    // Handle search
-    if (extra && extra.search) {
-      const stremioResults = await searchStremio(extra.search, type);
-      const localResults = await mediaService.searchMedia(extra.search);
-      
-      // Combine results
-      const metas = [
-        ...stremioResults,
-        ...localResults.map(item => ({
-          id: generateStremioId(item),
-          type,
-          name: item.name,
-          poster: config.addon.background,
-          background: config.addon.background,
-          logo: config.addon.background,
-          description: `Watch ${item.name}`,
-          releaseInfo: new Date(item.modified).getFullYear().toString(),
-        }))
-      ];
-
-      return { metas };
-    }
-
-    // Return local media list by default
-    const mediaList = await mediaService.scanDirectory();
-    const metas = mediaList.map((item) => ({
-      id: generateStremioId(item),
-      type,
-      name: item.name,
-      poster: config.addon.background,
-      background: config.addon.background,
-      logo: config.addon.background,
-      description: `Watch ${item.name}`,
-      releaseInfo: new Date(item.modified).getFullYear().toString(),
-    }));
-
-    return { metas };
-  } catch (error) {
-    logger.error("Catalog handler error:", error);
-    return { metas: [] };
-  }
-});
-
-// Define meta handler
-builder.defineMetaHandler(async ({ type, id }) => {
-  try {
-    if (type !== "movie" && type !== "series") {
-      return { meta: null };
-    }
-
-    // Try to get meta from Stremio first
-    try {
-      const response = await axios.get(`https://v3-cinemeta.strem.io/meta/${type}/${id}.json`);
-      if (response.data && response.data.meta) {
-        return response.data;
-      }
-    } catch (error) {
-      logger.debug("Stremio meta not found, checking local library");
-    }
-
-    // Fall back to local media
-    const mediaList = await mediaService.scanDirectory();
-    const mediaInfo = mediaList.find(
-      (item) => generateStremioId(item) === id
-    );
-
-    if (!mediaInfo) {
-      return { meta: null };
-    }
-
-    return {
-      meta: {
-        id,
-        type,
-        name: mediaInfo.name,
-        poster: config.addon.background,
-        background: config.addon.background,
-        logo: config.addon.background,
-        description: `Watch ${mediaInfo.name}`,
-        releaseInfo: new Date(mediaInfo.modified).getFullYear().toString(),
-        videos: type === "series" ? [
-          {
-            id: `${id}:1:1`,
-            title: mediaInfo.name,
-            released: new Date(mediaInfo.modified).toISOString(),
-            season: 1,
-            episode: 1,
-            available: true,
-          },
-        ] : [
-          {
-            id: `${id}`,
-            title: mediaInfo.name,
-            released: new Date(mediaInfo.modified).toISOString(),
-            available: true,
-          },
-        ],
-      },
-    };
-  } catch (error) {
-    logger.error("Meta handler error:", error);
-    return { meta: null };
-  }
-});
-
-// Define stream handler
-builder.defineStreamHandler(async ({ type, id }) => {
-  try {
-    if (type !== "movie" && type !== "series") {
-      return { streams: [] };
-    }
-
-    const videoId = type === "series" ? id.split(":")[0] : id;
-    
-    // Try to get streams from Stremio first
-    try {
-      const response = await axios.get(`https://v3-cinemeta.strem.io/stream/${type}/${id}.json`);
-      if (response.data && response.data.streams) {
-        // Convert Stremio streams to torrent streams
-        const torrentStreams = response.data.streams
-          .filter(stream => stream.infoHash)
-          .map(stream => ({
-            name: stream.name || "Unknown quality",
-            title: `[${stream.name}] ${stream.title || "Stremio stream"}`,
-            url: `${config.server.baseUrl}/torrent/stream?magnet=${encodeURIComponent(
-              torrentService.createMagnet(stream.infoHash, stream.title)
-            )}`,
-            behaviorHints: {
-              bingeGroup: stream.name?.includes("1080p") ? "hd" : "sd",
-              notWebReady: false,
-            },
-          }));
-
-        return { streams: torrentStreams };
-      }
-    } catch (error) {
-      logger.debug("Stremio streams not found, checking local library");
-    }
-
-    // Fall back to local media and torrent search
-    const mediaList = await mediaService.scanDirectory();
-    const mediaInfo = mediaList.find(
-      (item) => generateStremioId(item) === videoId
-    );
-
-    // Start with local streams if available
-    let streams = [];
-    if (mediaInfo) {
-      streams = [
-        {
-          name: "1080p",
-          title: "[Local] 1080p Multi Audio",
-          url: `${config.server.baseUrl}/stream/${mediaInfo.id}?quality=1080p`,
-          behaviorHints: {
-            bingeGroup: "hd",
-            notWebReady: false,
-          },
-        },
-        {
-          name: "720p",
-          title: "[Local] 720p WebRip",
-          url: `${config.server.baseUrl}/stream/${mediaInfo.id}?quality=720p`,
-          behaviorHints: {
-            bingeGroup: "sd",
-            notWebReady: false,
-          },
-        },
-      ];
-
-      // Add subtitles if available
-      if (await mediaService.getSubtitles(mediaInfo.id)) {
-        streams.forEach((stream) => {
-          stream.subtitles = [
-            {
-              url: `${config.server.baseUrl}/subtitles/${mediaInfo.id}`,
-              lang: "en",
-              id: "default",
-            },
-          ];
-        });
-      }
-    }
-
-    // Add torrent streams from search
-    const torrentResults = await torrentService.searchTorrents(mediaInfo ? mediaInfo.name : id, type);
-    const torrentStreams = torrentResults.map(result => ({
-      name: result.quality,
-      title: `[${result.source}] ${result.title}`,
-      url: `${config.server.baseUrl}/torrent/stream?magnet=${encodeURIComponent(result.magnet)}`,
-      behaviorHints: {
-        bingeGroup: result.quality.includes("1080p") ? "hd" : "sd",
-        notWebReady: false,
-      },
-    }));
-
-    return { streams: [...streams, ...torrentStreams] };
-  } catch (error) {
-    logger.error("Stream handler error:", error);
-    return { streams: [] };
-  }
-});
-
-// Export the serveHTTP function
-export const serveAddon = (port) => {
-  const app = express();
-  app.use(cors());
-
-  // Get the interface once
-  const addonInterface = builder.getInterface();
-
-  // Serve the manifest
-  app.get("/manifest.json", (req, res) => {
-    res.setHeader("Content-Type", "application/json");
-    res.send(addonInterface.manifest);
-  });
-
-  // Handle catalog requests
-  app.get("/catalog/:type/:id/:extra?.json", async (req, res) => {
-    try {
-      const { type, id } = req.params;
-      const extra = req.params.extra ? JSON.parse(req.params.extra) : undefined;
-      const result = await addonInterface.get("catalog", { type, id, extra });
-      res.setHeader("Content-Type", "application/json");
-      res.send(result);
-    } catch (error) {
-      logger.error("Catalog request error:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  // Handle meta requests
-  app.get("/meta/:type/:id.json", async (req, res) => {
-    try {
-      const { type, id } = req.params;
-      const result = await addonInterface.get("meta", { type, id });
-      res.setHeader("Content-Type", "application/json");
-      res.send(result);
-    } catch (error) {
-      logger.error("Meta request error:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  // Handle stream requests
-  app.get("/stream/:type/:id.json", async (req, res) => {
-    try {
-      const { type, id } = req.params;
-      const result = await addonInterface.get("stream", { type, id });
-      res.setHeader("Content-Type", "application/json");
-      res.send(result);
-    } catch (error) {
-      logger.error("Stream request error:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  app.listen(port, () => {
-    logger.info(`Stremio addon server running on port ${port}`);
-    logger.info(
-      `Addon manifest available at: http://localhost:${port}/manifest.json`
-    );
-  });
+// Create a new addon builder
+const manifest = {
+  id: "org.stremio.self-streme",
+  version: "1.0.0",
+  name: "Self-Streme",
+  description: "Stream your local media and torrents",
+  resources: ["catalog", "meta", "stream"],
+  types: ["movie", "series"],
+  idPrefixes: ["tt", "local"],
+  catalogs: [
+    {
+      type: "movie",
+      id: "local.movies",
+      name: "Local Movies",
+      extra: [{ name: "search" }],
+    },
+    {
+      type: "series",
+      id: "local.series",
+      name: "Local Series",
+      extra: [{ name: "search" }],
+    },
+  ],
 };
+
+const builder = new addonBuilder(manifest);
+
+// Helper function to generate Stremio ID for local media
+function generateStremioId(mediaInfo) {
+  return `local:${mediaInfo.type}:${mediaInfo.id}`;
+}
+
+// Export the serve function that takes the port and torrent service
+export async function serveAddon(port, torrentService) {
+  try {
+    // Catalog handler
+    builder.defineCatalogHandler(async ({ type, id }) => {
+      try {
+        logger.info(`Catalog request: ${type} ${id}`);
+        const results = [];
+
+        // Get local media
+        const mediaDir = path.join(config.media.localPath);
+        const files = await fs.readdir(mediaDir);
+
+        for (const file of files) {
+          if (file.endsWith(".mp4") || file.endsWith(".mkv")) {
+            const mediaInfo = {
+              id: file,
+              type: type,
+              name: path.parse(file).name,
+            };
+
+            results.push({
+              id: generateStremioId(mediaInfo),
+              type: type,
+              name: mediaInfo.name,
+              poster: null,
+            });
+          }
+        }
+
+        // Search for torrents if enabled
+        if (config.torrent.enabled) {
+          const torrents = await torrentService.searchTorrents("", type);
+          for (const torrent of torrents) {
+            results.push({
+              id: `tt:${torrent.imdbId}`,
+              type: type,
+              name: torrent.title,
+              poster: torrent.poster,
+            });
+          }
+        }
+
+        return { metas: results };
+      } catch (error) {
+        logger.error("Catalog error:", error);
+        throw error;
+      }
+    });
+
+    // Meta handler
+    builder.defineMetaHandler(async ({ type, id }) => {
+      try {
+        logger.info(`Meta request: ${type} ${id}`);
+
+        if (id.startsWith("local:")) {
+          const mediaId = id.split(":")[2];
+          const mediaPath = path.join(config.media.localPath, mediaId);
+
+          try {
+            await fs.access(mediaPath);
+            const name = path.parse(mediaId).name;
+
+            if (type === "series") {
+              // Handle series meta
+              const seasonMatch = name.match(/S(\d+)E(\d+)/i);
+              if (seasonMatch) {
+                const [, season, episode] = seasonMatch;
+                return {
+                  id,
+                  type,
+                  name,
+                  videos: [
+                    {
+                      id: `${id}:${season}:${episode}`,
+                      title: `Episode ${episode}`,
+                      season: parseInt(season),
+                      episode: parseInt(episode),
+                      available: true,
+                    },
+                  ],
+                };
+              }
+            }
+
+            // Handle movie meta
+            return {
+              id,
+              type,
+              name,
+              videos: [
+                {
+                  id: id,
+                  title: name,
+                  available: true,
+                },
+              ],
+            };
+          } catch (error) {
+            logger.error(`Media not found: ${mediaPath}`, error);
+            throw new Error("Media not found");
+          }
+        } else if (id.startsWith("tt:")) {
+          // Handle torrent meta
+          const imdbId = id.split(":")[1];
+          const torrentInfo = await torrentService.getTorrentInfo(imdbId, type);
+
+          if (!torrentInfo) {
+            throw new Error("Torrent not found");
+          }
+
+          if (type === "series") {
+            return {
+              id,
+              type,
+              name: torrentInfo.title,
+              videos: torrentInfo.episodes.map((episode) => ({
+                id: `${id}:${episode.season}:${episode.episode}`,
+                title: episode.title,
+                season: episode.season,
+                episode: episode.episode,
+                available: true,
+              })),
+            };
+          }
+
+          return {
+            id,
+            type,
+            name: torrentInfo.title,
+            videos: [
+              {
+                id: id,
+                title: torrentInfo.title,
+                available: true,
+              },
+            ],
+          };
+        }
+
+        throw new Error("Invalid ID format");
+      } catch (error) {
+        logger.error("Meta error:", error);
+        throw error;
+      }
+    });
+
+    // Stream handler
+    builder.defineStreamHandler(async ({ type, id }) => {
+      try {
+        logger.info(`Stream request: ${type} ${id}`);
+
+        if (!id || !type) {
+          logger.error("Missing required parameters");
+          return { streams: [] };
+        }
+
+        if (id.startsWith("local:")) {
+          const parts = id.split(":");
+          if (parts.length < 3) {
+            logger.error("Invalid local ID format");
+            return { streams: [] };
+          }
+
+          const mediaId = parts[2];
+          const mediaPath = path.join(config.media.localPath, mediaId);
+
+          try {
+            await fs.access(mediaPath);
+            return {
+              streams: [
+                {
+                  url: `${config.server.baseUrl}/stream/${encodeURIComponent(
+                    mediaId
+                  )}`,
+                  title: "Local Stream",
+                  name: "Local",
+                },
+              ],
+            };
+          } catch (error) {
+            logger.error(`Media not found: ${mediaPath}`);
+            return { streams: [] };
+          }
+        } else if (id.match(/^tt\d+/)) {
+          const parts = id.split(":");
+          const imdbId = parts[0];
+          const season = parts[1] ? parseInt(parts[1]) : null;
+          const episode = parts[2] ? parseInt(parts[2]) : null;
+
+          try {
+            // Construct search query for series episodes
+            const searchQuery =
+              type === "series" && season && episode
+                ? `${imdbId} S${String(season).padStart(2, "0")}E${String(
+                    episode
+                  ).padStart(2, "0")}`
+                : imdbId;
+
+            logger.debug(`Searching torrents with query: ${searchQuery}`);
+            const searchResults = await torrentService.searchTorrents(
+              searchQuery,
+              type
+            );
+
+            if (!searchResults || searchResults.length === 0) {
+              logger.debug("No torrents found");
+              return { streams: [] };
+            }
+
+            // Use the first result
+            const torrent = searchResults[0];
+            logger.debug(`Selected torrent: ${torrent.title}`);
+
+            const torrentStream = await torrentService.streamTorrent(
+              torrent.magnetLink
+            );
+            if (!torrentStream) {
+              logger.debug("Failed to create torrent stream");
+              return { streams: [] };
+            }
+
+            return {
+              streams: [
+                {
+                  url: `${config.server.baseUrl}/stream/${encodeURIComponent(
+                    torrentStream.infoHash
+                  )}`,
+                  title: torrent.title,
+                  name: "Torrent",
+                },
+              ],
+            };
+          } catch (error) {
+            logger.error("Torrent stream error:", error);
+            return { streams: [] };
+          }
+        }
+
+        logger.error(`Unrecognized ID format: ${id}`);
+        return { streams: [] };
+      } catch (error) {
+        logger.error("Stream error:", error);
+        return { streams: [] };
+      }
+    });
+
+    const addonInterface = builder.getInterface();
+    serveHTTP(addonInterface, { port });
+
+    return addonInterface;
+  } catch (error) {
+    logger.error("Failed to serve addon:", error);
+    throw error;
+  }
+}
