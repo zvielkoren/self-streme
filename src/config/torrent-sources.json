@@ -1,0 +1,177 @@
+{
+  "providers": {
+    "yts": {
+      "enabled": true,
+      "priority": 1,
+      "type": ["movies"],
+      "domains": [
+        "https://yts.mx/api/v2",
+        "https://yts.lt/api/v2",
+        "https://yts.am/api/v2",
+        "https://yts.unblockit.kim/api/v2"
+      ],
+      "rateLimit": 1000,
+      "timeout": 5000,
+      "maxResults": 20
+    },
+    "eztv": {
+      "enabled": true,
+      "priority": 1,
+      "type": ["series"],
+      "domains": [
+        "https://eztvx.to/api",
+        "https://eztv.wf/api",
+        "https://eztv.re/api"
+      ],
+      "rateLimit": 2000,
+      "timeout": 5000,
+      "maxResults": 50
+    },
+    "1337x": {
+      "enabled": true,
+      "priority": 2,
+      "type": ["movies", "series"],
+      "domains": [
+        "https://1337x.to",
+        "https://1337x.st",
+        "https://x1337x.ws",
+        "https://x1337x.se",
+        "https://1337x.unblockit.kim"
+      ],
+      "rateLimit": 1000,
+      "timeout": 5000,
+      "maxResults": 20
+    },
+    "nyaa": {
+      "enabled": true,
+      "priority": 1,
+      "type": ["anime"],
+      "domain": "https://nyaa.si",
+      "rateLimit": 1000,
+      "timeout": 5000,
+      "maxResults": 30,
+      "categories": {
+        "anime": "1_2"
+      }
+    },
+    "rutracker": {
+      "enabled": true,
+      "priority": 3,
+      "type": ["movies", "series"],
+      "domains": [
+        "https://rutracker.org",
+        "https://rutracker.nl",
+        "https://rutracker.net"
+      ],
+      "rateLimit": 2000,
+      "timeout": 5000,
+      "maxResults": 20,
+      "categories": {
+        "movies": "7",
+        "series": "189"
+      }
+    },
+    "tpb": {
+      "enabled": true,
+      "priority": 3,
+      "type": ["movies", "series"],
+      "domains": [
+        "https://thepiratebay.org",
+        "https://piratebay.live",
+        "https://thepiratebay0.org",
+        "https://thepiratebay10.org"
+      ],
+      "rateLimit": 2000,
+      "timeout": 5000,
+      "maxResults": 20,
+      "categories": {
+        "movies": "201",
+        "series": "205"
+      }
+    },
+    "kickass": {
+      "enabled": true,
+      "priority": 2,
+      "type": ["movies", "series"],
+      "domains": [
+        "https://kickasstorrents.to",
+        "https://katcr.to",
+        "https://kat.am"
+      ],
+      "rateLimit": 1000,
+      "timeout": 5000,
+      "maxResults": 20
+    },
+    "limetorrents": {
+      "enabled": true,
+      "priority": 2,
+      "type": ["movies", "series"],
+      "domains": [
+        "https://limetorrents.pro",
+        "https://limetorrents.info",
+        "https://limetorrents.cc"
+      ],
+      "rateLimit": 1000,
+      "timeout": 5000,
+      "maxResults": 20
+    },
+    "torrentgalaxy": {
+      "enabled": true,
+      "priority": 2,
+      "type": ["movies", "series"],
+      "domains": [
+        "https://torrentgalaxy.to",
+        "https://tgx.rs",
+        "https://torrentgalaxy.mx"
+      ],
+      "rateLimit": 1000,
+      "timeout": 5000,
+      "maxResults": 20
+    }
+  },
+  "trackers": [
+    "udp://tracker.opentrackr.org:1337/announce",
+    "udp://open.tracker.cl:1337/announce",
+    "udp://tracker.openbittorrent.com:6969/announce",
+    "udp://opentracker.i2p.rocks:6969/announce",
+    "https://opentracker.i2p.rocks:443/announce",
+    "udp://tracker.torrent.eu.org:451/announce",
+    "udp://open.demonii.com:1337/announce",
+    "udp://tracker.moeking.me:6969/announce",
+    "udp://tracker.bitsearch.to:1337/announce",
+    "udp://tracker.theoks.net:6969/announce",
+    "udp://tracker.skyts.net:6969/announce"
+  ],
+  "cache": {
+    "enabled": true,
+    "duration": 3600,
+    "maxSize": 1000
+  },
+  "optimization": {
+    "concurrent_searches": 3,
+    "min_seeds": 1,
+    "max_age_days": 365,
+    "preferred_release_groups": [
+      "RARBG",
+      "YIFY",
+      "QxR",
+      "UTR",
+      "SPARKS",
+      "AMIABLE"
+    ],
+    "size_limits": {
+      "movies": {
+        "min_mb": 500,
+        "max_mb": 20000
+      },
+      "series": {
+        "min_mb": 100,
+        "max_mb": 5000
+      }
+    },
+    "quality_preferences": {
+      "movies": ["1080p", "720p", "2160p"],
+      "series": ["1080p", "720p"]
+    }
+  }
+}

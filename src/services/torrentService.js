@@ -1,488 +1,270 @@
 import WebTorrent from "webtorrent";
 import logger from "../utils/logger.js";
 import { config } from "../config/index.js";
+import proxyManager from "../utils/proxyManager.js";
 import axios from "axios";
 import path from "path";
 import fs from "fs/promises";
+import NodeCache from "node-cache";
 
-class TorrentService {
-  constructor(client = null) {
-    this.client =
-      client ||
-      new WebTorrent({
-        maxConns: config.torrent.maxConnections,
-        downloadLimit: config.torrent.downloadLimit,
-        uploadLimit: config.torrent.uploadLimit,
-      });
-    this.activeTorrents = new Map();
-    this.setupCleanupInterval();
-    this.apis = {
-      yts: [
-        "https://yts.mx/api/v2",
-        "https://yts.lt/api/v2",
-        "https://yts.am/api/v2",
-        "https://yts.unblockit.kim/api/v2",
-      ],
-      eztv: [
-        { domain: "https://eztvx.to", endpoint: "/api/get-torrents" },
-        { domain: "https://eztv.wf", endpoint: "/api/get-torrents" },
-        { domain: "https://eztv.re", endpoint: "/api/get-torrents" },
-      ],
-      rarbg: "https://torrentapi.org/pubapi_v2.php",
-      _1337x: [
-        "https://1337x.to",
-        "https://1337x.st",
-        "https://x1337x.ws",
-        "https://x1337x.eu",
-        "https://x1337x.se",
-      ],
-    };
-  }
+// הגדרת משתנים גלובליים
+let client = null;
+let activeTorrents = new Map();
+let lastRequestTime = {};
+let requestDelay = 2000;
+let torrentConfig = null;
+let cache = null;
 
-  setupCleanupInterval() {
-    // Cleanup inactive torrents every hour
+// פונקציות עזר
+function setupCleanupInterval() {
     setInterval(() => {
       const now = Date.now();
-      for (const [infoHash, torrent] of this.activeTorrents.entries()) {
+    for (const [infoHash, torrent] of activeTorrents.entries()) {
         if (now - torrent.lastAccessed > 3600000) {
-          // 1 hour
-          this.destroyTorrent(infoHash);
-        }
+        destroyTorrent(infoHash);
+      }
       }
     }, 3600000);
   }
 
-  async searchTorrents(query, type) {
-    try {
-      let results = [];
-      const searchPromises = [];
+async function initialize() {
+  try {
+    const configPath = path.join(
+      process.cwd(),
+      "src/config/torrent-sources.json"
+    );
+    const configData = await fs.readFile(configPath, "utf8");
+    torrentConfig = JSON.parse(configData);
 
-      if (type === "movie") {
-        // Search YTS
-        searchPromises.push(this.searchYTS(query));
-
-        // Search RARBG for movies
-        searchPromises.push(this.searchRARBG(query, type));
-
-        // Search 1337x
-        searchPromises.push(this.search1337x(query, type));
-      } else if (type === "series") {
-        // Search EZTV
-        searchPromises.push(this.searchEZTV(query));
-
-        // Search RARBG for series
-        searchPromises.push(this.searchRARBG(query, type));
-
-        // Search 1337x
-        searchPromises.push(this.search1337x(query, type));
-      }
-
-      // Wait for all searches to complete
-      const searchResults = await Promise.allSettled(searchPromises);
-
-      // Combine results from successful searches
-      searchResults.forEach((result) => {
-        if (result.status === "fulfilled" && Array.isArray(result.value)) {
-          results = results.concat(result.value);
-        }
+    if (torrentConfig.cache.enabled) {
+      cache = new NodeCache({
+        stdTTL: torrentConfig.cache.duration,
+        maxKeys: torrentConfig.cache.maxSize,
       });
+    }
 
-      // Remove duplicates based on infoHash
-      results = [
-        ...new Map(results.map((item) => [item.infoHash, item])).values(),
-      ];
+    client = new WebTorrent({
+      maxConns: config.torrent.maxConnections,
+      downloadLimit: config.torrent.downloadLimit,
+      uploadLimit: config.torrent.uploadLimit,
+    });
 
-      // Sort by seeds and limit results
-      return results.sort((a, b) => b.seeds - a.seeds).slice(0, 20);
+    setupCleanupInterval();
+    logger.info("TorrentService initialized successfully");
+  } catch (error) {
+    logger.error("Failed to initialize TorrentService:", error);
+    throw error;
+  }
+}
+
+// פונקציות חיפוש
+async function searchTorrents(query, type) {
+  try {
+    const cacheKey = `${type}:${query}`;
+    if (cache) {
+      const cached = cache.get(cacheKey);
+      if (cached) {
+        logger.debug("Returning cached results for:", cacheKey);
+        return cached;
+      }
+    }
+
+    const results = [];
+    const providers = getEnabledProviders(type);
+    const searchPromises = [];
+
+    for (
+      let i = 0;
+      i < providers.length;
+      i += torrentConfig.optimization.concurrent_searches
+    ) {
+      const batch = providers.slice(
+        i,
+        i + torrentConfig.optimization.concurrent_searches
+      );
+      const batchPromises = batch.map((provider) =>
+        searchProvider(provider, query, type).catch((err) => {
+          logger.error(`Search failed for ${provider.name}:`, err);
+    return [];
+        })
+      );
+
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults.flat());
+
+      if (hasEnoughGoodResults(results)) {
+        break;
+      }
+    }
+
+    const filteredResults = filterAndSortResults(results, type);
+
+    if (cache) {
+      cache.set(cacheKey, filteredResults);
+    }
+
+    return filteredResults;
     } catch (error) {
-      logger.error("Error searching torrents:", error);
+    logger.error("Error in searchTorrents:", error);
       return [];
     }
   }
 
-  async searchYTS(query) {
-    let lastError = null;
+function getEnabledProviders(type) {
+  return Object.entries(torrentConfig.providers)
+    .filter(([, provider]) => provider.enabled && provider.type.includes(type))
+    .map(([name, provider]) => ({
+      name,
+      ...provider,
+    }))
+    .sort((a, b) => a.priority - b.priority);
+}
 
-    for (const apiUrl of this.apis.yts) {
-      try {
-        const response = await axios.get(`${apiUrl}/list_movies.json`, {
-          params: {
-            query_term: query,
-            limit: 20,
-          },
-          timeout: 10000,
-        });
+function hasEnoughGoodResults(results, minResults = 5) {
+  return results.length >= minResults;
+}
 
-        if (response.data.status === "ok" && response.data.data.movies) {
-          return response.data.data.movies.flatMap((movie) =>
-            movie.torrents.map((torrent) => ({
-              infoHash: torrent.hash,
-              title: `${movie.title} ${torrent.quality}`,
-              quality: torrent.quality,
-              size: torrent.size_bytes,
-              seeds: torrent.seeds,
-              peers: torrent.peers,
-              magnetLink: this.createMagnet(torrent.hash, movie.title),
-              poster: movie.large_cover_image,
-              year: movie.year,
-            }))
-          );
-        }
-      } catch (error) {
-        lastError = error;
-        logger.debug(`YTS search failed for ${apiUrl}:`, error.message);
-        continue;
-      }
+function filterAndSortResults(results, type) {
+  return results
+    .filter((result) => {
+      // בדיקת איכות בסיסית
+      const hasEnoughSeeders = result.seeders >= 5;
+      const hasValidSize = result.size > 0;
+      const hasValidTitle = result.title && result.title.length > 0;
+
+      return hasEnoughSeeders && hasValidSize && hasValidTitle;
+    })
+    .sort((a, b) => b.seeders - a.seeders);
+}
+
+async function searchProvider(provider, query, type) {
+  const now = Date.now();
+  const lastRequest = lastRequestTime[provider.name] || 0;
+  if (now - lastRequest < provider.rateLimit) {
+    await new Promise((resolve) =>
+      setTimeout(resolve, provider.rateLimit - (now - lastRequest))
+    );
+  }
+  lastRequestTime[provider.name] = now;
+
+  try {
+    let results = [];
+    switch (provider.name) {
+      case "eztv":
+        results = await searchEztv(query, type);
+        break;
+      case "1337x":
+        results = await search1337x(query, type);
+        break;
+      case "kickass":
+        results = await searchKickass(query, type);
+        break;
+      default:
+        logger.warn(`Unknown provider: ${provider.name}`);
+        return [];
     }
-
-    if (lastError) {
-      logger.error("YTS search failed on all domains:", lastError.message);
-    }
+    return results;
+  } catch (error) {
+    logger.error(`Search failed for ${provider.name}:`, error);
     return [];
   }
+}
 
-  async searchRARBG(query, type) {
-    try {
-      // Get token first
-      const tokenResponse = await axios.get(this.apis.rarbg, {
-        params: {
-          get_token: "get_token",
-          app_id: "self_streme",
-        },
-        timeout: 10000,
-      });
-
-      if (!tokenResponse.data || !tokenResponse.data.token) {
-        logger.debug("Invalid RARBG token response:", tokenResponse.data);
-        return [];
-      }
-
-      // Wait 2 seconds as required by RARBG API
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // Map content types to RARBG categories
-      const categories =
-        type === "movie"
-          ? ["14;17;42;44;45;46;47;48"] // Movie categories
-          : ["18;41;49"]; // TV categories
-
-      const response = await axios.get(this.apis.rarbg, {
-        params: {
-          token: tokenResponse.data.token,
-          mode: "search",
-          search_string: query,
-          category: categories.join(";"),
-          format: "json_extended",
-          ranked: 0,
-          sort: "seeders",
-          limit: 25,
-          min_seeders: 1,
-          app_id: "self_streme",
-        },
-        timeout: 10000,
-      });
-
-      if (!response.data) {
-        logger.debug("Empty RARBG response");
-        return [];
-      }
-
-      if (response.data.error) {
-        logger.debug("RARBG API error:", response.data.error);
-        return [];
-      }
-
-      if (!response.data.torrent_results) {
-        logger.debug("No torrent results from RARBG");
-        return [];
-      }
-
-      return response.data.torrent_results.map((torrent) => ({
-        infoHash: torrent.info_hash.toLowerCase(),
-        title: torrent.title,
-        size: torrent.size,
-        seeds: torrent.seeders,
-        peers: torrent.leechers,
-        magnetLink: this.createMagnet(torrent.info_hash, torrent.title),
-        episode:
-          type === "series" ? this.parseEpisodeInfo(torrent.title) : null,
-      }));
-    } catch (error) {
-      logger.error("RARBG search error:", error.message);
-      return [];
-    }
-  }
-
-  async search1337x(query, type) {
-    const results = [];
-    let lastError = null;
-
-    for (const domain of this.apis._1337x) {
-      try {
-        // Search endpoint varies by type
-        const searchPath =
-          type === "movie"
-            ? `/search/${encodeURIComponent(query)}/Movies/1/`
-            : `/search/${encodeURIComponent(query)}/TV/1/`;
-
-        logger.debug(`Trying 1337x domain: ${domain}${searchPath}`);
-
-        const response = await axios.get(`${domain}${searchPath}`, {
-          timeout: 10000,
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-          },
-        });
-
-        // Parse HTML response and extract torrent information
-        const matches = response.data.match(
-          /href="\/torrent\/(\d+)\/([^"]+)"/g
-        );
-        if (!matches) {
-          logger.debug(`No matches found on ${domain}`);
-          continue;
-        }
-
-        logger.debug(`Found ${matches.length} potential torrents on ${domain}`);
-
-        for (const match of matches.slice(0, 5)) {
-          // Limit to first 5 results
-          try {
-            const torrentId = match.match(/\/torrent\/(\d+)\//)[1];
-            const torrentResponse = await axios.get(
-              `${domain}/torrent/${torrentId}/`,
-              {
-                timeout: 10000,
-                headers: {
-                  "User-Agent":
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-                },
-              }
-            );
-
-            // Extract magnet link and other details
-            const magnetMatch = torrentResponse.data.match(
-              /href="(magnet:\?[^"]+)"/
-            );
-            if (magnetMatch) {
-              const magnetLink = magnetMatch[1];
-              const infoHash = magnetLink
-                .match(/btih:([^&]+)/)[1]
-                .toLowerCase();
-
-              // Extract size
-              const sizeMatch = torrentResponse.data.match(
-                /Size:.*?([\d.]+\s*[KMGT]iB)/
-              );
-              const size = sizeMatch ? sizeMatch[1] : "0";
-
-              // Extract seeds and peers
-              const seedsMatch = torrentResponse.data.match(/Seeders:.*?(\d+)/);
-              const peersMatch =
-                torrentResponse.data.match(/Leechers:.*?(\d+)/);
-
-              const seeds = seedsMatch ? parseInt(seedsMatch[1]) : 0;
-              const peers = peersMatch ? parseInt(peersMatch[1]) : 0;
-
-              if (seeds > 0) {
-                // Only add torrents with seeds
-                const title = decodeURIComponent(
-                  match.match(/\/([^"]+)"/)[1].replace(/\+/g, " ")
-                );
-                results.push({
-                  infoHash,
-                  title,
-                  magnetLink,
-                  seeds,
-                  peers,
-                  size,
-                  episode:
-                    type === "series" ? this.parseEpisodeInfo(title) : null,
-                });
-              }
-            }
-          } catch (error) {
-            logger.debug(`Failed to fetch torrent details: ${error.message}`);
-            continue;
-          }
-        }
-
-        if (results.length > 0) {
-          logger.debug(
-            `Successfully found ${results.length} torrents on ${domain}`
-          );
-          break; // If successful, break the domain loop
-        }
-      } catch (error) {
-        lastError = error;
-        logger.debug(`1337x search failed for ${domain}:`, error.message);
-        continue;
-      }
-    }
-
-    if (lastError && results.length === 0) {
-      logger.error("1337x search failed on all domains:", lastError.message);
-    }
-
-    return results;
-  }
-
-  async searchEZTV(query) {
-    try {
-      // Try multiple EZTV domains and endpoints
-      const eztvDomains = [
-        { domain: "https://eztvx.to", endpoint: "/api/get-torrents" },
-        { domain: "https://eztv.wf", endpoint: "/api/get-torrents" },
-        { domain: "https://eztv.re", endpoint: "/api/get-torrents" },
-      ];
-
-      let response = null;
-      let error = null;
-
-      // Extract IMDb ID and episode info from query
-      const imdbMatch = query.match(/tt(\d+)/);
-      const episodeMatch = query.match(/S(\d+)E(\d+)/i);
-
-      if (!imdbMatch) {
-        logger.debug("No valid IMDb ID found in query:", query);
-        return [];
-      }
-
-      const imdbId = imdbMatch[0];
-      const season = episodeMatch ? parseInt(episodeMatch[1]) : null;
-      const episode = episodeMatch ? parseInt(episodeMatch[2]) : null;
-
-      for (const { domain, endpoint } of eztvDomains) {
-        try {
-          response = await axios.get(`${domain}${endpoint}`, {
+async function searchEztv(query, type) {
+  try {
+    const response = await axios.get("https://eztv.io/api/get-torrents", {
             params: {
-              imdb_id: imdbId,
               limit: 100,
-            },
-            timeout: 5000, // 5 second timeout
-          });
+        keywords: query,
+      },
+      proxy: proxyManager.getProxyConfig(),
+    });
 
-          if (response.data && response.data.torrents) {
-            // Filter torrents for specific season/episode if provided
-            let torrents = response.data.torrents;
-            if (season && episode) {
-              torrents = torrents.filter((t) => {
-                const epInfo = this.parseEpisodeInfo(t.title);
-                return (
-                  epInfo &&
-                  epInfo.season === season &&
-                  epInfo.episode === episode
-                );
-              });
-            }
-
-            if (torrents.length > 0) {
-              return torrents.map((torrent) => ({
-                infoHash: torrent.hash,
+    return response.data.torrents.map((torrent) => ({
                 title: torrent.title,
                 size: torrent.size_bytes,
-                seeds: torrent.seeds,
-                peers: torrent.peers,
-                magnetLink:
-                  torrent.magnet_url ||
-                  this.createMagnet(torrent.hash, torrent.title),
-                episode: this.parseEpisodeInfo(torrent.title),
-              }));
-            }
-          }
-        } catch (e) {
-          error = e;
-          logger.debug(`EZTV search failed for ${domain}:`, e.message);
-          continue;
-        }
-      }
+      seeders: torrent.seeds,
+      leechers: torrent.peers,
+      magnet: torrent.magnet_url,
+      provider: "eztv",
+    }));
+  } catch (error) {
+    logger.error("Eztv search error:", error);
+    return [];
+  }
+}
 
-      if (error) {
-        logger.error("EZTV search failed on all domains:", error.message);
-      }
-      return [];
+async function search1337x(query, type) {
+  try {
+    const response = await axios.get("https://1337x.to/search", {
+      params: {
+        search: query,
+        category: type === "movie" ? "Movies" : "TV",
+      },
+      proxy: proxyManager.getProxyConfig(),
+    });
+
+    // כאן צריך לפרסר את ה-HTML של התוצאות
+    // זה דורש מימוש של פונקציית parse1337xResults
+    return parse1337xResults(response.data);
     } catch (error) {
-      logger.error("EZTV search error:", error);
+    logger.error("1337x search error:", error);
       return [];
     }
   }
 
-  parseEpisodeInfo(title) {
-    const match = title.match(/S(\d{2})E(\d{2})/i);
-    if (match) {
-      return {
-        season: parseInt(match[1]),
-        episode: parseInt(match[2]),
-      };
-    }
-    return null;
+async function searchKickass(query, type) {
+  try {
+    const response = await axios.get("https://katcr.co/new/search", {
+      params: {
+        q: query,
+        field: "seeders",
+        sorder: "desc",
+      },
+      proxy: proxyManager.getProxyConfig(),
+    });
+
+    // כאן צריך לפרסר את ה-HTML של התוצאות
+    // זה דורש מימוש של פונקציית parseKickassResults
+    return parseKickassResults(response.data);
+  } catch (error) {
+    logger.error("Kickass search error:", error);
+    return [];
   }
+}
 
-  createMagnet(hash, title) {
-    const trackers = config.torrent.trackers;
-    const trackersString = trackers
-      .map((tracker) => `&tr=${encodeURIComponent(tracker)}`)
-      .join("");
+function parse1337xResults(html) {
+  // TODO: מימוש פונקציית פירוס לתוצאות של 1337x
+  return [];
+}
 
-    return `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(
-      title
-    )}${trackersString}`;
-  }
+function parseKickassResults(html) {
+  // TODO: מימוש פונקציית פירוס לתוצאות של Kickass
+  return [];
+}
 
-  async getTorrentInfo(infoHash) {
-    try {
-      // Check if we already have this torrent
-      if (this.activeTorrents.has(infoHash)) {
-        const torrentData = this.activeTorrents.get(infoHash);
-        const { torrent } = torrentData;
-        return {
-          infoHash: torrent.infoHash,
-          title: torrent.name,
-          size: torrent.length,
-          seeds: torrent.numPeers,
-          progress: torrent.progress,
-          downloadSpeed: torrent.downloadSpeed,
-          uploadSpeed: torrent.uploadSpeed,
-          timeRemaining: torrent.timeRemaining,
-        };
-      }
-
-      // If not, try to get metadata from torrent cache/history
-      // This is a placeholder - you'll need to implement torrent metadata caching
-      return null;
-    } catch (error) {
-      logger.error("Error getting torrent info:", error);
-      return null;
-    }
-  }
-
-  async streamTorrent(magnetLink) {
+// פונקציות סטרימינג
+async function streamTorrent(magnetLink) {
     try {
       logger.debug(`Starting torrent stream for magnet: ${magnetLink}`);
-      let torrent = this.client.get(magnetLink);
+    let torrent = client.get(magnetLink);
 
       if (!torrent) {
         logger.debug("Torrent not found in client, adding new torrent");
-
-        // Ensure temp directory exists
         await fs.mkdir(config.media.tempPath, { recursive: true });
 
-        // Add the torrent and wait for it to be ready
         torrent = await new Promise((resolve, reject) => {
-          const newTorrent = this.client.add(magnetLink, {
+        const newTorrent = client.add(magnetLink, {
             path: config.media.tempPath,
             announce: config.torrent.trackers,
             maxWebConns: config.torrent.maxConnections,
           });
 
-          logger.debug("Torrent added to client, waiting for metadata...");
-
           let isReady = false;
           const timeout = setTimeout(() => {
             cleanup();
             reject(new Error("Torrent metadata timeout"));
-          }, 60000); // 60 second timeout
+        }, 60000);
 
           const cleanup = () => {
             clearTimeout(timeout);
@@ -498,14 +280,9 @@ class TorrentService {
           };
 
           const onReady = () => {
-            if (isReady) return; // Prevent multiple resolves
+          if (isReady) return;
             isReady = true;
             cleanup();
-            logger.debug(
-              `Torrent ready: ${newTorrent.name}, files: ${
-                newTorrent.files ? newTorrent.files.length : 0
-              }`
-            );
             resolve(newTorrent);
           };
 
@@ -523,14 +300,6 @@ class TorrentService {
           newTorrent.on("ready", onReady);
           newTorrent.on("download", onDownload);
           newTorrent.on("wire", onWire);
-
-          // Also resolve when metadata is received
-          newTorrent.once("metadata", () => {
-            logger.debug("Received torrent metadata");
-            if (newTorrent.files && newTorrent.files.length > 0) {
-              onReady();
-            }
-          });
         });
       }
 
@@ -613,7 +382,7 @@ class TorrentService {
       logger.debug(`Selected file: ${file.name}, size: ${file.length}`);
 
       // Store torrent for later cleanup
-      this.activeTorrents.set(torrent.infoHash, {
+    activeTorrents.set(torrent.infoHash, {
         torrent,
         lastAccessed: Date.now(),
         file,
@@ -621,9 +390,7 @@ class TorrentService {
 
       // Create stream factory function
       const createStream = (start, end) => {
-        logger.debug(
-          `Creating stream for ${file.name} from ${start} to ${end}`
-        );
+      logger.debug(`Creating stream for ${file.name} from ${start} to ${end}`);
         const stream = file.createReadStream({ start, end });
 
         // Add error handler to the stream
@@ -651,13 +418,23 @@ class TorrentService {
     }
   }
 
-  getTorrentStatus(infoHash) {
-    const torrentData = this.activeTorrents.get(infoHash);
-    if (!torrentData) {
-      throw new Error("Torrent not found");
+async function destroyTorrent(infoHash) {
+  try {
+    const torrent = client.get(infoHash);
+    if (torrent) {
+      logger.debug(`Destroying torrent: ${infoHash}`);
+      torrent.destroy();
+      activeTorrents.delete(infoHash);
     }
+  } catch (error) {
+    logger.error(`Error destroying torrent ${infoHash}:`, error);
+  }
+}
 
-    const { torrent } = torrentData;
+function getTorrentStatus(infoHash) {
+  const torrent = client.get(infoHash);
+  if (!torrent) return null;
+
     return {
       infoHash: torrent.infoHash,
       name: torrent.name,
@@ -666,31 +443,20 @@ class TorrentService {
       uploadSpeed: torrent.uploadSpeed,
       numPeers: torrent.numPeers,
       timeRemaining: torrent.timeRemaining,
-      files: torrent.files.map((file) => ({
-        name: file.name,
-        path: file.path,
-        length: file.length,
-        progress: file.progress,
-      })),
-    };
-  }
-
-  async destroyTorrent(infoHash) {
-    const torrentData = this.activeTorrents.get(infoHash);
-    if (!torrentData) {
-      throw new Error("Torrent not found");
-    }
-
-    const { torrent } = torrentData;
-    this.activeTorrents.delete(infoHash);
-
-    return new Promise((resolve, reject) => {
-      torrent.destroy((err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-  }
+    ratio: torrent.ratio,
+  };
 }
 
-export default new TorrentService();
+// ייצוא הפונקציות
+export default {
+  initialize,
+  searchTorrents,
+  streamTorrent,
+  destroyTorrent,
+  getTorrentStatus,
+};
+
+// אתחול השירות
+initialize().catch((err) => {
+  logger.error("Failed to initialize torrent service:", err);
+});
