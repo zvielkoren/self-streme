@@ -95,9 +95,11 @@ function getProxyConfig() {
   };
 }
 
-export default {
+const proxyManager = {
   initialize,
   getProxyConfig,
   getNextProxy,
   checkProxies,
 };
+
+export default proxyManager;

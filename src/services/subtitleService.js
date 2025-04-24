@@ -1,4 +1,4 @@
-import fs from 'fs/promises';
+import { promises as fs } from 'fs';
 import subsrt from 'subsrt';
 import logger from '../utils/logger.js';
 
@@ -60,4 +60,5 @@ class SubtitleService {
   }
 }
 
-export default new SubtitleService(); 
+const subtitleService = new SubtitleService();
+export default subtitleService; 

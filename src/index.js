@@ -1,19 +1,39 @@
 import express from "express";
 import cors from "cors";
 import path from "path";
+import { fileURLToPath } from "url";
 import { config } from "./config/index.js";
 import logger from "./utils/logger.js";
 import mediaService from "./services/mediaService.js";
 import subtitleService from "./services/subtitleService.js";
 import { serveAddon } from "./addon/index.js";
 import WebTorrent from "webtorrent";
-import fs from "fs";
+import { promises as fs } from "fs";
 import pump from "pump";
 import torrentService from "./services/torrentService.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Create Express app for streaming server
 const app = express();
 app.use(cors());
+
+// Add search endpoint
+app.get("/api/search", async (req, res) => {
+  try {
+    const { q: query } = req.query;
+    if (!query) {
+      return res.status(400).json({ error: "Query parameter 'q' is required" });
+    }
+
+    const results = await torrentService.searchTorrents(query);
+    res.json(results);
+  } catch (error) {
+    logger.error("Search error:", error);
+    res.status(500).json({ error: "Failed to perform search" });
+  }
+});
 
 // Create a single WebTorrent client instance
 const torrentClient = new WebTorrent({
@@ -32,11 +52,11 @@ app.get("/stream/:mediaId", async (req, res) => {
     const range = req.headers.range;
 
     // Check if it's a local file first
-    const localPath = path.join(config.media.localPath, mediaId);
+    const localPath = path.join(config.media.path, mediaId);
     try {
-      await fs.promises.access(localPath);
+      await fs.access(localPath);
       // Handle local file streaming
-      const stat = await fs.promises.stat(localPath);
+      const stat = await fs.stat(localPath);
       if (!range) {
         res.writeHead(200, {
           "Content-Length": stat.size,
@@ -207,39 +227,24 @@ app.post("/torrent/stop/:infoHash", async (req, res) => {
   }
 });
 
-// Initialize servers
+// Start the servers
 const startServers = async () => {
   try {
-    // Create temp directory if it doesn't exist
-    if (!fs.existsSync(config.media.tempPath)) {
-      fs.mkdirSync(config.media.tempPath);
-    }
-
-    // Create media directory if it doesn't exist
-    if (!fs.existsSync(config.media.libraryPath)) {
-      fs.mkdirSync(config.media.libraryPath);
-    }
-
-    // Start streaming server
-    const port = config.server.port;
-    app.listen(port, "0.0.0.0", () => {
-      logger.info(`Streaming server running on port ${port}`);
+    // Start the streaming server
+    const streamingPort = config.server.port || 3000;
+    app.listen(streamingPort, () => {
+      logger.info(`Streaming server running on port ${streamingPort}`);
     });
 
-    // Start Stremio addon server
-    const addonPort = config.server.addonPort;
-    serveAddon(addonPort, torrentService);
-
-    // Log server URLs
-    logger.info(`Streaming server URL: ${config.server.baseUrl}`);
-    logger.info(
-      `Addon manifest URL: http://0.0.0.0:${addonPort}/manifest.json`
-    );
+    // Start the Stremio addon server
+    const addonPort = config.server.addonPort || 7000;
+    await serveAddon(addonPort, torrentService);
+    logger.info(`Stremio addon server running on port ${addonPort}`);
   } catch (error) {
-    logger.error("Error starting servers:", error);
+    logger.error("Failed to start servers:", error);
     process.exit(1);
   }
 };
 
-// Start servers
+// Start the servers
 startServers();

@@ -1,9 +1,13 @@
 import pkg from "stremio-addon-sdk";
 const { addonBuilder, serveHTTP } = pkg;
 import path from "path";
-import fs from "fs/promises";
+import { fileURLToPath } from "url";
+import { promises as fs } from "fs";
 import { config } from "../config/index.js";
 import logger from "../utils/logger.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Create a new addon builder
 const manifest = {
@@ -284,10 +288,9 @@ export async function serveAddon(port, torrentService) {
       }
     });
 
-    const addonInterface = builder.getInterface();
-    serveHTTP(addonInterface, { port });
-
-    return addonInterface;
+    // Start the addon server
+    await serveHTTP(builder.getInterface(), { port });
+    logger.info(`Stremio addon server running on port ${port}`);
   } catch (error) {
     logger.error("Failed to serve addon:", error);
     throw error;

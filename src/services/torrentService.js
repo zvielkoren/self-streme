@@ -4,11 +4,20 @@ import { config } from "../config/index.js";
 import proxyManager from "../utils/proxyManager.js";
 import axios from "axios";
 import path from "path";
-import fs from "fs/promises";
+import { fileURLToPath } from "url";
+import { promises as fs } from "fs";
 import NodeCache from "node-cache";
+import * as cheerio from "cheerio";
 
-// הגדרת משתנים גלובליים
-let client = null;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Initialize variables
+let client = new WebTorrent({
+  maxConns: config.torrent.maxConnections,
+  downloadLimit: config.torrent.downloadLimit,
+  uploadLimit: config.torrent.uploadLimit,
+});
 let activeTorrents = new Map();
 let lastRequestTime = {};
 let requestDelay = 2000;
@@ -42,12 +51,6 @@ async function initialize() {
         maxKeys: torrentConfig.cache.maxSize,
       });
     }
-
-    client = new WebTorrent({
-      maxConns: config.torrent.maxConnections,
-      downloadLimit: config.torrent.downloadLimit,
-      uploadLimit: config.torrent.uploadLimit,
-    });
 
     setupCleanupInterval();
     logger.info("TorrentService initialized successfully");
@@ -160,7 +163,7 @@ async function searchProvider(provider, query, type) {
         results = await searchKickass(query, type);
         break;
       default:
-        logger.warn(`Unknown provider: ${provider.name}`);
+        logger.warn(`Provider ${provider.name} is not implemented`);
         return [];
     }
     return results;
@@ -173,16 +176,21 @@ async function searchProvider(provider, query, type) {
 async function searchEztv(query, type) {
   try {
     const response = await axios.get("https://eztv.io/api/get-torrents", {
-            params: {
-              limit: 100,
+      params: {
+        limit: 100,
         keywords: query,
       },
       proxy: proxyManager.getProxyConfig(),
     });
 
+    if (!response.data || !response.data.torrents) {
+      logger.warn("Eztv API returned unexpected data format");
+      return [];
+    }
+
     return response.data.torrents.map((torrent) => ({
-                title: torrent.title,
-                size: torrent.size_bytes,
+      title: torrent.title,
+      size: torrent.size_bytes,
       seeders: torrent.seeds,
       leechers: torrent.peers,
       magnet: torrent.magnet_url,
@@ -196,46 +204,87 @@ async function searchEztv(query, type) {
 
 async function search1337x(query, type) {
   try {
-    const response = await axios.get("https://1337x.to/search", {
+    const response = await axios.get("https://www.1377x.to/search", {
       params: {
         search: query,
-        category: type === "movie" ? "Movies" : "TV",
+        category: type === "series" ? "tv" : "movies",
       },
       proxy: proxyManager.getProxyConfig(),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
     });
 
-    // כאן צריך לפרסר את ה-HTML של התוצאות
-    // זה דורש מימוש של פונקציית parse1337xResults
-    return parse1337xResults(response.data);
-    } catch (error) {
-    logger.error("1337x search error:", error);
+    if (response.status === 404) {
+      logger.warn("1337x API returned 404, trying alternative domain");
       return [];
     }
-  }
 
-async function searchKickass(query, type) {
-  try {
-    const response = await axios.get("https://katcr.co/new/search", {
-      params: {
-        q: query,
-        field: "seeders",
-        sorder: "desc",
-      },
-      proxy: proxyManager.getProxyConfig(),
-    });
-
-    // כאן צריך לפרסר את ה-HTML של התוצאות
-    // זה דורש מימוש של פונקציית parseKickassResults
-    return parseKickassResults(response.data);
+    // Parse the HTML response to extract torrent information
+    const results = parse1337xResults(response.data);
+    return results;
   } catch (error) {
-    logger.error("Kickass search error:", error);
+    logger.error("1337x search error:", error);
     return [];
   }
 }
 
 function parse1337xResults(html) {
-  // TODO: מימוש פונקציית פירוס לתוצאות של 1337x
-  return [];
+  try {
+    const results = [];
+    const $ = cheerio.load(html);
+    
+    $('table.table-list tbody tr').each((i, element) => {
+      const $row = $(element);
+      const name = $row.find('td.name a:nth-child(2)').text().trim();
+      const seeders = parseInt($row.find('td.seeds').text().trim(), 10);
+      const leechers = parseInt($row.find('td.leeches').text().trim(), 10);
+      const size = $row.find('td.size').text().trim();
+      const uploadDate = $row.find('td.coll-date').text().trim();
+      const magnetLink = $row.find('td.name a:nth-child(1)').attr('href');
+      
+      if (name && seeders > 0) {
+        results.push({
+          name,
+          seeders,
+          leechers,
+          size,
+          uploadDate,
+          magnetLink,
+          provider: '1337x'
+        });
+      }
+    });
+    
+    return results;
+  } catch (error) {
+    logger.error("Error parsing 1337x results:", error);
+    return [];
+  }
+}
+
+async function searchKickass(query, type) {
+  try {
+    const response = await axios.get("https://kickasstorrents.to/search", {
+      params: {
+        q: query,
+        category: type === "series" ? "tv" : "movies",
+      },
+      proxy: proxyManager.getProxyConfig(),
+    });
+
+    if (response.status === 404) {
+      logger.warn("Kickass API returned 404, trying alternative domain");
+      return [];
+    }
+
+    // Parse the HTML response to extract torrent information
+    const results = parseKickassResults(response.data);
+    return results;
+  } catch (error) {
+    logger.error("Kickass search error:", error);
+    return [];
+  }
 }
 
 function parseKickassResults(html) {
@@ -447,16 +496,80 @@ function getTorrentStatus(infoHash) {
   };
 }
 
-// ייצוא הפונקציות
-export default {
-  initialize,
+async function getTorrentInfo(imdbId, type) {
+  try {
+    const cacheKey = `torrent:${imdbId}:${type}`;
+    if (cache) {
+      const cached = cache.get(cacheKey);
+      if (cached) {
+        logger.debug("Returning cached torrent info for:", cacheKey);
+        return cached;
+      }
+    }
+
+    const results = await searchTorrents(imdbId, type);
+    if (results.length === 0) {
+      return null;
+    }
+
+    const torrentInfo = {
+      title: results[0].title,
+      imdbId,
+      type,
+      episodes: type === "series" ? [] : undefined,
+    };
+
+    if (cache) {
+      cache.set(cacheKey, torrentInfo);
+    }
+
+    return torrentInfo;
+  } catch (error) {
+    logger.error("Error getting torrent info:", error);
+    return null;
+  }
+}
+
+async function getTorrentStream(mediaId) {
+  try {
+    const torrent = activeTorrents.get(mediaId);
+    if (!torrent) {
+      return null;
+    }
+
+    const file = torrent.files.find(file => {
+      const ext = path.extname(file.name).toLowerCase();
+      return ['.mp4', '.mkv', '.avi', '.webm', '.mov', '.flv'].includes(ext);
+    });
+
+    if (!file) {
+      return null;
+    }
+
+    return {
+      file,
+      createStream: (start, end) => file.createReadStream({ start, end })
+    };
+  } catch (error) {
+    logger.error("Error getting torrent stream:", error);
+    return null;
+  }
+}
+
+const torrentService = {
+  client,
   searchTorrents,
   streamTorrent,
   destroyTorrent,
   getTorrentStatus,
+  getTorrentInfo,
+  getTorrentStream,
+  initialize
 };
 
-// אתחול השירות
-initialize().catch((err) => {
-  logger.error("Failed to initialize torrent service:", err);
+// Initialize the service
+initialize().catch(error => {
+  logger.error("Failed to initialize torrent service:", error);
 });
+
+export default torrentService;

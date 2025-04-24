@@ -1,25 +1,11 @@
 {
   "providers": {
-    "yts": {
-      "enabled": true,
-      "priority": 1,
-      "type": ["movies"],
-      "domains": [
-        "https://yts.mx/api/v2",
-        "https://yts.lt/api/v2",
-        "https://yts.am/api/v2",
-        "https://yts.unblockit.kim/api/v2"
-      ],
-      "rateLimit": 1000,
-      "timeout": 5000,
-      "maxResults": 20
-    },
     "eztv": {
       "enabled": true,
       "priority": 1,
       "type": ["series"],
       "domains": [
-        "https://eztvx.to/api",
+        "https://eztv.io/api",
         "https://eztv.wf/api",
         "https://eztv.re/api"
       ],
@@ -35,8 +21,21 @@
         "https://1337x.to",
         "https://1337x.st",
         "https://x1337x.ws",
-        "https://x1337x.se",
-        "https://1337x.unblockit.kim"
+        "https://x1337x.se"
+      ],
+      "rateLimit": 1000,
+      "timeout": 5000,
+      "maxResults": 20
+    },
+    "yts": {
+      "enabled": true,
+      "priority": 1,
+      "type": ["movies"],
+      "domains": [
+        "https://yts.mx/api/v2",
+        "https://yts.lt/api/v2",
+        "https://yts.am/api/v2",
+        "https://yts.unblockit.kim/api/v2"
       ],
       "rateLimit": 1000,
       "timeout": 5000,
@@ -148,30 +147,8 @@
     "maxSize": 1000
   },
   "optimization": {
-    "concurrent_searches": 3,
-    "min_seeds": 1,
-    "max_age_days": 365,
-    "preferred_release_groups": [
-      "RARBG",
-      "YIFY",
-      "QxR",
-      "UTR",
-      "SPARKS",
-      "AMIABLE"
-    ],
-    "size_limits": {
-      "movies": {
-        "min_mb": 500,
-        "max_mb": 20000
-      },
-      "series": {
-        "min_mb": 100,
-        "max_mb": 5000
-      }
-    },
-    "quality_preferences": {
-      "movies": ["1080p", "720p", "2160p"],
-      "series": ["1080p", "720p"]
-    }
+    "concurrent_searches": 2,
+    "min_seeders": 5,
+    "max_results": 50
   }
 }

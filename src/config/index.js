@@ -2,13 +2,13 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// Load environment variables
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const config = {
+// Load environment variables
+dotenv.config();
+
+const config = {
   server: {
     port: 3000,
     addonPort: 3001,
@@ -17,6 +17,7 @@ export const config = {
   media: {
     tempPath: "./temp",
     libraryPath: "./media",
+    localPath: process.env.MEDIA_PATH || path.join(__dirname, "../../media"),
     path: process.env.MEDIA_PATH || path.join(__dirname, "../../media"),
     supportedVideoFormats: [".mp4", ".mkv", ".avi", ".webm", ".mov", ".flv"],
     supportedSubtitleFormats: [".srt", ".vtt", ".ass", ".ssa"],
@@ -28,6 +29,7 @@ export const config = {
     level: process.env.LOG_LEVEL || "info",
   },
   torrent: {
+    enabled: true,
     apis: {
       rarbg: {
         url: "https://torrentapi.org/pubapi_v2.php",
@@ -98,7 +100,8 @@ export const config = {
     background: "https://www.stremio.com/website/stremio-logo-small.png",
     behaviorHints: {
       configurable: true,
-      configurationRequired: false,
     },
   },
 };
+
+export { config };
