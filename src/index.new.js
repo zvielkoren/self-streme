@@ -14,7 +14,9 @@ if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 // Cache Map – infoHash -> { filePath, lastAccessed }
 const tempCache = new Map();
 const CACHE_LIFETIME = 60 * 60 * 1000; // שעה
-
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, "install.html"));
+});
 // ניקוי אוטומטי
 setInterval(() => {
   const now = Date.now();
