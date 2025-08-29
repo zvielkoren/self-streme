@@ -286,10 +286,23 @@ async function searchKickass(query, type) {
     return [];
   }
 }
-
 function parseKickassResults(html) {
-  // TODO: מימוש פונקציית פירוס לתוצאות של Kickass
-  return [];
+  const results = [];
+  const $ = cheerio.load(html);
+
+  $('.torrent').each((i, el) => {
+    const title = $(el).find('.torrent-name a').text().trim();
+    const magnet = $(el).find('a.magnet-link').attr('href');
+    const seeders = parseInt($(el).find('.seeders').text(), 10);
+    const leechers = parseInt($(el).find('.leechers').text(), 10);
+    const size = $(el).find('.size').text().trim();
+
+    if (title && magnet) {
+      results.push({ title, magnet, seeders, leechers, size, provider: 'kickass' });
+    }
+  });
+
+  return results;
 }
 
 // פונקציות סטרימינג
@@ -496,6 +509,7 @@ function getTorrentStatus(infoHash) {
   };
 }
 
+
 async function getTorrentInfo(imdbId, type) {
   try {
     const cacheKey = `torrent:${imdbId}:${type}`;
@@ -507,7 +521,25 @@ async function getTorrentInfo(imdbId, type) {
       }
     }
 
-    const results = await searchTorrents(imdbId, type);
+    // בקשת שם הסרט מ-OMDb (או API דומה)
+    const omdbApiKey = config.apiKeys.omdb;
+    const omdbResponse = await axios.get(`http://www.omdbapi.com/`, {
+      params: {
+        i: imdbId,
+        apikey: omdbApiKey,
+      },
+    });
+
+    if (!omdbResponse.data || omdbResponse.data.Response === "False") {
+      logger.warn(`OMDb did not return info for ${imdbId}`);
+      return null;
+    }
+
+    const titleToSearch = omdbResponse.data.Title;
+    logger.debug(`Searching torrents for movie title: ${titleToSearch}`);
+
+    const results = await searchTorrents(titleToSearch, type);
+
     if (results.length === 0) {
       return null;
     }
@@ -552,7 +584,7 @@ async function getTorrentStream(mediaId) {
     };
   } catch (error) {
     logger.error("Error getting torrent stream:", error);
-    return null;
+    throw error;
   }
 }
 

@@ -61,4 +61,4 @@ class SubtitleService {
 }
 
 const subtitleService = new SubtitleService();
-export default subtitleService; 
+export default subtitleService;

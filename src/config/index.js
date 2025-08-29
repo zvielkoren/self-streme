@@ -5,14 +5,14 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables
+// Load environment variables from .env file
 dotenv.config();
 
 const config = {
   server: {
-    port: 3000,
-    addonPort: 3001,
-    baseUrl: "http://0.0.0.0:3000",
+    port: process.env.PORT || 3000,
+    addonPort: process.env.ADDON_PORT || 3001,
+    baseUrl: process.env.BASE_URL || "http://0.0.0.0:3000",
   },
   media: {
     tempPath: "./temp",
@@ -21,6 +21,9 @@ const config = {
     path: process.env.MEDIA_PATH || path.join(__dirname, "../../media"),
     supportedVideoFormats: [".mp4", ".mkv", ".avi", ".webm", ".mov", ".flv"],
     supportedSubtitleFormats: [".srt", ".vtt", ".ass", ".ssa"],
+  },
+  apiKeys: {
+    omdb: process.env.OMDB_API_KEY,
   },
   cache: {
     ttl: parseInt(process.env.CACHE_TTL, 10) || 3600,
