@@ -10,9 +10,15 @@ dotenv.config();
 
 const config = {
   server: {
-    port: process.env.PORT || 3000,
-    addonPort: process.env.ADDON_PORT || 3001,
-    baseUrl: process.env.BASE_URL || "http://0.0.0.0:3000",
+    port: process.env.PORT || 7000,
+    addonPort: process.env.ADDON_PORT || 7001,
+    baseUrl: process.env.BASE_URL || "http://127.0.0.1:7000",
+  },
+  external: {
+    jackett: {
+      url: process.env.JACKETT_URL || 'http://localhost:9117',
+      apiKey: process.env.JACKETT_API_KEY || ''
+    }
   },
   media: {
     tempPath: "./temp",
