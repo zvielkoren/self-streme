@@ -1,69 +1,81 @@
-import axios from 'axios';
-import { config } from '../config/index.js';
-import logger from '../utils/logger.js';
+import logger from "../utils/logger.js";
+import axios from "axios";
 
-/**
- * Core metadata service for resolving IMDb IDs to metadata
- */
 class MetadataService {
-    constructor() {
-        this.cache = new Map();
+  constructor() {
+    this.cache = new Map(); // מטמון למניעת בקשות חוזרות
+  }
+
+  /**
+   * מחזיר metadata לסרט או סדרה
+   * @param {string} imdbId - ה-ID הבסיסי של הסרט/סדרה
+   * @param {number} [season] - מספר עונה אם מדובר בסדרה
+   * @param {number} [episode] - מספר פרק אם מדובר בפרק
+   * @returns {Promise<Object|null>}
+   */
+  async getMetadata(imdbId, season, episode) {
+    const cacheKey = season && episode ? `${imdbId}:${season}:${episode}` : imdbId;
+    if (this.cache.has(cacheKey)) {
+      return this.cache.get(cacheKey);
     }
 
-    /**
-     * Get metadata for IMDb ID
-     * @param {string} imdbId 
-     * @returns {Promise<Object>}
-     */
-    async getMetadata(imdbId) {
+    try {
+      // דוגמה ל-fetch מ-OMDb API או מקור אחר
+      const url = `https://www.omdbapi.com/?i=${imdbId}&apikey=YOUR_OMDB_API_KEY`;
+      const response = await axios.get(url);
+      const data = response.data;
+
+      if (!data || data.Response === "False") {
+        logger.error(`No metadata found for ${cacheKey}`);
+        return null;
+      }
+
+      let metadata = {
+        id: imdbId,
+        title: data.Title,
+        type: data.Type,
+        year: data.Year,
+        poster: data.Poster,
+        imdbRating: data.imdbRating,
+        genre: data.Genre
+      };
+
+      // אם יש עונה ופרק, מחזירים מידע ספציפי לפרק
+      if (season && episode && data.Type === "series") {
+        // במידה ויש API שמחזיר מידע על עונות/פרקים
+        // נניח שיש endpoint שמחזיר episodes
         try {
-            // Check cache first
-            if (this.cache.has(imdbId)) {
-                logger.debug(`Cache hit for ${imdbId}`);
-                return this.cache.get(imdbId);
-            }
-
-            logger.info(`Fetching metadata for ${imdbId}`);
-            const response = await axios.get('http://www.omdbapi.com/', {
-                params: {
-                    i: imdbId,
-                    apikey: config.apiKeys.omdb
-                },
-                timeout: 5000
-            });
-
-            if (response.data.Response === 'True') {
-                const metadata = {
-                    imdbId,
-                    title: response.data.Title,
-                    year: response.data.Year,
-                    type: response.data.Type.toLowerCase(),
-                    genre: response.data.Genre,
-                    runtime: response.data.Runtime,
-                    season: response.data.Season,
-                    episode: response.data.Episode
-                };
-
-                // Cache the result
-                this.cache.set(imdbId, metadata);
-                logger.info(`Resolved ${imdbId}: ${metadata.title} (${metadata.year})`);
-                return metadata;
-            }
-
-            throw new Error(`No metadata found for ${imdbId}`);
-        } catch (error) {
-            logger.error(`Metadata error for ${imdbId}:`, error.message);
-            throw error;
+          const epResponse = await axios.get(`https://www.omdbapi.com/?i=${imdbId}&Season=${season}&apikey=YOUR_OMDB_API_KEY`);
+          const epData = epResponse.data;
+          const ep = epData.Episodes.find(e => parseInt(e.Episode) === parseInt(episode));
+          if (ep) {
+            metadata = {
+              ...metadata,
+              season,
+              episode,
+              title: ep.Title,
+              released: ep.Released
+            };
+          } else {
+            logger.warn(`Episode not found: ${imdbId} S${season}E${episode}`);
+          }
+        } catch (err) {
+          logger.error("Error fetching episode metadata:", err.message);
         }
-    }
+      }
 
-    /**
-     * Clear metadata cache
-     */
-    clearCache() {
-        this.cache.clear();
-        logger.debug('Metadata cache cleared');
+      this.cache.set(cacheKey, metadata);
+      return metadata;
+
+    } catch (error) {
+      logger.error(`Metadata error for ${imdbId}:${season || 1}:${episode || 1}:`, error.message);
+      return null;
     }
+  }
+
+  clearCache() {
+    this.cache.clear();
+  }
 }
 
 export default new MetadataService();

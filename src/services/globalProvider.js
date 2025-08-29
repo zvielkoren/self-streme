@@ -1,8 +1,8 @@
-import { searchTorrentio } from './providers/torrentio.js';
-import { searchJackett } from './providers/jackett.js';
-import { search1337x } from './providers/1337x.js';
-import { searchEztv } from './providers/eztv.js';
-import { searchPirateBay } from './providers/piratebay.js';
+import { searchTorrentio } from '../providers/torrents/torrentio.js';
+import { searchJackett } from '../providers/torrents/jackett.js';
+import { search1337x } from '../providers/torrents/1337x.js';
+// import { searchEztv } from '../providers/torrents/eztv.js';
+import { searchPirateBay } from '../providers/torrents/piratebay.js';
 import logger from '../../utils/logger.js';
 
 async function searchAll(metadata) {
@@ -12,7 +12,7 @@ async function searchAll(metadata) {
         searchTorrentio(metadata),
         searchJackett(metadata),
         search1337x(metadata),
-        searchEztv(metadata),
+        // searchEztv(metadata),
         searchPirateBay(metadata),
         // future: YTS, Nyaa, Google scraper...
     ];

@@ -1,71 +1,104 @@
+// src/core/streamService.js
 import logger from "../utils/logger.js";
-import metadataService from "../core/metadataService.js";
 import searchService from "../providers/index.js";
 import torrentService from "../core/torrentService.js";
 import { config } from "../config/index.js";
 
 class StreamService {
     constructor() {
-        this.metadataService = metadataService;
+        this.cache = new Map(); // שמירה של streams
         this.setupCleanup();
     }
 
-    async getStreams(type, imdbId) {
+    /**
+     * מחזיר streams לסרט או סדרה
+     * @param {string} type - "movie" או "series"
+     * @param {string} imdbId
+     * @param {number} [season]
+     * @param {number} [episode]
+     */
+    async getStreams(type, imdbId, season, episode) {
         try {
-            logger.info(`Getting streams for ${type}:${imdbId}`);
+            logger.info(`Getting streams for ${type}:${imdbId} S${season || "-"}E${episode || "-"}`);
 
-            const metadata = await metadataService.getMetadata(imdbId);
+            // קריאה ל-searchService
+            const streamsData = await searchService.search(imdbId, type);
 
-            const results = await Promise.allSettled(
-                searchService.providers.map(p => p.search(imdbId, type).catch(() => []))
-            );
+            if (!streamsData || !Array.isArray(streamsData) || streamsData.length === 0) {
+                logger.warn(`No streams found from searchService for ${imdbId} (${type})`);
+                return [];
+            }
 
-            const searchResults = results
-                .filter(r => r.status === "fulfilled")
-                .map(r => r.value)
-                .flat();
+            // יצירת metadata מינימלי מה־streams עצמם
+            const safeMetadata = {
+                title: streamsData[0].title || streamsData[0].name || "Unknown Title",
+                type
+            };
 
-            const streams = searchResults.map(result => this.convertToStremioStream(result));
+            const streams = streamsData
+                .filter(r => r) // מסננים null
+                .map(result => this.convertToStremioStream(result, safeMetadata));
 
-            streams.forEach(stream => {
-                stream.name = "Self-Streme";
-                stream.behaviorHints = {
-                    notWebReady: true,
-                    bingeGroup: `self-streme-${stream.quality || "default"}`
-                };
-            });
+            if (streams.length === 0) {
+                logger.warn(`No valid streams after conversion for ${imdbId}`);
+                return [];
+            }
+
+            // שמירת cache לפי imdbId + עונה + פרק
+            const cacheKey = `${imdbId}:${season || 0}:${episode || 0}`;
+            this.cache.set(cacheKey, streams);
 
             return streams;
+
         } catch (error) {
-            logger.error(`Stream service error for ${imdbId}:`, error.message);
+            logger.error(`Stream service error for ${imdbId}:${season || 1}:${episode || 1}:`, error.message);
             return [];
         }
     }
 
-    convertToStremioStream(result) {
+    getCachedStream(imdbId, season, episode, fileIdx) {
+        const key = `${imdbId}:${season || 0}:${episode || 0}`;
+        const streams = this.cache.get(key) || [];
+        return streams[fileIdx] || null;
+    }
+
+    convertToStremioStream(result, metadata) {
         const stream = {
             name: "Self-Streme",
-            title: result.title || `${result.name} [${result.provider}]`
+            title: result.title || result.name || metadata.title || "Unknown Title",
+            quality: result.quality,
+            size: result.size,
+            seeders: result.seeders,
+            source: result.source
         };
 
-        if (result.magnet) {
-            const infoHash = result.infoHash || this.extractInfoHash(result.magnet);
+        // magnet
+        if (result.magnet || (result.sources && result.sources.some(s => s.startsWith("magnet:")))) {
+            const magnetLink = result.magnet || result.sources.find(s => s.startsWith("magnet:"));
+            const infoHash = this.extractInfoHash(magnetLink);
             if (infoHash) {
                 stream.infoHash = infoHash;
                 stream.fileIdx = result.fileIdx || 0;
-                stream.sources = [result.magnet];
+                stream.sources = [magnetLink];
             }
         }
 
-        if (result.url) {
-            stream.url = result.url;
-            stream.ytId = result.ytId;
+        // URL ישיר
+        if (result.url) stream.url = result.url;
+
+        // YouTube ID
+        if (result.ytId) stream.ytId = result.ytId;
+
+        // fallback אם אין מקור
+        if (!stream.infoHash && !stream.url && !stream.ytId) {
+            stream.url = "https://example.com/placeholder.mp4";
         }
 
-        if (result.seeders) stream.seeders = result.seeders;
-        if (result.quality) stream.quality = result.quality;
-        if (result.size) stream.size = result.size;
-        if (result.source) stream.source = result.source;
+        // behaviorHints
+        stream.behaviorHints = {
+            notWebReady: true,
+            bingeGroup: `self-streme-${stream.quality || "default"}`
+        };
 
         return stream;
     }
@@ -84,12 +117,6 @@ class StreamService {
                 logger.error("Cleanup error:", error.message);
             }
         }, config.torrent.cleanupInterval || 1800000);
-    }
-
-    destroy() {
-        torrentService.destroy();
-        metadataService.clearCache();
-        searchService.clearCache();
     }
 }
 
