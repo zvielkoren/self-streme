@@ -12,6 +12,7 @@ import torrentGalaxyProvider from './torrents/torrentgalaxy.js';
 // Import external providers
 import torrentioProvider from './external/torrentio.js';
 import jackettProvider from './external/jackett.js';
+import fallbackProvider from './external/fallbackProvider.js';
 
 class SearchService {
     constructor() {
@@ -24,7 +25,8 @@ class SearchService {
 
         this.externalProviders = [
             torrentioProvider,
-            jackettProvider
+            jackettProvider,
+            fallbackProvider,
         ];
 
         // Initialize cache

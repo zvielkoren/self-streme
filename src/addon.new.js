@@ -30,30 +30,30 @@ builder.defineStreamHandler(async ({ type, id }) => {
 });
 
 // ------------------ META HANDLER ------------------
-builder.defineMetaHandler(async ({ type, id }) => {
-    try {
-        const cacheKey = `meta:${id}`;
-        const cached = cache.get(cacheKey);
-        if (cached) return cached;
+// builder.defineMetaHandler(async ({ type, id }) => {
+//     try {
+//         const cacheKey = `meta:${id}`;
+//         const cached = cache.get(cacheKey);
+//         if (cached) return cached;
 
-        const metadata = await StreamService.metadataService.getMetadata(id);
-        const meta = {
-            id,
-            type,
-            name: metadata.title,
-            description: metadata.plot || "",
-            poster: metadata.poster,
-            background: metadata.background,
-            year: metadata.year
-        };
+//         const metadata = await StreamService.metadataService.getMetadata(id);
+//         const meta = {
+//             id,
+//             type,
+//             name: metadata.title,
+//             description: metadata.plot || "",
+//             poster: metadata.poster,
+//             background: metadata.background,
+//             year: metadata.year
+//         };
 
-        cache.set(cacheKey, meta);
-        return meta;
-    } catch (error) {
-        logger.error("Meta handler error:", error.message);
-        return {};
-    }
-});
+//         cache.set(cacheKey, meta);
+//         return meta;
+//     } catch (error) {
+//         logger.error("Meta handler error:", error.message);
+//         return {};
+//     }
+// });
 
 // ------------------ CATALOG HANDLER ------------------
 builder.defineCatalogHandler(async ({ type, id, extra }) => {

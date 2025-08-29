@@ -18,13 +18,11 @@ body {
     min-height: 100vh;
     text-align: center;
 }
-
 .logo {
     width: 150px;
     margin-bottom: 1rem;
     animation: rotateBounce 5s infinite;
 }
-
 @keyframes rotateBounce {
     0% { transform: rotate(0deg) scale(1); }
     25% { transform: rotate(90deg) scale(1.05); }
@@ -32,18 +30,8 @@ body {
     75% { transform: rotate(270deg) scale(1.05); }
     100% { transform: rotate(360deg) scale(1); }
 }
-
 h1 { font-size: 2.5rem; margin-bottom: 1rem; }
-
-.status {
-    font-size: 1.2rem;
-    margin-bottom: 2rem;
-    color: #c0c0ff;
-    transition: color 0.5s ease, transform 0.3s ease;
-}
-.status.active { color: #4caf50; transform: scale(1.05); }
-.status.offline { color: #f44336; transform: scale(1.05); }
-
+.status { font-size: 1.2rem; margin-bottom: 2rem; color: #c0c0ff; }
 .btn {
     padding: 1rem 2.5rem;
     font-size: 1.3rem;
@@ -53,55 +41,22 @@ h1 { font-size: 2.5rem; margin-bottom: 1rem; }
     border: none;
     border-radius: 50px;
     cursor: pointer;
-    transition: all 0.3s ease;
 }
 .btn:hover { transform: scale(1.05); }
-
 .footer { position: absolute; bottom: 20px; font-size: 0.9rem; color: #aaa; }
 </style>
 </head>
 <body>
 <img src="logo.png" alt="Self-Streme Logo" class="logo">
 <h1>Self-Streme Addon</h1>
-<p class="status" id="addon-status">Status: Loading...</p>
+<p class="status" id="addon-status">Status: Active</p>
 <button class="btn" onclick="installAddon()">Add to Stremio</button>
 <div class="footer">&copy; 2025 Self-Streme</div>
 
 <script>
 function installAddon() {
-    const stremioUrl = 'stremio://127.0.0.1:3001/manifest.json';
-    // ניסיון לפתוח את ה-Addon ב-Stremio
-    window.location.href = stremioUrl;
-
-    // הודעה חביבה למשתמש
-    setTimeout(() => {
-        alert("Addon installation triggered!\n\nאם Stremio לא נפתח אוטומטית, העתק את הקישור הבא והדבק בדפדפן:\n" + stremioUrl);
-    }, 500);
+    window.location.href = 'stremio://127.0.0.1:3001/manifest.json';
 }
-
-// עדכון סטטוס דינמי עם צבע
-async function updateStatus() {
-    const statusEl = document.getElementById('addon-status');
-    try {
-        const res = await fetch('http://127.0.0.1:3000/status'); // HTTP
-        const data = await res.json();
-        statusEl.textContent = `Status: ${data.status}`;
-        statusEl.classList.remove('active', 'offline');
-        if(data.status.toLowerCase() === 'active') {
-            statusEl.classList.add('active');
-        } else {
-            statusEl.classList.add('offline');
-        }
-    } catch (e) {
-        statusEl.textContent = 'Status: Offline';
-        statusEl.classList.remove('active');
-        statusEl.classList.add('offline');
-    }
-}
-
-// עדכון סטטוס כל 5 שניות
-updateStatus();
-setInterval(updateStatus, 5000);
 </script>
 </body>
 </html>

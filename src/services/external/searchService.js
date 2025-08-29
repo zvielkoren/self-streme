@@ -21,7 +21,7 @@ async function searchExternal(metadata) {
     try {
         // Example: Search Torrentio
         if (metadata.type === 'movie') {
-            const torrentioUrl = `${EXTERNAL_APIS.TORRENTIO}${metadata.imdbId}.json`;
+            const torrentioUrl = `${EXTERNAL_APIS.TORRENTIO}${metadata.imdbId}`;
             const torrentioResponse = await axios.get(torrentioUrl, { timeout: 5000 });
             
             if (torrentioResponse.data?.streams) {

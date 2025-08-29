@@ -7,7 +7,6 @@
   "scripts": {
     "start": "node src/index.new.js",
     "dev": "nodemon src/index.new.js"
-
   },
   "dependencies": {
     "axios": "^1.11.0",
