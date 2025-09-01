@@ -6,6 +6,8 @@ import logger from "./utils/logger.js";
 import express from "express";
 import streamService from "./core/streamService.js";
 import torrentService from "./core/torrentService.js";
+// Serve HTML installation page
+import { fileURLToPath } from "url";
 
 const app = express();
 const TEMP_DIR = path.join(os.tmpdir(), "self-streme");
@@ -14,6 +16,10 @@ if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 // Cache Map – infoHash -> { filePath, lastAccessed }
 const tempCache = new Map();
 const CACHE_LIFETIME = 60 * 60 * 1000; // שעה
+
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "install.html"));
 });
