@@ -130,5 +130,5 @@ app.get("/play/:type/:imdbId/:fileIdx/:season?/:episode?", async (req, res) => {
 });
 
 // Start server
-const PORT = 3001;
+const PORT = 10000;
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
