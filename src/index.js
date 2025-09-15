@@ -118,13 +118,13 @@ async function startServer() {
 // Clean up on process termination
 process.on('SIGINT', () => {
     logger.info('Shutting down...');
-    streamService.destroy();
+    // Graceful shutdown
     process.exit(0);
 });
 
 process.on('SIGTERM', () => {
     logger.info('Shutting down...');
-    streamService.destroy();
+    // Graceful shutdown
     process.exit(0);
 });
 

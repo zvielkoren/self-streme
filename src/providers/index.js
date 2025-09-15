@@ -46,6 +46,11 @@ class SearchService {
 
         try {
             const metadata = await metadataService.getMetadata(imdbId);
+            if (!metadata || !metadata.title) {
+                logger.error(`No valid metadata found for ${imdbId}`);
+                return [];
+            }
+            
             const params = {
                 imdbId,
                 type,

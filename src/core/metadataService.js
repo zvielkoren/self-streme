@@ -21,7 +21,8 @@ class MetadataService {
 
     try {
       // דוגמה ל-fetch מ-OMDb API או מקור אחר
-      const url = `https://www.omdbapi.com/?i=${imdbId}&apikey=YOUR_OMDB_API_KEY`;
+      const apiKey = process.env.OMDB_API_KEY || '';
+      const url = `https://www.omdbapi.com/?i=${imdbId}&apikey=${apiKey}`;
       const response = await axios.get(url);
       const data = response.data;
 
@@ -45,7 +46,7 @@ class MetadataService {
         // במידה ויש API שמחזיר מידע על עונות/פרקים
         // נניח שיש endpoint שמחזיר episodes
         try {
-          const epResponse = await axios.get(`https://www.omdbapi.com/?i=${imdbId}&Season=${season}&apikey=YOUR_OMDB_API_KEY`);
+          const epResponse = await axios.get(`https://www.omdbapi.com/?i=${imdbId}&Season=${season}&apikey=${apiKey}`);
           const epData = epResponse.data;
           const ep = epData.Episodes.find(e => parseInt(e.Episode) === parseInt(episode));
           if (ep) {
@@ -69,7 +70,10 @@ class MetadataService {
 
     } catch (error) {
       logger.error(`Metadata error for ${imdbId}:${season || 1}:${episode || 1}:`, error.message);
-      return null;
+      // Add to cache to prevent repeated failed requests
+      const emptyMetadata = { id: imdbId, title: null, type: null, year: null };
+      this.cache.set(cacheKey, emptyMetadata);
+      return emptyMetadata;
     }
   }
 
