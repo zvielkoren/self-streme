@@ -4,8 +4,11 @@ services:
     name: self-streme
     env: node
     plan: free
+    region: frankfurt
     buildCommand: npm install
     startCommand: node src/index.js
+    staticPublishPath: ./media
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production

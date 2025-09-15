@@ -10,6 +10,12 @@ import streamService from "./core/streamService.js";
 // Initialize Express app
 const app = express();
 
+// Basic error handler
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ error: 'Something broke!' });
+});
+
 // CORS configuration for Render
 app.use(cors({
     origin: '*',
@@ -31,6 +37,12 @@ app.get('/', (req, res) => {
 // Status endpoints
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Explicit manifest endpoint
+app.get('/manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.json(manifest);
 });
 
 app.get('/status', (req, res) => {

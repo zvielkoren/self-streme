@@ -1,7 +1,8 @@
 const manifest = {
-  id: "com.zvicraft.selfstreme",
+  id: "org.selfstreme",
   version: "1.0.0",
   name: "Self-Streme",
+  description: "Stream content from multiple sources",
   url: "https://self-streme.onrender.com",
   description: "Stream movies and series from multiple sources including local files and torrents",
   types: ["movie", "series"],
