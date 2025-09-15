@@ -8,6 +8,11 @@ import logger from "./utils/logger.js";
 const { addonBuilder } = addonSdk;
 const builder = new addonBuilder(manifest);
 
+// Define required meta handler (even if empty)
+builder.defineMetaHandler(() => {
+    return Promise.resolve({ meta: [] });
+});
+
 builder.defineStreamHandler(async ({ type, id }) => {
     try {
         if (!id.startsWith('tt')) {

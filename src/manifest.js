@@ -4,7 +4,7 @@ const manifest = {
   name: "Self-Streme",
   description: "Stream movies and series from multiple sources including local files and torrents",
   types: ["movie", "series"],
-  resources: ["stream", "meta", "catalog"],
+  resources: ["stream", "meta"],
   catalogs: [],
   idPrefixes: ["tt"],
   behaviorHints: {

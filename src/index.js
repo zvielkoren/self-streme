@@ -4,7 +4,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { config } from "./config/index.js";
 import logger from "./utils/logger.js";
-import { app as addonApp } from "./addon.js";
+import builder from "./addon.js";
+const addonInterface = builder.getInterface();
+const addonRouter = express.Router();
+addonRouter.use('/', addonInterface);
 import streamService from "./core/streamService.js";
 
 // Initialize Express app
@@ -49,8 +52,8 @@ async function startServer() {
         const port = process.env.PORT || 7000;
         const host = process.env.HOST || '0.0.0.0';
         
-        // Mount the Stremio addon app
-        app.use('/', addonApp);
+        // Mount the Stremio addon router
+        app.use('/', addonRouter);
 
         app.listen(port, host, () => {
             const publicUrl = process.env.PUBLIC_URL || `http://${host}:${port}`;
