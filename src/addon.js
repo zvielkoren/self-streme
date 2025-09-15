@@ -42,9 +42,26 @@ builder.defineStreamHandler(async ({ type, id }) => {
 // Create the addon interface router
 const addonInterface = builder.getInterface();
 
-const app = express();
-app.use(cors());
-app.use("/", addonInterface);
+// Create express router for the addon
+const addonRouter = express.Router();
+
+// Mount the addon interface on the router
+addonRouter.get("/:path(*)", (req, res) => {
+    const path = req.params.path || "";
+    const handler = addonInterface[path];
+    
+    if (typeof handler !== 'function') {
+        res.status(404).json({ error: 'Not found' });
+        return;
+    }
+
+    Promise.resolve()
+        .then(() => handler(req, res))
+        .catch(error => {
+            console.error('Addon error:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        });
+});
 
 export default builder;
-export { app };
+export { addonRouter };
