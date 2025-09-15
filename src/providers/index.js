@@ -13,7 +13,6 @@ import tpbProvider from './torrents/piratebay.js'; // הוסף את PirateBay כ
 import torrentioProvider from './external/torrentio.js';
 import jackettProvider from './external/jackett.js';
 import fallbackProvider from './external/fallbackProvider.js';
-import mockProvider from './test/mockProvider.js';
 
 // Metadata service
 import metadataService from '../core/metadataService.js';
@@ -29,7 +28,6 @@ class SearchService {
         ];
 
         this.externalProviders = [
-            mockProvider,
             torrentioProvider,
             jackettProvider,
             fallbackProvider

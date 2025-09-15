@@ -39,6 +39,11 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'install.html'));
 });
 
+// Serve iOS fix test page
+app.get('/test-ios-fix', (req, res) => {
+    res.sendFile(path.join(__dirname, 'test-ios-fix.html'));
+});
+
 // Serve static files from src directory
 app.use(express.static(path.join(__dirname)));
 

@@ -21,8 +21,6 @@ class StreamService {
    */
   async getStreams(type, imdbId, season, episode, userAgent) {
     try {
-      logger.info(`getStreams called with: type=${type}, imdbId=${imdbId}, season=${season}, episode=${episode}, userAgent=${userAgent ? userAgent.substring(0, 30) + '...' : 'undefined'}`);
-      
       // Clean the IMDB ID by removing .json and any other extensions
       const cleanImdbId = imdbId.replace(/\.(json|txt|html)$/, '');
       const cacheKey = `${cleanImdbId}:${season || 0}:${episode || 0}`;
@@ -42,14 +40,9 @@ class StreamService {
 
       // מיפוי ותיקון metadata מתוך מקור ה־streams
       const isIOS = this.isIOSDevice(userAgent);
-      logger.info(`iOS detection result: ${isIOS} from UA: ${userAgent}`);
-      logger.info(`Stream data before conversion: ${JSON.stringify(streamsData.slice(0, 2))}`); // Log first 2 results
-      
       const streams = streamsData
         .filter(result => result && (result.title || result.name || result.magnet || result.url || result.ytId))
         .map(result => this.convertToStremioStream(result, isIOS));
-        
-      logger.info(`Converted streams: ${JSON.stringify(streams.slice(0, 2))}`); // Log first 2 converted streams
 
       // שמירה במטמון
       this.cache.set(cacheKey, streams);
