@@ -65,56 +65,15 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 function installAddon() {
     const host = window.location.host;
-    const protocol = window.location.protocol.replace(/:$/, '');
-    const manifestUrl = `${protocol}://${host}/manifest.json`;
+    const protocol = window.location.protocol.replace(/:$/, ''); // Remove trailing colon
     
-    // Detect iOS
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    // Install URL using stremio protocol
+    window.location.href = `stremio://${host}/manifest.json`;
     
-    if (isIOS) {
-        // For iOS, open Stremio with the full URL
-        const encodedUrl = encodeURIComponent(manifestUrl);
-        window.location.href = `stremio://addon?url=${encodedUrl}`;
-        
-        // Show iOS-specific instructions after a delay
-        setTimeout(() => {
-            const iosInstructions = document.createElement('div');
-            iosInstructions.innerHTML = `
-                <div style="margin-top: 2rem; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 8px;">
-                    <p style="color: #ff6ec4;">iOS Installation Steps:</p>
-                    <ol style="text-align: left; color: #fff;">
-                        <li>Open Stremio app</li>
-                        <li>Go to Settings ⚙️</li>
-                        <li>Tap on Addons</li>
-                        <li>Tap on + to add addon</li>
-                        <li>Copy and paste this URL:</li>
-                    </ol>
-                    <code onclick="copyToClipboard(this)" style="background: #1d1f2c; padding: 0.5rem; border-radius: 4px; display: block; margin-top: 1rem; cursor: pointer; word-break: break-all;">${manifestUrl}</code>
-                    <small style="color: #aaa; margin-top: 0.5rem; display: block;">(Tap to copy)</small>
-                </div>
-            `;
-            document.querySelector('.status').after(iosInstructions);
-        }, 1500);
-    } else {
-        // For non-iOS devices, use standard installation
-        window.location.href = `stremio://${host}/manifest.json`;
-        
-        // Fallback to showing the manifest
-        setTimeout(() => {
-            window.location.href = manifestUrl;
-        }, 1000);
-    }
-}
-
-// Helper function to copy text to clipboard
-function copyToClipboard(element) {
-    const text = element.textContent;
-    navigator.clipboard.writeText(text).then(() => {
-        element.style.background = '#2d4';
-        setTimeout(() => {
-            element.style.background = '#1d1f2c';
-        }, 500);
-    });
+    // Fallback to web URL
+    setTimeout(() => {
+        window.location.href = `${protocol}://${host}/manifest.json`;
+    }, 1000);
 }
 </script>
 </body>
