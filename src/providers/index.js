@@ -109,7 +109,7 @@ class SearchService {
         const allResults = [...localResults, ...externalResults];
         const seen = new Set();
         const unique = allResults.filter(r => {
-            const key = r.infoHash || r.url;
+            const key = r.infoHash || r.url || r.magnet || r.title;
             if (!key || seen.has(key)) return false;
             seen.add(key);
             return true;
