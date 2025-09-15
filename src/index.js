@@ -49,15 +49,14 @@ app.get('/health', (req, res) => {
 // Explicit manifest endpoint
 app.get('/manifest.json', (req, res) => {
     const isProduction = process.env.NODE_ENV === 'production';
+    const hostName = isProduction ? 'self-streme.onrender.com' : req.get('host');
     const protocol = isProduction ? 'https' : req.protocol;
-    const host = process.env.BASE_URL || req.get('host');
-    const cleanBaseUrl = host.replace(/^https?:\/\//, '');
     
     // Create a copy of the manifest with the correct URL
     const manifestResponse = {
         ...manifest,
-        url: `${protocol}://${cleanBaseUrl}`,
-        logo: `${protocol}://${cleanBaseUrl}/logo.png`
+        url: `${protocol}://${hostName}`,
+        logo: `${protocol}://${hostName}/logo.png`
     };
     
     res.setHeader('Content-Type', 'application/json');
@@ -98,21 +97,16 @@ async function startServer() {
 
         app.listen(port, host, () => {
             const isProduction = process.env.NODE_ENV === 'production';
-            const baseUrl = process.env.BASE_URL || (isProduction 
-                ? 'self-streme.onrender.com'
-                : `${host}:${port}`);
+            const hostName = isProduction ? 'self-streme.onrender.com' : `${host}:${port}`;
             
-            // Ensure clean base URL without protocol
-            const cleanBaseUrl = baseUrl.replace(/^https?:\/\//, '');
-            
-            // In production, we're behind Render's SSL proxy
+            // For HTTP/HTTPS URLs
             const protocol = isProduction ? 'https' : 'http';
-            const fullUrl = `${protocol}://${cleanBaseUrl}`;
+            const fullUrl = `${protocol}://${hostName}`;
             
             logger.info(`Server running on port ${port}`);
             logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
             logger.info(`Full URL: ${fullUrl}`);
-            logger.info(`Add to Stremio: stremio://${cleanBaseUrl}/manifest.json`);
+            logger.info(`Add to Stremio: stremio://${hostName}/manifest.json`);
         });
 
     } catch (error) {
