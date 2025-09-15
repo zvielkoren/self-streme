@@ -3,10 +3,18 @@ services:
   - type: web
     name: self-streme
     env: node
+    plan: free
     buildCommand: npm install
     startCommand: node src/index.js
-    domains:
-      - self-streme.onrender.com
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PUBLIC_URL
+        value: https://self-streme.onrender.com
+      - key: OMDB_API_KEY
+        sync: false
     envVars:
       - key: NODE_ENV
         value: production

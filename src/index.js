@@ -12,7 +12,7 @@ const app = express();
 
 // CORS configuration for Render
 app.use(cors({
-    origin: ['*', 'https://app.strem.io', 'https://web.strem.io', 'http://localhost:11470', 'https://self-streme.onrender.com'],
+    origin: '*',
     methods: ['GET', 'HEAD', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Accept', 'Origin'],
     credentials: true
