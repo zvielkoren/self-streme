@@ -3,7 +3,7 @@ const baseUrl = process.env.BASE_URL || 'self-streme.onrender.com';
 const manifestUrl = `${baseUrl.replace(/^https?:\/\//, '')}`;
 
 const manifest = {
-  id: "org.selfstreme",
+  id: "com.zvicraft.selfstreme",
   version: "1.0.0",
   name: "Self-Streme",
   description: "Stream movies and series from multiple sources including local files and torrents",

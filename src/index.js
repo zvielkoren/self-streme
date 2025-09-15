@@ -22,6 +22,9 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'Something broke!' });
 });
 
+// Trust Render's proxy
+app.set('trust proxy', 1);
+
 // CORS configuration for Render
 app.use(cors({
     origin: '*',
@@ -45,8 +48,20 @@ app.get('/health', (req, res) => {
 
 // Explicit manifest endpoint
 app.get('/manifest.json', (req, res) => {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const protocol = isProduction ? 'https' : req.protocol;
+    const host = process.env.BASE_URL || req.get('host');
+    const cleanBaseUrl = host.replace(/^https?:\/\//, '');
+    
+    // Create a copy of the manifest with the correct URL
+    const manifestResponse = {
+        ...manifest,
+        url: `${protocol}://${cleanBaseUrl}`,
+        logo: `${protocol}://${cleanBaseUrl}/logo.png`
+    };
+    
     res.setHeader('Content-Type', 'application/json');
-    res.json(manifest);
+    res.json(manifestResponse);
 });
 
 app.get('/status', (req, res) => {
@@ -82,15 +97,22 @@ async function startServer() {
         app.use('/', addonRouter);
 
         app.listen(port, host, () => {
-            // Set the base URL for the manifest
-            process.env.BASE_URL = process.env.BASE_URL || (process.env.NODE_ENV === 'production' 
+            const isProduction = process.env.NODE_ENV === 'production';
+            const baseUrl = process.env.BASE_URL || (isProduction 
                 ? 'self-streme.onrender.com'
                 : `${host}:${port}`);
             
-            const publicUrl = `https://${process.env.BASE_URL}`;
+            // Ensure clean base URL without protocol
+            const cleanBaseUrl = baseUrl.replace(/^https?:\/\//, '');
+            
+            // In production, we're behind Render's SSL proxy
+            const protocol = isProduction ? 'https' : 'http';
+            const fullUrl = `${protocol}://${cleanBaseUrl}`;
+            
             logger.info(`Server running on port ${port}`);
-            logger.info(`Public URL: ${publicUrl}`);
-            logger.info(`Add to Stremio: stremio://${process.env.BASE_URL}/manifest.json`);
+            logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+            logger.info(`Full URL: ${fullUrl}`);
+            logger.info(`Add to Stremio: stremio://${cleanBaseUrl}/manifest.json`);
         });
 
     } catch (error) {
