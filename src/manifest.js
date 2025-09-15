@@ -1,6 +1,6 @@
 // Get the base URL from environment or default to render URL
 const baseUrl = process.env.BASE_URL || 'self-streme.onrender.com';
-const manifestUrl = `https://${baseUrl.replace(/^https?:\/\//, '')}`;
+const manifestUrl = `${baseUrl.replace(/^https?:\/\//, '')}`;
 
 const manifest = {
   id: "org.selfstreme",
@@ -16,7 +16,7 @@ const manifest = {
     p2p: true,
     adult: false
   },
-  logo: "https://dl.strem.io/addon-logo-self-streme.png",
+  logo: `https://${baseUrl}/logo.png`,
   contactEmail: "self-streme@zvicraft.com"
 };
 
