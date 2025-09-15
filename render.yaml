@@ -1,0 +1,18 @@
+# Render.yaml - Configuration for Render deployment
+services:
+  - type: web
+    name: self-streme
+    env: node
+    buildCommand: npm install
+    startCommand: node src/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000  # Render will override this
+      - key: HOST
+        value: 0.0.0.0
+      - key: PUBLIC_URL
+        sync: false  # Will be set manually in Render dashboard
+      - key: OMDB_API_KEY
+        sync: false  # Will be set manually in Render dashboard
