@@ -94,27 +94,32 @@ async function scrapeWebSearch(query) {
 /**
  * 🌍 ספק fallback שמריץ את כולם
  */
-async function fallbackProvider(metadata) {
-  logger.info(`[Fallback] Searching for: ${metadata.title} (${metadata.year})`);
+const fallbackProvider = {
+  name: 'FallbackProvider',
+  
+  async search(params) {
+    const { query, year } = params;
+    logger.info(`[Fallback] Searching for: ${query} (${year})`);
 
-  const query = `${metadata.title} ${metadata.year}`;
-  const results = [];
+    const searchQuery = `${query} ${year}`;
+    const results = [];
 
-  // Scrapers
-  const [yts, x1337] = await Promise.all([
-    scrapeYTS(query),
-    scrape1337x(query)
-  ]);
-  results.push(...yts, ...x1337);
+    // Scrapers
+    const [yts, x1337] = await Promise.all([
+      scrapeYTS(searchQuery),
+      scrape1337x(searchQuery)
+    ]);
+    results.push(...yts, ...x1337);
 
-  // Web Search as last resort
-  if (results.length === 0) {
-    const webResults = await scrapeWebSearch(query);
-    results.push(...webResults);
+    // Web Search as last resort
+    if (results.length === 0) {
+      const webResults = await scrapeWebSearch(searchQuery);
+      results.push(...webResults);
+    }
+
+    logger.info(`[Fallback] Found ${results.length} results`);
+    return results;
   }
-
-  logger.info(`[Fallback] Found ${results.length} results`);
-  return results;
-}
+};
 
 export default fallbackProvider;

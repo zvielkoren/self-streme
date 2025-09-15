@@ -3,9 +3,10 @@ import logger from '../../utils/logger.js';
 
 class TorrentioProvider {
     constructor() {
+        this.name = 'Torrentio';
         this.baseUrl = 'https://torrentio.strem.fun';
         this.lastRequest = 0;
-        this.rateLimit = 1000;
+        this.rateLimit = 500; // Reduced rate limit for faster requests
     }
 
     /**
@@ -30,7 +31,12 @@ class TorrentioProvider {
 
         try {
             const endpoint = `${this.baseUrl}/stream/${type}/${imdbId}.json`;
-            const response = await axios.get(endpoint, { timeout: 10000 });
+            const response = await axios.get(endpoint, { 
+                timeout: 5000,  // Reduced timeout to 5 seconds for faster response
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            });
 
             if (!response.data?.streams) {
                 return [];
