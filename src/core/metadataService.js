@@ -14,7 +14,10 @@ class MetadataService {
    * @returns {Promise<Object|null>}
    */
   async getMetadata(imdbId, season, episode) {
-    const cacheKey = season && episode ? `${imdbId}:${season}:${episode}` : imdbId;
+    // Clean the IMDB ID by removing .json and any other extensions
+    const cleanImdbId = imdbId.replace(/\.(json|txt|html)$/, '');
+    
+    const cacheKey = season && episode ? `${cleanImdbId}:${season}:${episode}` : cleanImdbId;
     if (this.cache.has(cacheKey)) {
       return this.cache.get(cacheKey);
     }
@@ -27,7 +30,7 @@ class MetadataService {
       const data = response.data;
 
       if (!data || data.Response === "False") {
-        logger.error(`No metadata found for ${cacheKey}`);
+        logger.error(`No metadata found for ${cleanImdbId}`);
         return null;
       }
 
@@ -69,7 +72,7 @@ class MetadataService {
       return metadata;
 
     } catch (error) {
-      logger.error(`Metadata error for ${imdbId}:${season || 1}:${episode || 1}:`, error.message);
+      logger.error(`Metadata error for ${cleanImdbId}:${season || 1}:${episode || 1}:`, error.message);
       // Add to cache to prevent repeated failed requests
       const emptyMetadata = { id: imdbId, title: null, type: null, year: null };
       this.cache.set(cacheKey, emptyMetadata);

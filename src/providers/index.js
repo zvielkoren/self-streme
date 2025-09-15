@@ -40,14 +40,17 @@ class SearchService {
     }
 
     async search(imdbId, type) {
-        const cacheKey = `${type}:${imdbId}`;
+        // Clean the IMDB ID by removing .json and any other extensions
+        const cleanImdbId = imdbId.replace(/\.(json|txt|html)$/, '');
+        
+        const cacheKey = `${type}:${cleanImdbId}`;
         const cached = this.cache.get(cacheKey);
         if (cached) return cached;
 
         try {
-            const metadata = await metadataService.getMetadata(imdbId);
+            const metadata = await metadataService.getMetadata(cleanImdbId);
             if (!metadata || !metadata.title) {
-                logger.error(`No valid metadata found for ${imdbId}`);
+                logger.error(`No valid metadata found for ${cleanImdbId}`);
                 return [];
             }
             
@@ -69,7 +72,7 @@ class SearchService {
 
             return allResults;
         } catch (err) {
-            logger.error(`Search error for ${imdbId}: ${err.message}`);
+            logger.error(`Search error for ${cleanImdbId}: ${err.message}`);
             return [];
         }
     }
