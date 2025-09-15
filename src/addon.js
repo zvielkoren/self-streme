@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import addonSdk from "stremio-addon-sdk";
 import manifest from "./manifest.js";
-import streamService from "./core/streamService.js";
+import secureStreamService from "./core/secureStreamService.js";
 import logger from "./utils/logger.js";
 
 const { addonBuilder } = addonSdk;
@@ -15,7 +15,7 @@ builder.defineMetaHandler(async ({ type, id }) => {
     }
 
     try {
-        const meta = await streamService.getMetadata(type, id);
+        const meta = await secureStreamService.getMetadata(type, id);
         return { meta };
     } catch (error) {
         logger.error('Meta handler error:', error.message);
@@ -31,7 +31,7 @@ builder.defineStreamHandler(async ({ type, id }) => {
         }
 
         logger.info(`Stream request: ${type}:${id}`);
-        const streams = await streamService.getStreams(type, id);
+        const streams = await secureStreamService.getStreams(type, id);
         
         if (streams.length > 0) {
             logger.info(`Found ${streams.length} streams for ${id}`);

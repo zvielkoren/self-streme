@@ -6,6 +6,7 @@ import { config } from "./config/index.js";
 import logger from "./utils/logger.js";
 import addon, { addonRouter } from "./addon.js";
 import streamService from "./core/streamService.js";
+import secureStreamService from "./core/secureStreamService.js";
 import manifest from "./manifest.js";
 
 // File paths
@@ -74,6 +75,52 @@ app.get('/status', (req, res) => {
     });
 });
 
+// Secure streaming endpoint for signed URLs
+app.get("/secure-stream/:token", async (req, res) => {
+    try {
+        const { token } = req.params;
+        await secureStreamService.streamingServer.streamContent(req, res, token);
+    } catch (error) {
+        logger.error('Secure stream error:', error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Streaming error' });
+        }
+    }
+});
+
+// API endpoint to generate secure URLs for testing/debugging
+app.post("/api/generate-secure-url", express.json(), async (req, res) => {
+    try {
+        const { magnetLink, fileIndex = 0, validityHours = 24 } = req.body;
+        
+        if (!magnetLink) {
+            return res.status(400).json({ error: 'Magnet link is required' });
+        }
+        
+        const secureUrl = await secureStreamService.streamingServer.generateSignedUrl(
+            magnetLink, 
+            fileIndex, 
+            validityHours
+        );
+        
+        res.json(secureUrl);
+    } catch (error) {
+        logger.error('Error generating secure URL:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Server statistics endpoint
+app.get("/api/stats", (req, res) => {
+    try {
+        const stats = secureStreamService.getStats();
+        res.json(stats);
+    } catch (error) {
+        logger.error('Error getting stats:', error);
+        res.status(500).json({ error: 'Failed to get stats' });
+    }
+});
+
 // iOS stream caching endpoint
 app.get("/stream/cache/:infoHash", async (req, res) => {
     try {
@@ -114,12 +161,15 @@ app.get("/stream/proxy/:infoHash", async (req, res) => {
     }
 });
 
-// Main streaming endpoint
+// Main streaming endpoint - Updated to use secure streams
 app.get("/stream/:type/:imdbId", async (req, res) => {
     try {
         const { type, imdbId } = req.params;
         const isIOS = /iPad|iPhone|iPod/.test(req.headers['user-agent']);
-        const streams = await streamService.getStreams(type, imdbId, isIOS);
+        
+        // Use secure stream service instead of regular stream service
+        const streams = await secureStreamService.getStreams(type, imdbId);
+        
         res.json({ streams });
     } catch (error) {
         logger.error('Stream request error:', error);
