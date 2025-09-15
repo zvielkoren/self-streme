@@ -12,9 +12,10 @@ const app = express();
 
 // CORS configuration for Render
 app.use(cors({
-    origin: '*',
+    origin: ['*', 'https://app.strem.io', 'https://web.strem.io', 'http://localhost:11470', 'https://self-streme.onrender.com'],
     methods: ['GET', 'HEAD', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Accept', 'Origin']
+    allowedHeaders: ['Content-Type', 'Accept', 'Origin'],
+    credentials: true
 }));
 
 // Health check endpoint for Render
@@ -25,6 +26,22 @@ app.get('/health', (req, res) => {
 // Manifest endpoint at root for Render
 app.get('/', (req, res) => {
     res.redirect('/manifest.json');
+});
+
+// Status endpoints
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/status', (req, res) => {
+    res.json({
+        status: 'ok',
+        version: process.env.npm_package_version || '1.0.0',
+        environment: process.env.NODE_ENV || 'development',
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        timestamp: new Date().toISOString()
+    });
 });
 
 // File paths

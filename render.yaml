@@ -5,6 +5,8 @@ services:
     env: node
     buildCommand: npm install
     startCommand: node src/index.js
+    domains:
+      - self-streme.onrender.com
     envVars:
       - key: NODE_ENV
         value: production
