@@ -13,6 +13,7 @@ import tpbProvider from './torrents/piratebay.js'; // הוסף את PirateBay כ
 import torrentioProvider from './external/torrentio.js';
 import jackettProvider from './external/jackett.js';
 import fallbackProvider from './external/fallbackProvider.js';
+import mockProvider from './test/mockProvider.js';
 
 // Metadata service
 import metadataService from '../core/metadataService.js';
@@ -28,6 +29,7 @@ class SearchService {
         ];
 
         this.externalProviders = [
+            mockProvider,
             torrentioProvider,
             jackettProvider,
             fallbackProvider
@@ -109,7 +111,7 @@ class SearchService {
         const allResults = [...localResults, ...externalResults];
         const seen = new Set();
         const unique = allResults.filter(r => {
-            const key = r.infoHash || r.url;
+            const key = r.infoHash || r.url || r.magnet || r.title;
             if (!key || seen.has(key)) return false;
             seen.add(key);
             return true;

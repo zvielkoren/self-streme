@@ -39,6 +39,7 @@ const config = {
   },
   torrent: {
     enabled: true,
+    downloadPath: "./temp", // Add download path
     apis: {
       rarbg: {
         url: "https://torrentapi.org/pubapi_v2.php",

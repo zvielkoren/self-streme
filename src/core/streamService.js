@@ -1,11 +1,13 @@
 import logger from "../utils/logger.js";
 import searchService from "../providers/index.js";
 import torrentService from "./torrentService.js";
+import streamHandler from "../services/streamHandler.js";
 import { config } from "../config/index.js";
 
 class StreamService {
   constructor() {
     this.cache = new Map(); // cache: imdbId:season:episode -> streams
+    this.handler = streamHandler; // Add handler reference
     this.setupCleanup();
   }
 
@@ -15,9 +17,12 @@ class StreamService {
    * @param {string} imdbId
    * @param {number} [season]
    * @param {number} [episode]
+   * @param {string} [userAgent] - User agent for iOS detection
    */
-  async getStreams(type, imdbId, season, episode) {
+  async getStreams(type, imdbId, season, episode, userAgent) {
     try {
+      logger.info(`getStreams called with: type=${type}, imdbId=${imdbId}, season=${season}, episode=${episode}, userAgent=${userAgent ? userAgent.substring(0, 30) + '...' : 'undefined'}`);
+      
       // Clean the IMDB ID by removing .json and any other extensions
       const cleanImdbId = imdbId.replace(/\.(json|txt|html)$/, '');
       const cacheKey = `${cleanImdbId}:${season || 0}:${episode || 0}`;
@@ -36,9 +41,15 @@ class StreamService {
       }
 
       // מיפוי ותיקון metadata מתוך מקור ה־streams
+      const isIOS = this.isIOSDevice(userAgent);
+      logger.info(`iOS detection result: ${isIOS} from UA: ${userAgent}`);
+      logger.info(`Stream data before conversion: ${JSON.stringify(streamsData.slice(0, 2))}`); // Log first 2 results
+      
       const streams = streamsData
         .filter(result => result && (result.title || result.name || result.magnet || result.url || result.ytId))
-        .map(result => this.convertToStremioStream(result));
+        .map(result => this.convertToStremioStream(result, isIOS));
+        
+      logger.info(`Converted streams: ${JSON.stringify(streams.slice(0, 2))}`); // Log first 2 converted streams
 
       // שמירה במטמון
       this.cache.set(cacheKey, streams);
@@ -62,8 +73,10 @@ class StreamService {
 
   /**
    * ממיר אובייקט מקור ל־Stremio Stream
+   * @param {object} result - מקור stream
+   * @param {boolean} isIOS - האם זה מכשיר iOS
    */
-  convertToStremioStream(result) {
+  convertToStremioStream(result, isIOS = false) {
     const stream = {
       name: result.title || result.name || "Self-Streme",
       title: result.title || result.name || "Unknown Title",
@@ -78,9 +91,17 @@ class StreamService {
       const magnetLink = result.magnet || result.sources.find(s => s.startsWith("magnet:"));
       const infoHash = this.extractInfoHash(magnetLink);
       if (infoHash) {
-        stream.infoHash = infoHash;
-        stream.fileIdx = result.fileIdx || 0;
-        stream.sources = [magnetLink];
+        if (isIOS) {
+          // For iOS devices, provide HTTP stream URL instead of magnet
+          stream.url = `/stream/proxy/${infoHash}`;
+          // Cache the stream info for proxy serving
+          this.handler.cacheStream(infoHash, 'movie', result.title || result.name, result.quality || 'unknown');
+        } else {
+          // For desktop/Android, provide magnet link
+          stream.infoHash = infoHash;
+          stream.fileIdx = result.fileIdx || 0;
+          stream.sources = [magnetLink];
+        }
       }
     }
 
@@ -111,6 +132,16 @@ class StreamService {
     if (!magnetUri) return null;
     const match = magnetUri.match(/btih:([a-fA-F0-9]+)/i);
     return match ? match[1].toLowerCase() : null;
+  }
+
+  /**
+   * בודק אם המכשיר הוא iOS
+   */
+  isIOSDevice(userAgent) {
+    if (!userAgent) return false;
+    const ua = userAgent.toLowerCase();
+    return ua.includes('iphone') || ua.includes('ipad') || ua.includes('ipod') || 
+           ua.includes('ios') || (ua.includes('mobile') && ua.includes('safari') && !ua.includes('android'));
   }
 
   /**

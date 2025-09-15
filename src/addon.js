@@ -15,7 +15,9 @@ builder.defineMetaHandler(async ({ type, id }) => {
     }
 
     try {
-        const meta = await streamService.getMetadata(type, id);
+        // Import metadataService directly since streamService doesn't have getMetadata
+        const metadataService = (await import('./core/metadataService.js')).default;
+        const meta = await metadataService.getMetadata(id);
         return { meta };
     } catch (error) {
         logger.error('Meta handler error:', error.message);
@@ -31,7 +33,8 @@ builder.defineStreamHandler(async ({ type, id }) => {
         }
 
         logger.info(`Stream request: ${type}:${id}`);
-        const streams = await streamService.getStreams(type, id);
+        // Note: We can't access req object in the SDK handler, so iOS detection will be done elsewhere
+        const streams = await streamService.getStreams(type, id, undefined, undefined, undefined);
         
         if (streams.length > 0) {
             logger.info(`Found ${streams.length} streams for ${id}`);
@@ -49,29 +52,8 @@ builder.defineStreamHandler(async ({ type, id }) => {
     }
 });
 
-// Create the addon interface router
-const addonInterface = builder.getInterface();
-
-// Create express router for the addon
-const addonRouter = express.Router();
-
-// Mount the addon interface on the router
-addonRouter.get("/:path(*)", (req, res) => {
-    const path = req.params.path || "";
-    const handler = addonInterface[path];
-    
-    if (typeof handler !== 'function') {
-        res.status(404).json({ error: 'Not found' });
-        return;
-    }
-
-    Promise.resolve()
-        .then(() => handler(req, res))
-        .catch(error => {
-            console.error('Addon error:', error);
-            res.status(500).json({ error: 'Internal server error' });
-        });
-});
+// Create and start the addon interface on its own port
+const addonApp = builder.getInterface();
 
 export default builder;
-export { addonRouter };
+export { addonApp };

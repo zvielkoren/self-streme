@@ -4,8 +4,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { config } from "./config/index.js";
 import logger from "./utils/logger.js";
-import addon, { addonRouter } from "./addon.js";
+import addon, { addonApp } from "./addon.js";
 import streamService from "./core/streamService.js";
+import torrentService from "./core/torrentService.js";
 import manifest from "./manifest.js";
 
 // File paths
@@ -106,7 +107,7 @@ app.get("/stream/proxy/:infoHash", async (req, res) => {
         }
 
         // Stream through our proxy service
-        await proxyService.streamTorrent(req, res, infoHash);
+        await torrentService.streamTorrent(req, res, infoHash);
         
     } catch (error) {
         logger.error('Proxy stream error:', error);
@@ -118,12 +119,39 @@ app.get("/stream/proxy/:infoHash", async (req, res) => {
 app.get("/stream/:type/:imdbId", async (req, res) => {
     try {
         const { type, imdbId } = req.params;
-        const isIOS = /iPad|iPhone|iPod/.test(req.headers['user-agent']);
-        const streams = await streamService.getStreams(type, imdbId, isIOS);
+        const userAgent = req.headers['user-agent'] || '';
+        const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent);
         res.json({ streams });
     } catch (error) {
         logger.error('Stream request error:', error);
         res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// iOS-specific stream endpoint that provides HTTP streams instead of magnets
+app.get("/stream/:type/:imdbId.json", async (req, res) => {
+    try {
+        const { type, imdbId } = req.params;
+        const userAgent = req.headers['user-agent'] || '';
+        
+        logger.info(`Stream request: ${type}:${imdbId} from ${userAgent.substring(0, 50)}...`);
+        
+        // Detect iOS
+        const isIOS = streamService.isIOSDevice(userAgent);
+        logger.info(`iOS device detected: ${isIOS}`);
+        
+        const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent);
+        
+        if (streams.length > 0) {
+            logger.info(`Found ${streams.length} streams for ${imdbId} (iOS: ${isIOS})`);
+        } else {
+            logger.warn(`No streams found for ${imdbId}`);
+        }
+
+        res.json({ streams });
+    } catch (error) {
+        logger.error('Stream endpoint error:', error);
+        res.status(500).json({ streams: [] });
     }
 });
 
@@ -133,8 +161,35 @@ async function startServer() {
         const port = process.env.PORT || 7000;
         const host = process.env.HOST || '0.0.0.0';
         
-        // Mount the Stremio addon router
-        app.use('/', addonRouter);
+// iOS-specific stream endpoint that provides HTTP streams instead of magnets
+app.get("/stream/:type/:imdbId.json", async (req, res) => {
+    try {
+        const { type, imdbId } = req.params;
+        const userAgent = req.headers['user-agent'] || '';
+        
+        logger.info(`Stream request: ${type}:${imdbId} from ${userAgent.substring(0, 50)}...`);
+        
+        // Detect iOS
+        const isIOS = streamService.isIOSDevice(userAgent);
+        logger.info(`iOS device detected: ${isIOS}`);
+        
+        const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent);
+        
+        if (streams.length > 0) {
+            logger.info(`Found ${streams.length} streams for ${imdbId} (iOS: ${isIOS})`);
+        } else {
+            logger.warn(`No streams found for ${imdbId}`);
+        }
+
+        res.json({ streams });
+    } catch (error) {
+        logger.error('Stream endpoint error:', error);
+        res.status(500).json({ streams: [] });
+    }
+});
+
+        // For now, disable the addon mounting until we fix the interface issue
+        // app.use('/', addonApp);
 
         app.listen(port, host, () => {
             const isProduction = process.env.NODE_ENV === 'production';
