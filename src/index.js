@@ -82,10 +82,15 @@ async function startServer() {
         app.use('/', addonRouter);
 
         app.listen(port, host, () => {
-            const publicUrl = process.env.PUBLIC_URL || `http://${host}:${port}`;
+            // Set the base URL for the manifest
+            process.env.BASE_URL = process.env.BASE_URL || (process.env.NODE_ENV === 'production' 
+                ? 'self-streme.onrender.com'
+                : `${host}:${port}`);
+            
+            const publicUrl = `https://${process.env.BASE_URL}`;
             logger.info(`Server running on port ${port}`);
             logger.info(`Public URL: ${publicUrl}`);
-            logger.info(`Add to Stremio: stremio://${publicUrl}/manifest.json`);
+            logger.info(`Add to Stremio: stremio://${process.env.BASE_URL}/manifest.json`);
         });
 
     } catch (error) {
