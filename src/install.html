@@ -51,11 +51,24 @@ h1 { font-size: 2.5rem; margin-bottom: 1rem; }
 <h1>Self-Streme Addon</h1>
 <p class="status" id="addon-status">Status: Active</p>
 <button class="btn" onclick="installAddon()">Add to Stremio</button>
+<p style="margin-top: 2rem; color: #aaa;">Manual Installation:</p>
+<p style="color: #aaa;">Copy this URL and add it manually in Stremio:</p>
+<code id="manual-url" style="background: rgba(255,255,255,0.1); padding: 0.5rem 1rem; border-radius: 4px; margin-top: 0.5rem; display: inline-block;"></code>
 <div class="footer">&copy; 2025 Self-Streme</div>
 
 <script>
+// Set the manual URL on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const currentHost = window.location.origin;
+    document.getElementById('manual-url').textContent = `${currentHost}/manifest.json`;
+});
 function installAddon() {
-    window.location.href = 'stremio://127.0.0.1:3001/manifest.json';
+    const currentHost = window.location.origin;
+    window.location.href = `stremio://${currentHost}/manifest.json`;
+    // Fallback for direct installation
+    setTimeout(() => {
+        window.location.href = `${currentHost}/manifest.json`;
+    }, 1000);
 }
 </script>
 </body>
