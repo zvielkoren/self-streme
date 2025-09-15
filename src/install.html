@@ -59,15 +59,20 @@ h1 { font-size: 2.5rem; margin-bottom: 1rem; }
 <script>
 // Set the manual URL on page load
 document.addEventListener('DOMContentLoaded', function() {
-    const currentHost = window.location.origin;
-    document.getElementById('manual-url').textContent = `${currentHost}/manifest.json`;
+    const host = window.location.host;
+    const protocol = window.location.protocol.replace(/:$/, ''); // Remove trailing colon
+    document.getElementById('manual-url').textContent = `${protocol}://${host}/manifest.json`;
 });
 function installAddon() {
-    const currentHost = window.location.origin;
-    window.location.href = `stremio://${currentHost}/manifest.json`;
-    // Fallback for direct installation
+    const host = window.location.host;
+    const protocol = window.location.protocol.replace(/:$/, ''); // Remove trailing colon
+    
+    // Install URL using stremio protocol
+    window.location.href = `stremio://${host}/manifest.json`;
+    
+    // Fallback to web URL
     setTimeout(() => {
-        window.location.href = `${currentHost}/manifest.json`;
+        window.location.href = `${protocol}://${host}/manifest.json`;
     }, 1000);
 }
 </script>
