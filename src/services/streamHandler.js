@@ -39,18 +39,16 @@ class StreamHandler {
     /**
      * Format stream object for Stremio
      */
-    formatStream(streamInfo, isIOS = false) {
-        const { infoHash, title, quality } = streamInfo;
+    formatStream(streamInfo) {
+        const { infoHash, title, quality, url } = streamInfo;
         
-        // For iOS, we use a different URL format that caches first
-        const streamUrl = isIOS 
-            ? `/stream/cache/${infoHash}` 
-            : `/stream/play/${infoHash}`;
+        // Always stream through our server
+        const serverStreamUrl = `/stream/proxy/${infoHash}`;
 
         return {
             name: 'Self-Streme',
             title: `${title} (${quality})`,
-            url: streamUrl,
+            url: serverStreamUrl,
             behaviorHints: {
                 notWebReady: true,
                 bingeGroup: `quality-${quality}`

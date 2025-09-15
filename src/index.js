@@ -95,7 +95,8 @@ app.get("/stream/cache/:infoHash", async (req, res) => {
 });
 
 // Direct streaming endpoint
-app.get("/stream/play/:infoHash", async (req, res) => {
+// Proxy streaming endpoint
+app.get("/stream/proxy/:infoHash", async (req, res) => {
     try {
         const { infoHash } = req.params;
         const streamInfo = streamService.handler.getStreamInfo(infoHash);
@@ -104,12 +105,11 @@ app.get("/stream/play/:infoHash", async (req, res) => {
             return res.status(404).json({ error: 'Stream not found' });
         }
 
-        // Return direct stream URL
-        res.json({
-            streams: [streamService.handler.formatStream(streamInfo, false)]
-        });
+        // Stream through our proxy service
+        await proxyService.streamTorrent(req, res, infoHash);
+        
     } catch (error) {
-        logger.error('Stream play error:', error);
+        logger.error('Proxy stream error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
