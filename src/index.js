@@ -74,11 +74,52 @@ app.get('/status', (req, res) => {
     });
 });
 
-// Streaming endpoints
+// iOS stream caching endpoint
+app.get("/stream/cache/:infoHash", async (req, res) => {
+    try {
+        const { infoHash } = req.params;
+        const streamInfo = streamService.handler.getStreamInfo(infoHash);
+        
+        if (!streamInfo) {
+            return res.status(404).json({ error: 'Stream not found' });
+        }
+
+        // Return cached stream info for iOS
+        res.json({
+            streams: [streamService.handler.formatStream(streamInfo, true)]
+        });
+    } catch (error) {
+        logger.error('Stream cache error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Direct streaming endpoint
+app.get("/stream/play/:infoHash", async (req, res) => {
+    try {
+        const { infoHash } = req.params;
+        const streamInfo = streamService.handler.getStreamInfo(infoHash);
+        
+        if (!streamInfo) {
+            return res.status(404).json({ error: 'Stream not found' });
+        }
+
+        // Return direct stream URL
+        res.json({
+            streams: [streamService.handler.formatStream(streamInfo, false)]
+        });
+    } catch (error) {
+        logger.error('Stream play error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Main streaming endpoint
 app.get("/stream/:type/:imdbId", async (req, res) => {
     try {
         const { type, imdbId } = req.params;
-        const streams = await streamService.getStreams(type, imdbId);
+        const isIOS = /iPad|iPhone|iPod/.test(req.headers['user-agent']);
+        const streams = await streamService.getStreams(type, imdbId, isIOS);
         res.json({ streams });
     } catch (error) {
         logger.error('Stream request error:', error);
