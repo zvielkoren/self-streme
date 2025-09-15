@@ -1,12 +1,6 @@
 import torrentService from './torrentService.new.js';
 import externalService from './external/index.js';
 import logger from '../utils/logger.js';
-import { getTorrentStreams } from "../providers/torrents/index.js";
-
-export async function getStreams(type, imdbId, metadata) {
-  const streams = await getTorrentStreams(metadata);
-  return streams;
-}
 
 // Initialize the torrent service
 await torrentService.initialize().catch(error => {
