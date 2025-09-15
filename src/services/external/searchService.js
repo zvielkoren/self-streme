@@ -60,15 +60,34 @@ async function searchExternal(metadata) {
             }
         }
 
-        // Example: Add a direct stream (for demonstration)
-        if (metadata.type === 'movie') {
+        // Add direct stream if available in configured sources
+        if (metadata.type === 'movie' && config.external?.directStream?.enabled) {
             const cleanImdbId = metadata.imdbId.replace(/\.(json|txt|html)$/, '');
-            streams.push({
-                name: 'Self-Streme',
-                title: `${metadata.title} [Direct]`,
-                url: `https://example.com/movies/${cleanImdbId}/stream.mp4`,
-                source: 'direct'
-            });
+            const baseUrl = config.external.directStream.baseUrl || process.env.DIRECT_STREAM_URL;
+            
+            if (baseUrl) {
+                try {
+                    // Check if the stream exists first
+                    const streamUrl = `${baseUrl}/movies/${cleanImdbId}/stream.mp4`;
+                    const headResponse = await axios.head(streamUrl, { timeout: 5000 });
+                    
+                    if (headResponse.status === 200) {
+                        logger.debug(`Direct stream available for ${cleanImdbId}`);
+                        streams.push({
+                            name: 'Self-Streme',
+                            title: `${metadata.title} [Direct] [${headResponse.headers['content-type'] || 'video/mp4'}]`,
+                            url: streamUrl,
+                            source: 'direct',
+                            size: headResponse.headers['content-length'],
+                            quality: metadata.quality || '1080p'
+                        });
+                    }
+                } catch (error) {
+                    logger.debug(`No direct stream found for ${cleanImdbId}: ${error.message}`);
+                }
+            } else {
+                logger.warn('Direct streaming enabled but no base URL configured');
+            }
         }
 
         logger.info(`Found ${streams.length} external streams`);
