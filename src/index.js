@@ -6,6 +6,12 @@ import { config } from "./config/index.js";
 import logger from "./utils/logger.js";
 import addon, { addonRouter } from "./addon.js";
 import streamService from "./core/streamService.js";
+import manifest from "./manifest.js";
+
+// File paths
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 
 // Initialize Express app
 const app = express();
@@ -24,15 +30,13 @@ app.use(cors({
     credentials: true
 }));
 
-// Health check endpoint for Render
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok' });
+// Serve installation page at root
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'install.html'));
 });
 
-// Manifest endpoint at root for Render
-app.get('/', (req, res) => {
-    res.redirect('/manifest.json');
-});
+// Serve static files from src directory
+app.use(express.static(path.join(__dirname)));
 
 // Status endpoints
 app.get('/health', (req, res) => {
@@ -55,10 +59,6 @@ app.get('/status', (req, res) => {
         timestamp: new Date().toISOString()
     });
 });
-
-// File paths
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Streaming endpoints
 app.get("/stream/:type/:imdbId", async (req, res) => {
