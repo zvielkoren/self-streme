@@ -21,13 +21,32 @@ class StreamService {
    */
   async getStreams(type, imdbId, season, episode, userAgent) {
     try {
+      // Input validation
+      if (!imdbId || typeof imdbId !== 'string') {
+        logger.error(`Invalid imdbId: ${imdbId}`);
+        return [];
+      }
+
+      if (!type || !['movie', 'series'].includes(type)) {
+        logger.error(`Invalid type: ${type}`);
+        return [];
+      }
+
       // Clean the IMDB ID by removing .json and any other extensions
       const cleanImdbId = imdbId.replace(/\.(json|txt|html)$/, '');
+      
+      // Validate IMDb ID format (should start with tt followed by digits)
+      if (!cleanImdbId.match(/^tt\d+$/)) {
+        logger.error(`Invalid IMDb ID format: ${cleanImdbId}`);
+        return [];
+      }
+
       const cacheKey = `${cleanImdbId}:${season || 0}:${episode || 0}`;
       logger.info(`Getting streams for ${type}:${cleanImdbId} S${season || "-"}E${episode || "-"}`);
 
       // בדיקה אם יש כבר במטמון
       if (this.cache.has(cacheKey)) {
+        logger.info(`Cache hit for ${cacheKey}`);
         return this.cache.get(cacheKey);
       }
 
@@ -35,6 +54,8 @@ class StreamService {
       const streamsData = await searchService.search(imdbId, type, season, episode);
       if (!streamsData || !Array.isArray(streamsData) || streamsData.length === 0) {
         logger.warn(`No streams found from searchService for ${cacheKey}`);
+        // Cache empty result for a shorter time to retry sooner
+        this.cache.set(cacheKey, [], 300); // 5 minutes for empty results
         return [];
       }
 
@@ -42,7 +63,10 @@ class StreamService {
       const isIOS = this.isIOSDevice(userAgent);
       const streams = streamsData
         .filter(result => result && (result.title || result.name || result.magnet || result.url || result.ytId))
-        .map(result => this.convertToStremioStream(result, isIOS));
+        .map(result => this.convertToStremioStream(result, isIOS))
+        .filter(stream => stream && (stream.infoHash || stream.url || stream.ytId)); // Filter out invalid streams
+
+      logger.info(`Processed ${streams.length} valid streams for ${cacheKey}`);
 
       // שמירה במטמון
       this.cache.set(cacheKey, streams);

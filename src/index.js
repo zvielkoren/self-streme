@@ -125,11 +125,23 @@ app.get("/stream/:type/:imdbId", async (req, res) => {
     try {
         const { type, imdbId } = req.params;
         const userAgent = req.headers['user-agent'] || '';
+        
+        // Input validation
+        if (!type || !['movie', 'series'].includes(type)) {
+            logger.warn(`Invalid type parameter: ${type}`);
+            return res.status(400).json({ error: 'Invalid type. Must be "movie" or "series"', streams: [] });
+        }
+
+        if (!imdbId || !imdbId.match(/^tt\d+/)) {
+            logger.warn(`Invalid IMDb ID format: ${imdbId}`);
+            return res.status(400).json({ error: 'Invalid IMDb ID format', streams: [] });
+        }
+
         const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent);
         res.json({ streams });
     } catch (error) {
         logger.error('Stream request error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: 'Internal server error', streams: [] });
     }
 });
 
@@ -138,6 +150,17 @@ app.get("/stream/:type/:imdbId.json", async (req, res) => {
     try {
         const { type, imdbId } = req.params;
         const userAgent = req.headers['user-agent'] || '';
+        
+        // Input validation
+        if (!type || !['movie', 'series'].includes(type)) {
+            logger.warn(`Invalid type parameter: ${type}`);
+            return res.status(400).json({ error: 'Invalid type. Must be "movie" or "series"', streams: [] });
+        }
+
+        if (!imdbId || !imdbId.match(/^tt\d+/)) {
+            logger.warn(`Invalid IMDb ID format: ${imdbId}`);
+            return res.status(400).json({ error: 'Invalid IMDb ID format', streams: [] });
+        }
         
         logger.info(`Stream request: ${type}:${imdbId} from ${userAgent.substring(0, 50)}...`);
         
@@ -156,7 +179,7 @@ app.get("/stream/:type/:imdbId.json", async (req, res) => {
         res.json({ streams });
     } catch (error) {
         logger.error('Stream endpoint error:', error);
-        res.status(500).json({ streams: [] });
+        res.status(500).json({ error: 'Internal server error', streams: [] });
     }
 });
 
