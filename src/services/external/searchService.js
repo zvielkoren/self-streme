@@ -21,7 +21,8 @@ async function searchExternal(metadata) {
     try {
         // Example: Search Torrentio
         if (metadata.type === 'movie') {
-            const torrentioUrl = `${EXTERNAL_APIS.TORRENTIO}${metadata.imdbId}`;
+            const cleanImdbId = metadata.imdbId.replace(/\.(json|txt|html)$/, '');
+            const torrentioUrl = `${EXTERNAL_APIS.TORRENTIO}${cleanImdbId}`;
             const torrentioResponse = await axios.get(torrentioUrl, { timeout: 5000 });
             
             if (torrentioResponse.data?.streams) {
@@ -61,10 +62,11 @@ async function searchExternal(metadata) {
 
         // Example: Add a direct stream (for demonstration)
         if (metadata.type === 'movie') {
+            const cleanImdbId = metadata.imdbId.replace(/\.(json|txt|html)$/, '');
             streams.push({
                 name: 'Self-Streme',
                 title: `${metadata.title} [Direct]`,
-                url: `https://example.com/movies/${metadata.imdbId}/stream.mp4`,
+                url: `https://example.com/movies/${cleanImdbId}/stream.mp4`,
                 source: 'direct'
             });
         }

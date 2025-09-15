@@ -18,8 +18,10 @@ class StreamService {
    */
   async getStreams(type, imdbId, season, episode) {
     try {
-      const cacheKey = `${imdbId}:${season || 0}:${episode || 0}`;
-      logger.info(`Getting streams for ${type}:${imdbId} S${season || "-"}E${episode || "-"}`);
+      // Clean the IMDB ID by removing .json and any other extensions
+      const cleanImdbId = imdbId.replace(/\.(json|txt|html)$/, '');
+      const cacheKey = `${cleanImdbId}:${season || 0}:${episode || 0}`;
+      logger.info(`Getting streams for ${type}:${cleanImdbId} S${season || "-"}E${episode || "-"}`);
 
       // בדיקה אם יש כבר במטמון
       if (this.cache.has(cacheKey)) {
@@ -52,7 +54,8 @@ class StreamService {
    * מחזיר stream ספציפי מקאש לפי fileIdx
    */
   getCachedStream(imdbId, season, episode, fileIdx) {
-    const key = `${imdbId}:${season || 0}:${episode || 0}`;
+    const cleanImdbId = imdbId.replace(/\.(json|txt|html)$/, '');
+    const key = `${cleanImdbId}:${season || 0}:${episode || 0}`;
     const streams = this.cache.get(key) || [];
     return streams[fileIdx] || null;
   }
