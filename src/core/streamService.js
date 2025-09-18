@@ -44,36 +44,40 @@ class StreamService {
       const cacheKey = `${cleanImdbId}:${season || 0}:${episode || 0}`;
       logger.info(`Getting streams for ${type}:${cleanImdbId} S${season || "-"}E${episode || "-"}`);
 
-      // בדיקה אם יש כבר במטמון
+      // בדיקה אם יש כבר במטמון (cache raw streams, not converted ones)
+      let streamsData;
       if (this.cache.has(cacheKey)) {
         logger.info(`Cache hit for ${cacheKey}`);
-        return this.cache.get(cacheKey);
-      }
-
-      // קריאה למקור ה־streams (searchService)
-      const streamsData = await searchService.search(imdbId, type, season, episode);
-      if (!streamsData || !Array.isArray(streamsData) || streamsData.length === 0) {
-        logger.warn(`No streams found from searchService for ${cacheKey}`);
+        streamsData = this.cache.get(cacheKey);
+      } else {
+        // קריאה למקור ה־streams (searchService)
+        streamsData = await searchService.search(imdbId, type, season, episode);
+        if (!streamsData || !Array.isArray(streamsData) || streamsData.length === 0) {
+          logger.warn(`No streams found from searchService for ${cacheKey}`);
+          
+          // Return a placeholder stream instead of empty array
+          const placeholderStream = {
+            name: "No Stream Available - Check Self-Streme Addon",
+            title: "No Stream Available - Check Self-Streme Addon", 
+            url: "/static/placeholder.mp4",
+            quality: "N/A",
+            size: "0 MB",
+            seeders: 0,
+            source: "placeholder",
+            behaviorHints: {
+              notWebReady: false,
+              bingeGroup: "self-streme-placeholder"
+            }
+          };
+          
+          const placeholderResult = [placeholderStream];
+          // Cache placeholder result for a shorter time to retry sooner
+          this.cache.set(cacheKey, placeholderResult, 300); // 5 minutes for placeholder results
+          return placeholderResult;
+        }
         
-        // Return a placeholder stream instead of empty array
-        const placeholderStream = {
-          name: "No Stream Available - Check Self-Streme Addon",
-          title: "No Stream Available - Check Self-Streme Addon", 
-          url: "/static/placeholder.mp4",
-          quality: "N/A",
-          size: "0 MB",
-          seeders: 0,
-          source: "placeholder",
-          behaviorHints: {
-            notWebReady: false,
-            bingeGroup: "self-streme-placeholder"
-          }
-        };
-        
-        const placeholderResult = [placeholderStream];
-        // Cache placeholder result for a shorter time to retry sooner
-        this.cache.set(cacheKey, placeholderResult, 300); // 5 minutes for placeholder results
-        return placeholderResult;
+        // Cache the raw stream data
+        this.cache.set(cacheKey, streamsData);
       }
 
       // מיפוי ותיקון metadata מתוך מקור ה־streams
@@ -85,8 +89,7 @@ class StreamService {
 
       logger.info(`Processed ${streams.length} valid streams for ${cacheKey}`);
 
-      // שמירה במטמון
-      this.cache.set(cacheKey, streams);
+      // Don't cache converted streams - we cache raw streams and convert per request
       return streams;
 
     } catch (error) {
@@ -120,6 +123,11 @@ class StreamService {
       source: result.source
     };
 
+    // Log iOS detection for debugging
+    if (isIOS) {
+      logger.debug(`Converting stream for iOS device: ${stream.name}`);
+    }
+
     // magnet
     if (result.magnet || (result.sources && result.sources.some(s => s.startsWith("magnet:")))) {
       const magnetLink = result.magnet || result.sources.find(s => s.startsWith("magnet:"));
@@ -131,11 +139,14 @@ class StreamService {
         if (isIOS) {
           // For iOS devices, provide HTTP stream URL instead of magnet
           stream.url = `/stream/proxy/${infoHash}`;
+          logger.debug(`iOS stream: providing HTTP URL for ${infoHash}`);
+          // Don't set infoHash for iOS to ensure Stremio uses HTTP URL
         } else {
           // For desktop/Android, provide magnet link
           stream.infoHash = infoHash;
           stream.fileIdx = result.fileIdx || 0;
           stream.sources = [magnetLink];
+          logger.debug(`Desktop stream: providing magnet link for ${infoHash}`);
         }
       }
     }

@@ -58,8 +58,15 @@ class ProxyService {
 
     async addTorrent(infoHash) {
         return new Promise((resolve, reject) => {
+            // Check if torrent already exists in WebTorrent client
+            let torrent = this.client.get(infoHash);
+            if (torrent) {
+                logger.debug(`Found existing torrent in client for ${infoHash}`);
+                return resolve(torrent);
+            }
+
             const magnet = `magnet:?xt=urn:btih:${infoHash}`;
-            const torrent = this.client.add(magnet, {
+            torrent = this.client.add(magnet, {
                 announce: [
                     "wss://tracker.openwebtorrent.com",
                     "wss://tracker.btorrent.xyz"
