@@ -187,6 +187,17 @@ class TorrentService {
                 return res.status(500).json({ error: 'Invalid file size' });
             }
 
+            // Check if file exists on disk and use file stream for better performance
+            const filePath = path.join(config.torrent.downloadPath, file.path);
+            const useFileStream = await this.shouldUseFileStream(filePath, fileSize, torrentStream.torrent);
+            
+            if (useFileStream) {
+                logger.info(`Using file stream for ${infoHash}: ${filePath}`);
+                return this.streamFromFile(req, res, filePath, fileSize, infoHash);
+            } else {
+                logger.info(`Using torrent stream for ${infoHash} (file not ready)`);
+            }
+
             // Get range header for partial content support
             const range = req.headers.range;
             
@@ -254,6 +265,118 @@ class TorrentService {
             // Only send error response if headers not already sent
             if (!res.headersSent) {
                 res.status(500).json({ error: 'Failed to stream torrent' });
+            }
+        }
+    }
+
+    /**
+     * Check if we should use file stream instead of torrent stream
+     * @param {string} filePath - Path to the downloaded file
+     * @param {number} expectedSize - Expected file size
+     * @param {object} torrent - Torrent object for progress check
+     * @returns {Promise<boolean>}
+     */
+    async shouldUseFileStream(filePath, expectedSize, torrent) {
+        try {
+            // Check if file exists
+            if (!fs.existsSync(filePath)) {
+                return false;
+            }
+
+            const stats = fs.statSync(filePath);
+            const downloadedSize = stats.size;
+            
+            // If file is completely downloaded, always use file stream
+            if (downloadedSize >= expectedSize) {
+                logger.debug(`File fully downloaded: ${downloadedSize}/${expectedSize} bytes`);
+                return true;
+            }
+
+            // If file is partially downloaded but has significant progress (>10%), use file stream
+            const progress = downloadedSize / expectedSize;
+            if (progress > 0.1 && torrent.progress > 0.05) {
+                logger.debug(`File partially downloaded: ${(progress * 100).toFixed(1)}% (${downloadedSize}/${expectedSize} bytes), torrent progress: ${(torrent.progress * 100).toFixed(1)}%`);
+                return true;
+            }
+
+            return false;
+        } catch (error) {
+            logger.debug(`Error checking file stream availability: ${error.message}`);
+            return false;
+        }
+    }
+
+    /**
+     * Stream content from downloaded file on disk
+     * @param {object} req - Request object
+     * @param {object} res - Response object  
+     * @param {string} filePath - Path to the file
+     * @param {number} fileSize - Size of the file
+     * @param {string} infoHash - Info hash for logging
+     */
+    async streamFromFile(req, res, filePath, fileSize, infoHash) {
+        try {
+            const range = req.headers.range;
+            
+            // Handle connection cleanup
+            req.on('close', () => {
+                logger.debug(`File stream connection closed for ${infoHash}`);
+            });
+
+            req.on('error', (err) => {
+                logger.error(`File stream request error for ${infoHash}:`, err);
+            });
+
+            if (range) {
+                // Parse range header
+                const parts = range.replace(/bytes=/, "").split("-");
+                const start = parseInt(parts[0], 10);
+                const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+                
+                // Validate range
+                if (start >= fileSize || end >= fileSize || start > end) {
+                    logger.error(`Invalid range for file ${infoHash}: ${start}-${end}/${fileSize}`);
+                    return res.status(416).json({ error: 'Invalid range' });
+                }
+                
+                const chunksize = (end - start) + 1;
+                
+                // Set headers for partial content
+                res.writeHead(206, {
+                    'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                    'Accept-Ranges': 'bytes',
+                    'Content-Length': chunksize,
+                    'Content-Type': 'video/mp4',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Range'
+                });
+                
+                // Create read stream for the range
+                const stream = fs.createReadStream(filePath, { start, end });
+                stream.on('error', (err) => {
+                    logger.error(`File stream error for ${infoHash}:`, err);
+                });
+                stream.pipe(res);
+                
+            } else {
+                // No range requested, send entire file
+                res.writeHead(200, {
+                    'Content-Length': fileSize,
+                    'Content-Type': 'video/mp4',
+                    'Access-Control-Allow-Origin': '*'
+                });
+                
+                const stream = fs.createReadStream(filePath);
+                stream.on('error', (err) => {
+                    logger.error(`Full file stream error for ${infoHash}:`, err);
+                });
+                stream.pipe(res);
+            }
+            
+        } catch (error) {
+            logger.error(`File streaming error for ${infoHash}:`, error);
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Failed to stream file' });
             }
         }
     }
