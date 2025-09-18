@@ -12,6 +12,7 @@ import streamService from "./core/streamService.js";
 import torrentService from "./core/torrentService.js";
 import manifest from "./manifest.js";
 import { getProxyAwareBaseUrl, getBaseUrlFromRequest } from "./utils/urlHelper.js";
+import ScalableCacheManager from "./services/scalableCacheManager.js";
 
 // File paths
 const __filename = fileURLToPath(import.meta.url);
@@ -21,37 +22,18 @@ const __dirname = path.dirname(__filename);
 const TEMP_DIR = path.join(os.tmpdir(), "self-streme");
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
-// Cache Map – infoHash -> { filePath, lastAccessed }
-const tempCache = new Map();
-const CACHE_LIFETIME = 30 * 60 * 1000; // Reduced to 30 minutes for faster cleanup
-const CLEANUP_INTERVAL = 5 * 60 * 1000; // Reduced to 5 minutes for more frequent cleanup
+// Scalable cache manager with configurable backend and limits
+const cacheManager = new ScalableCacheManager({
+    backend: config.cache.backend,
+    maxSize: config.cache.maxSize,
+    maxDiskUsage: config.cache.maxDiskUsage,
+    cleanupInterval: config.cache.cleanupInterval,
+    tempDir: TEMP_DIR
+});
 
-// Configurable scheduling for cache cleanup
-const scheduleCleanup = (interval = CLEANUP_INTERVAL) => {
-  return setInterval(() => {
-    const now = Date.now();
-    let cleanedCount = 0;
-    for (const [key, val] of tempCache.entries()) {
-      if (now - val.lastAccessed > CACHE_LIFETIME) {
-        try {
-          if (fs.existsSync(val.filePath)) {
-            fs.unlinkSync(val.filePath);
-            cleanedCount++;
-          }
-        } catch (err) {
-          logger.error("Error cleaning temp file:", err);
-        }
-        tempCache.delete(key);
-      }
-    }
-    if (cleanedCount > 0) {
-      logger.info(`Scheduled cleanup: removed ${cleanedCount} cached files`);
-    }
-  }, interval);
-};
-
-// Start automatic cleanup with shorter intervals
-const cleanupSchedule = scheduleCleanup();
+// Legacy compatibility - maintain old constants for existing code
+const CACHE_LIFETIME = config.cache.ttl * 1000;
+const CLEANUP_INTERVAL = config.cache.cleanupInterval * 1000;
 
 
 // Initialize Express app
@@ -165,12 +147,8 @@ app.get('/api/base-url', (req, res) => {
 
 // API endpoint to configure cache scheduling
 app.get('/api/cache-config', (req, res) => {
-    res.json({
-        cacheLifetime: CACHE_LIFETIME,
-        cleanupInterval: CLEANUP_INTERVAL,
-        cacheCount: tempCache.size,
-        lastCleanup: new Date().toISOString()
-    });
+    const stats = cacheManager.getStats();
+    res.json(stats);
 });
 
 app.post('/api/cache-config', express.json(), (req, res) => {
@@ -178,28 +156,37 @@ app.post('/api/cache-config', express.json(), (req, res) => {
         const { forceCleanup } = req.body;
         
         if (forceCleanup) {
-            const now = Date.now();
-            let cleanedCount = 0;
-            for (const [key, val] of tempCache.entries()) {
-                try {
-                    if (fs.existsSync(val.filePath)) {
-                        fs.unlinkSync(val.filePath);
-                        cleanedCount++;
-                    }
-                } catch (err) {
-                    logger.error("Error in forced cleanup:", err);
-                }
-                tempCache.delete(key);
-            }
-            logger.info(`Forced cleanup: removed ${cleanedCount} cached files`);
-            res.json({ message: `Cleaned ${cleanedCount} files`, cacheCount: tempCache.size });
+            cacheManager.forceCleanup().then(result => {
+                logger.info(`Forced cleanup: ${JSON.stringify(result)}`);
+                res.json({ 
+                    message: `Cleaned ${result.cleanedCount} files, freed ${result.freedSpaceMB.toFixed(2)}MB`, 
+                    ...result 
+                });
+            }).catch(error => {
+                logger.error('Force cleanup error:', error);
+                res.status(500).json({ error: 'Cleanup failed' });
+            });
         } else {
-            res.json({ message: 'No action specified' });
+            res.json({ message: 'No action specified', stats: cacheManager.getStats() });
         }
     } catch (error) {
         logger.error('Cache config error:', error);
         res.status(500).json({ error: 'Configuration error' });
     }
+});
+
+// New endpoint for cache statistics and scaling information
+app.get('/api/cache-stats', (req, res) => {
+    const stats = cacheManager.getStats();
+    res.json({
+        ...stats,
+        scalingInfo: {
+            backend: stats.backend,
+            isScalable: stats.backend !== 'memory',
+            supportsPersistence: config.cache.persistent,
+            recommendedForProduction: stats.backend === 'redis' || stats.backend === 'sqlite'
+        }
+    });
 });
 
 // iOS stream caching endpoint
@@ -408,7 +395,7 @@ app.get("/play/:type/:imdbId/:fileIdx/:season?/:episode?", async (req, res) => {
       const magnetUri = cachedStream.sources[0];
       logger.info(`Attempting to stream magnet: ${magnetUri.substring(0, 50)}...`);
       
-      let tempFile = tempCache.get(magnetUri);
+      let tempFile = cacheManager.get(magnetUri);
 
       if (!tempFile) {
         logger.info('Downloading file from magnet...');
@@ -426,11 +413,12 @@ app.get("/play/:type/:imdbId/:fileIdx/:season?/:episode?", async (req, res) => {
         });
 
         tempFile = { filePath: tempPath, lastAccessed: Date.now() };
-        tempCache.set(magnetUri, tempFile);
+        await cacheManager.set(magnetUri, tempFile);
         torrentStream.destroy();
         logger.info(`File downloaded to: ${tempPath}`);
       } else {
         tempFile.lastAccessed = Date.now();
+        await cacheManager.set(magnetUri, tempFile); // Update access time
         logger.info(`Using cached file: ${tempFile.filePath}`);
       }
 
@@ -520,22 +508,16 @@ async function startServer() {
 // Clean up on process termination
 process.on('SIGINT', () => {
     logger.info('Shutting down...');
-    // Clear scheduled tasks
-    if (cleanupSchedule) {
-        clearInterval(cleanupSchedule);
-        logger.info('Cleanup schedule cleared');
-    }
+    // Stop scalable cache manager
+    cacheManager.stop();
     // Graceful shutdown
     process.exit(0);
 });
 
 process.on('SIGTERM', () => {
     logger.info('Shutting down...');
-    // Clear scheduled tasks
-    if (cleanupSchedule) {
-        clearInterval(cleanupSchedule);
-        logger.info('Cleanup schedule cleared');
-    }
+    // Stop scalable cache manager
+    cacheManager.stop();
     // Graceful shutdown
     process.exit(0);
 });
