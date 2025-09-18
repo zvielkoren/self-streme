@@ -85,9 +85,28 @@ class StreamService {
       const streams = streamsData
         .filter(result => result && (result.title || result.name || result.magnet || result.url || result.ytId))
         .map(result => this.convertToStremioStream(result, isIOS))
-        .filter(stream => stream && (stream.infoHash || stream.url || stream.ytId)); // Filter out invalid streams
+        .filter(stream => stream !== null && stream && (stream.infoHash || stream.url || stream.ytId)); // Filter out invalid streams and nulls
 
       logger.info(`Processed ${streams.length} valid streams for ${cacheKey}`);
+
+      // If no valid streams found after filtering, provide a helpful placeholder
+      if (streams.length === 0) {
+        logger.warn(`No valid streams after filtering for ${cacheKey}`);
+        const placeholderStream = {
+          name: "No Stream Available - Check Self-Streme Addon",
+          title: "No Stream Available - Check Self-Streme Addon", 
+          url: "/static/placeholder.mp4",
+          quality: "N/A",
+          size: "0 MB",
+          seeders: 0,
+          source: "placeholder",
+          behaviorHints: {
+            notWebReady: false,
+            bingeGroup: "self-streme-placeholder"
+          }
+        };
+        return [placeholderStream];
+      }
 
       // Don't cache converted streams - we cache raw streams and convert per request
       return streams;
@@ -157,11 +176,10 @@ class StreamService {
     // YouTube ID
     if (result.ytId) stream.ytId = result.ytId;
 
-    // fallback למקרה שאין מקור תקף - הצג הודעת שגיאה
+    // fallback למקרה שאין מקור תקף - החזר null כדי שהסטרים יסונן החוצה
     if (!stream.infoHash && !stream.url && !stream.ytId) {
-      stream.url = "/static/placeholder.mp4";
-      stream.title = "No Stream Available - Check Self-Streme Addon";
-      stream.name = "Error: No valid stream source found";
+      logger.warn(`Filtering out invalid stream: ${result.title || result.name || 'Unknown'} from ${result.source || 'unknown source'} - no valid source`);
+      return null;
     }
 
     // behaviorHints
