@@ -45,6 +45,12 @@ class StreamService {
       const cacheKey = `${cleanImdbId}:${season || 0}:${episode || 0}`;
       logger.info(`Getting streams for ${type}:${cleanImdbId} S${season || "-"}E${episode || "-"}`);
 
+      // Detect iOS early for specific handling
+      const isIOS = this.isIOSDevice(userAgent);
+      if (isIOS) {
+        logger.info(`iOS device detected for ${type} request: ${cacheKey}`);
+      }
+
       // בדיקה אם יש כבר במטמון (cache raw streams, not converted ones)
       let streamsData;
       if (this.cache.has(cacheKey)) {
@@ -56,25 +62,33 @@ class StreamService {
         if (!streamsData || !Array.isArray(streamsData) || streamsData.length === 0) {
           logger.warn(`No streams found from searchService for ${cacheKey}`);
           
-          // Return a placeholder stream instead of empty array
-          const placeholderStream = {
-            name: "No Stream Available - Check Self-Streme Addon",
-            title: "No Stream Available - Check Self-Streme Addon", 
-            url: "/static/placeholder.mp4",
-            quality: "N/A",
-            size: "0 MB",
-            seeders: 0,
-            source: "placeholder",
-            behaviorHints: {
-              notWebReady: false,
-              bingeGroup: "self-streme-placeholder"
-            }
-          };
+          // For series on iOS, try fallback search strategies
+          if (type === 'series' && isIOS && season && episode) {
+            logger.info(`Attempting fallback search for iOS series: ${cacheKey}`);
+            streamsData = await this.fallbackSeriesSearch(cleanImdbId, season, episode);
+          }
           
-          const placeholderResult = [placeholderStream];
-          // Cache placeholder result for a shorter time to retry sooner
-          this.cache.set(cacheKey, placeholderResult, 300); // 5 minutes for placeholder results
-          return placeholderResult;
+          if (!streamsData || streamsData.length === 0) {
+            // Return a placeholder stream instead of empty array
+            const placeholderStream = {
+              name: "No Stream Available - Check Self-Streme Addon",
+              title: "No Stream Available - Check Self-Streme Addon", 
+              url: "/static/placeholder.mp4",
+              quality: "N/A",
+              size: "0 MB",
+              seeders: 0,
+              source: "placeholder",
+              behaviorHints: {
+                notWebReady: false,
+                bingeGroup: "self-streme-placeholder"
+              }
+            };
+            
+            const placeholderResult = [placeholderStream];
+            // Cache placeholder result for a shorter time to retry sooner
+            this.cache.set(cacheKey, placeholderResult, 300); // 5 minutes for placeholder results
+            return placeholderResult;
+          }
         }
         
         // Cache the raw stream data
@@ -82,7 +96,6 @@ class StreamService {
       }
 
       // מיפוי ותיקון metadata מתוך מקור ה־streams
-      const isIOS = this.isIOSDevice(userAgent);
       const streams = streamsData
         .filter(result => result && (result.title || result.name || result.magnet || result.url || result.ytId))
         .map(result => this.convertToStremioStream(result, isIOS, baseUrl))
@@ -119,6 +132,39 @@ class StreamService {
   }
 
   /**
+   * Fallback search for series when main search fails
+   * @param {string} imdbId - Clean IMDB ID
+   * @param {number} season - Season number
+   * @param {number} episode - Episode number
+   * @returns {Promise<Array>} Array of stream results
+   */
+  async fallbackSeriesSearch(imdbId, season, episode) {
+    try {
+      logger.info(`Attempting fallback series search for ${imdbId} S${season}E${episode}`);
+      
+      // Try searching without episode specificity first (season pack)
+      let results = await searchService.search(imdbId, 'series', season);
+      if (results && results.length > 0) {
+        logger.info(`Found ${results.length} season pack results for fallback search`);
+        return results;
+      }
+      
+      // Try searching as movie type (sometimes series episodes are indexed as movies)
+      results = await searchService.search(imdbId, 'movie');
+      if (results && results.length > 0) {
+        logger.info(`Found ${results.length} movie-type results for series fallback search`);
+        return results;
+      }
+      
+      logger.warn(`No results found in fallback series search for ${imdbId}`);
+      return [];
+    } catch (error) {
+      logger.error(`Fallback series search error for ${imdbId}:`, error);
+      return [];
+    }
+  }
+
+  /**
    * מחזיר stream ספציפי מקאש לפי fileIdx
    */
   getCachedStream(imdbId, season, episode, fileIdx) {
@@ -149,7 +195,7 @@ class StreamService {
       logger.debug(`Converting stream for iOS device: ${stream.name}, baseUrl: ${baseUrl}`);
     }
 
-    // magnet
+    // magnet handling with improved hash to video conversion
     if (result.magnet || (result.sources && result.sources.some(s => s.startsWith("magnet:")))) {
       const magnetLink = result.magnet || result.sources.find(s => s.startsWith("magnet:"));
       const infoHash = this.extractInfoHash(magnetLink);
@@ -163,6 +209,18 @@ class StreamService {
           const streamBaseUrl = baseUrl || config.server.baseUrl || `http://127.0.0.1:${config.server.port}`;
           stream.url = `${streamBaseUrl}/stream/proxy/${infoHash}`;
           logger.debug(`iOS stream: providing proxy-aware HTTP URL ${stream.url} for ${infoHash}`);
+          
+          // Add metadata for better iOS playback
+          stream.behaviorHints = {
+            notWebReady: false, // iOS streams are web-ready
+            bingeGroup: `self-streme-ios-${infoHash.substring(0, 8)}`,
+            proxyHeaders: {
+              request: {
+                'User-Agent': 'Stremio/iOS'
+              }
+            }
+          };
+          
           // Don't set infoHash for iOS to ensure Stremio uses HTTP URL
         } else {
           // For desktop/Android, provide magnet link
@@ -170,15 +228,39 @@ class StreamService {
           stream.fileIdx = result.fileIdx || 0;
           stream.sources = [magnetLink];
           logger.debug(`Desktop stream: providing magnet link for ${infoHash}`);
+          
+          // Desktop behavior hints
+          stream.behaviorHints = {
+            notWebReady: true,
+            bingeGroup: `self-streme-desktop-${stream.quality || "default"}`
+          };
         }
       }
     }
 
     // URL ישיר
-    if (result.url) stream.url = result.url;
+    if (result.url) {
+      stream.url = result.url;
+      // Set appropriate behavior hints for direct URLs
+      if (!stream.behaviorHints) {
+        stream.behaviorHints = {
+          notWebReady: false,
+          bingeGroup: `self-streme-direct-${stream.quality || "default"}`
+        };
+      }
+    }
 
     // YouTube ID
-    if (result.ytId) stream.ytId = result.ytId;
+    if (result.ytId) {
+      stream.ytId = result.ytId;
+      // YouTube streams are always web-ready
+      if (!stream.behaviorHints) {
+        stream.behaviorHints = {
+          notWebReady: false,
+          bingeGroup: "self-streme-youtube"
+        };
+      }
+    }
 
     // fallback למקרה שאין מקור תקף - החזר null כדי שהסטרים יסונן החוצה
     if (!stream.infoHash && !stream.url && !stream.ytId) {
@@ -186,11 +268,13 @@ class StreamService {
       return null;
     }
 
-    // behaviorHints
-    stream.behaviorHints = {
-      notWebReady: true,
-      bingeGroup: `self-streme-${stream.quality || "default"}`
-    };
+    // Default behaviorHints if not set above
+    if (!stream.behaviorHints) {
+      stream.behaviorHints = {
+        notWebReady: !isIOS, // iOS gets web-ready streams, others don't
+        bingeGroup: `self-streme-${stream.quality || "default"}`
+      };
+    }
 
     return stream;
   }

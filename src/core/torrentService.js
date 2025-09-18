@@ -34,7 +34,9 @@ class TorrentService {
         this.client.on('warning', warning => logger.warn('WebTorrent warning:', warning));
     }
 
-    async getStream(magnetUri, fileIdx = 0) {
+    async getStream(magnetUri, fileIdx = 0, retryCount = 0) {
+        const maxRetries = 2; // Maximum number of retries
+        
         return new Promise((resolve, reject) => {
             try {
                 if (!magnetUri || !magnetUri.startsWith('magnet:')) {
@@ -53,7 +55,7 @@ class TorrentService {
                     return reject(new Error('Invalid magnet URI: no info hash found'));
                 }
                 const infoHash = infoHashMatch[1];
-                logger.info(`Extracted info hash: ${infoHash}`);
+                logger.info(`Extracted info hash: ${infoHash}, retry: ${retryCount}`);
 
                 // Check if torrent already exists by searching through active torrents
                 let torrent = this.client.torrents.find(t => t.infoHash === infoHash);
@@ -62,14 +64,32 @@ class TorrentService {
                     logger.info(`Found existing torrent for ${infoHash}`);
                 } else {
                     logger.info(`Adding new torrent: ${magnetUri.substring(0, 50)}...`);
-                    torrent = this.client.add(magnetUri, { path: config.torrent.downloadPath });
-                    logger.info(`Torrent add initiated`);
+                    
+                    // Add additional trackers to improve connectivity
+                    const enhancedMagnetUri = this.enhanceMagnetUri(magnetUri);
+                    torrent = this.client.add(enhancedMagnetUri, { 
+                        path: config.torrent.downloadPath,
+                        announce: config.torrent.trackers
+                    });
+                    logger.info(`Torrent add initiated with enhanced trackers`);
                 }
                 
                 // Validate torrent object
                 if (!torrent || typeof torrent.on !== 'function') {
                     logger.error(`Invalid torrent object - type: ${typeof torrent}, constructor: ${torrent && torrent.constructor ? torrent.constructor.name : 'unknown'}`);
-                    return reject(new Error('Invalid torrent object'));
+                    
+                    // Retry logic for failed torrent creation
+                    if (retryCount < maxRetries) {
+                        logger.info(`Retrying torrent creation (${retryCount + 1}/${maxRetries})`);
+                        setTimeout(() => {
+                            this.getStream(magnetUri, fileIdx, retryCount + 1)
+                                .then(resolve)
+                                .catch(reject);
+                        }, 5000); // Wait 5 seconds before retry
+                        return;
+                    }
+                    
+                    return reject(new Error('Invalid torrent object after retries'));
                 }
 
                 logger.info(`Valid torrent object confirmed`);
@@ -123,7 +143,7 @@ class TorrentService {
                         torrent.destroy();
                     }
                     reject(new Error('Torrent adding timeout'));
-                }, 60000); // Increased timeout to 60 seconds
+                }, 120000); // Increased timeout to 120 seconds for better reliability
 
                 torrent.on('ready', () => {
                     clearTimeout(timeout);
@@ -172,7 +192,26 @@ class TorrentService {
                 return;
             }
 
-            const torrentStream = await this.getStream(magnetUri);
+            // Attempt to get stream with retry logic
+            let torrentStream;
+            try {
+                torrentStream = await this.getStream(magnetUri);
+            } catch (streamError) {
+                logger.error(`Failed to get torrent stream for ${infoHash}:`, streamError.message);
+                
+                // Try fallback: direct file access if available
+                const fallbackStream = await this.tryFallbackFileStream(infoHash);
+                if (fallbackStream) {
+                    logger.info(`Using fallback file stream for ${infoHash}`);
+                    return this.streamFromFile(req, res, fallbackStream.path, fallbackStream.size, infoHash);
+                }
+                
+                // No fallback available
+                if (!res.headersSent) {
+                    return res.status(404).json({ error: 'Stream not found or timed out' });
+                }
+                return;
+            }
             
             if (!torrentStream || !torrentStream.file) {
                 logger.error(`No valid torrent stream found for ${infoHash}`);
@@ -186,6 +225,8 @@ class TorrentService {
                 logger.error(`Invalid file size for ${infoHash}: ${fileSize}`);
                 return res.status(500).json({ error: 'Invalid file size' });
             }
+
+            logger.info(`Hash to video conversion successful: ${infoHash} -> ${file.name} (${fileSize} bytes)`);
 
             // Check if file exists on disk and use file stream for better performance
             const filePath = path.join(config.torrent.downloadPath, file.path);
@@ -379,6 +420,105 @@ class TorrentService {
                 res.status(500).json({ error: 'Failed to stream file' });
             }
         }
+    }
+
+    /**
+     * Try to find a fallback file stream for direct access
+     * @param {string} infoHash - Torrent info hash
+     * @returns {Promise<object|null>} File stream info or null
+     */
+    async tryFallbackFileStream(infoHash) {
+        try {
+            // Look for any files in download directory that might match this hash
+            const downloadPath = config.torrent.downloadPath;
+            if (!fs.existsSync(downloadPath)) {
+                return null;
+            }
+            
+            // Check for any subdirectories or files that contain the hash
+            const items = fs.readdirSync(downloadPath);
+            for (const item of items) {
+                const itemPath = path.join(downloadPath, item);
+                const stats = fs.statSync(itemPath);
+                
+                if (stats.isDirectory()) {
+                    // Check if directory name contains hash or look for video files inside
+                    const videoFiles = this.findVideoFilesInDirectory(itemPath);
+                    if (videoFiles.length > 0) {
+                        const firstVideo = videoFiles[0];
+                        const videoStats = fs.statSync(firstVideo);
+                        if (videoStats.size > 1024 * 1024) { // At least 1MB
+                            logger.info(`Found fallback video file: ${firstVideo}`);
+                            return {
+                                path: firstVideo,
+                                size: videoStats.size
+                            };
+                        }
+                    }
+                } else if (stats.isFile()) {
+                    // Check if it's a video file
+                    const ext = path.extname(item).toLowerCase();
+                    const videoExtensions = ['.mp4', '.mkv', '.avi', '.mov', '.m4v', '.webm', '.flv'];
+                    if (videoExtensions.includes(ext) && stats.size > 1024 * 1024) {
+                        logger.info(`Found fallback video file: ${itemPath}`);
+                        return {
+                            path: itemPath,
+                            size: stats.size
+                        };
+                    }
+                }
+            }
+            
+            return null;
+        } catch (error) {
+            logger.debug(`Error in fallback file stream search: ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Find video files in a directory
+     * @param {string} dirPath - Directory path
+     * @returns {Array<string>} Array of video file paths
+     */
+    findVideoFilesInDirectory(dirPath) {
+        try {
+            const items = fs.readdirSync(dirPath);
+            const videoExtensions = ['.mp4', '.mkv', '.avi', '.mov', '.m4v', '.webm', '.flv'];
+            
+            return items
+                .map(item => path.join(dirPath, item))
+                .filter(itemPath => {
+                    try {
+                        const stats = fs.statSync(itemPath);
+                        if (stats.isFile()) {
+                            const ext = path.extname(itemPath).toLowerCase();
+                            return videoExtensions.includes(ext);
+                        }
+                        return false;
+                    } catch (err) {
+                        return false;
+                    }
+                });
+        } catch (error) {
+            return [];
+        }
+    }
+
+    /**
+     * Enhance magnet URI with additional trackers for better connectivity
+     * @param {string} magnetUri - Original magnet URI
+     * @returns {string} Enhanced magnet URI with additional trackers
+     */
+    enhanceMagnetUri(magnetUri) {
+        // If magnet already has trackers, don't duplicate
+        if (magnetUri.includes('&tr=')) {
+            return magnetUri;
+        }
+        
+        // Add configured trackers to magnet URI
+        const trackers = config.torrent.trackers.map(t => `&tr=${encodeURIComponent(t)}`).join('');
+        return magnetUri + trackers;
     }
 
     cleanup() {
