@@ -179,7 +179,24 @@ app.get("/stream/:type/:imdbId.json", async (req, res) => {
             return res.status(400).json({ error: 'Invalid IMDb ID format', streams: [] });
         }
         
-        logger.info(`Stream request: ${type}:${imdbId} from ${userAgent.substring(0, 50)}...`);
+        // Parse season and episode from series IMDb ID (format: tt1234567:season:episode)
+        let season, episode;
+        let cleanImdbId = imdbId;
+        
+        if (type === 'series' && imdbId.includes(':')) {
+            const parts = imdbId.split(':');
+            cleanImdbId = parts[0];
+            season = parts[1] ? parseInt(parts[1], 10) : undefined;
+            episode = parts[2] ? parseInt(parts[2], 10) : undefined;
+            
+            // Validate clean IMDb ID after parsing
+            if (!cleanImdbId.match(/^tt\d+$/)) {
+                logger.warn(`Invalid IMDb ID format after parsing: ${cleanImdbId}`);
+                return res.status(400).json({ error: 'Invalid IMDb ID format', streams: [] });
+            }
+        }
+        
+        logger.info(`Stream request: ${type}:${cleanImdbId}${season ? ':' + season : ''}${episode ? ':' + episode : ''} from ${userAgent.substring(0, 50)}...`);
         
         // Detect iOS
         const isIOS = streamService.isIOSDevice(userAgent);
@@ -187,15 +204,15 @@ app.get("/stream/:type/:imdbId.json", async (req, res) => {
         
         // Get proxy-aware base URL for iOS stream URLs
         const streamBaseUrl = getProxyAwareBaseUrl(req);
-        const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent, streamBaseUrl);
+        const streams = await streamService.getStreams(type, cleanImdbId, season, episode, userAgent, streamBaseUrl);
         
         if (streams.length > 0) {
-            logger.info(`Found ${streams.length} streams for ${imdbId} (iOS: ${isIOS})`);
+            logger.info(`Found ${streams.length} streams for ${cleanImdbId}${season ? ':' + season : ''}${episode ? ':' + episode : ''} (iOS: ${isIOS})`);
             // Log first stream details for debugging
             const firstStream = streams[0];
             logger.info(`First stream: name="${firstStream.name}", url="${firstStream.url || 'null'}", infoHash="${firstStream.infoHash || 'null'}"`);
         } else {
-            logger.warn(`No streams found for ${imdbId}`);
+            logger.warn(`No streams found for ${cleanImdbId}${season ? ':' + season : ''}${episode ? ':' + episode : ''}`);
         }
 
         res.json({ streams });
@@ -222,9 +239,26 @@ app.get("/stream/:type/:imdbId", async (req, res) => {
             return res.status(400).json({ error: 'Invalid IMDb ID format', streams: [] });
         }
 
+        // Parse season and episode from series IMDb ID (format: tt1234567:season:episode)
+        let season, episode;
+        let cleanImdbId = imdbId;
+        
+        if (type === 'series' && imdbId.includes(':')) {
+            const parts = imdbId.split(':');
+            cleanImdbId = parts[0];
+            season = parts[1] ? parseInt(parts[1], 10) : undefined;
+            episode = parts[2] ? parseInt(parts[2], 10) : undefined;
+            
+            // Validate clean IMDb ID after parsing
+            if (!cleanImdbId.match(/^tt\d+$/)) {
+                logger.warn(`Invalid IMDb ID format after parsing: ${cleanImdbId}`);
+                return res.status(400).json({ error: 'Invalid IMDb ID format', streams: [] });
+            }
+        }
+
         // Get proxy-aware base URL for stream URLs
         const streamBaseUrl = getProxyAwareBaseUrl(req);
-        const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent, streamBaseUrl);
+        const streams = await streamService.getStreams(type, cleanImdbId, season, episode, userAgent, streamBaseUrl);
         res.json({ streams });
     } catch (error) {
         logger.error('Stream request error:', error);
