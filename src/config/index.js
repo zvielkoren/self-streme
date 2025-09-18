@@ -33,6 +33,11 @@ const config = {
   },
   cache: {
     ttl: parseInt(process.env.CACHE_TTL, 10) || 3600,
+    maxSize: parseInt(process.env.CACHE_MAX_SIZE, 10) || 1000, // Max number of cached files
+    maxDiskUsage: parseInt(process.env.CACHE_MAX_DISK_MB, 10) || 5000, // Max disk usage in MB
+    cleanupInterval: parseInt(process.env.CACHE_CLEANUP_INTERVAL, 10) || 300, // 5 minutes
+    backend: process.env.CACHE_BACKEND || 'memory', // memory, sqlite, redis
+    persistent: process.env.CACHE_PERSISTENT === 'true',
   },
   logging: {
     level: process.env.LOG_LEVEL || "info",

@@ -1,6 +1,9 @@
 import express from "express";
 import cors from "cors";
 import path from "path";
+import fs from "fs";
+import os from "os";
+import mime from "mime-types";
 import { fileURLToPath } from "url";
 import { config } from "./config/index.js";
 import logger from "./utils/logger.js";
@@ -9,10 +12,28 @@ import streamService from "./core/streamService.js";
 import torrentService from "./core/torrentService.js";
 import manifest from "./manifest.js";
 import { getProxyAwareBaseUrl, getBaseUrlFromRequest } from "./utils/urlHelper.js";
+import ScalableCacheManager from "./services/scalableCacheManager.js";
 
 // File paths
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Temporary cache for downloaded files
+const TEMP_DIR = path.join(os.tmpdir(), "self-streme");
+if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+
+// Scalable cache manager with configurable backend and limits
+const cacheManager = new ScalableCacheManager({
+    backend: config.cache.backend,
+    maxSize: config.cache.maxSize,
+    maxDiskUsage: config.cache.maxDiskUsage,
+    cleanupInterval: config.cache.cleanupInterval,
+    tempDir: TEMP_DIR
+});
+
+// Legacy compatibility - maintain old constants for existing code
+const CACHE_LIFETIME = config.cache.ttl * 1000;
+const CLEANUP_INTERVAL = config.cache.cleanupInterval * 1000;
 
 
 // Initialize Express app
@@ -43,6 +64,29 @@ app.get('/', (req, res) => {
 // Serve iOS fix test page
 app.get('/test-ios-fix', (req, res) => {
     res.sendFile(path.join(__dirname, 'test-ios-fix.html'));
+});
+
+// Serve source selection test page
+app.get('/test-source-selection', (req, res) => {
+    res.sendFile('/tmp/test-source-selection.html');
+});
+
+// Test endpoint for source selection with direct URL
+app.get('/test-stream/:fileIdx', (req, res) => {
+    const { fileIdx } = req.params;
+    const testStreams = [
+        { url: 'https://file-examples.com/storage/fe5deb0ffdce38e1fe1e39a/2017/10/file_example_MP4_1280_10MG.mp4', title: 'Sample Video 1' },
+        { url: 'https://file-examples.com/storage/fe5deb0ffdce38e1fe1e39a/2017/10/file_example_MP4_640_3MG.mp4', title: 'Sample Video 2' },
+        { url: 'https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4', title: 'Sample Video 3' }
+    ];
+    
+    const stream = testStreams[parseInt(fileIdx) || 0];
+    if (stream) {
+        logger.info(`Test stream redirect to: ${stream.url}`);
+        res.redirect(stream.url);
+    } else {
+        res.status(404).send('Test stream not found');
+    }
 });
 
 // Serve static files from src directory
@@ -98,6 +142,50 @@ app.get('/api/base-url', (req, res) => {
         baseUrl: baseUrl,
         manifestUrl: `${baseUrl}/manifest.json`,
         stremioUrl: `stremio://${getBaseUrlFromRequest(req).host}/manifest.json`
+    });
+});
+
+// API endpoint to configure cache scheduling
+app.get('/api/cache-config', (req, res) => {
+    const stats = cacheManager.getStats();
+    res.json(stats);
+});
+
+app.post('/api/cache-config', express.json(), (req, res) => {
+    try {
+        const { forceCleanup } = req.body;
+        
+        if (forceCleanup) {
+            cacheManager.forceCleanup().then(result => {
+                logger.info(`Forced cleanup: ${JSON.stringify(result)}`);
+                res.json({ 
+                    message: `Cleaned ${result.cleanedCount} files, freed ${result.freedSpaceMB.toFixed(2)}MB`, 
+                    ...result 
+                });
+            }).catch(error => {
+                logger.error('Force cleanup error:', error);
+                res.status(500).json({ error: 'Cleanup failed' });
+            });
+        } else {
+            res.json({ message: 'No action specified', stats: cacheManager.getStats() });
+        }
+    } catch (error) {
+        logger.error('Cache config error:', error);
+        res.status(500).json({ error: 'Configuration error' });
+    }
+});
+
+// New endpoint for cache statistics and scaling information
+app.get('/api/cache-stats', (req, res) => {
+    const stats = cacheManager.getStats();
+    res.json({
+        ...stats,
+        scalingInfo: {
+            backend: stats.backend,
+            isScalable: stats.backend !== 'memory',
+            supportsPersistence: config.cache.persistent,
+            recommendedForProduction: stats.backend === 'redis' || stats.backend === 'sqlite'
+        }
     });
 });
 
@@ -266,6 +354,118 @@ app.get("/stream/:type/:imdbId", async (req, res) => {
     }
 });
 
+// Source selection and streaming endpoint
+app.get("/play/:type/:imdbId/:fileIdx/:season?/:episode?", async (req, res) => {
+  let { type, imdbId, fileIdx, season, episode } = req.params;
+  fileIdx = parseInt(fileIdx, 10);
+
+  try {
+    logger.info(`Play request: ${type}:${imdbId}:${fileIdx} S${season || '-'}E${episode || '-'}`);
+    
+    // Get stream from cache or create new one
+    let cachedStream = streamService.getCachedStream(
+      imdbId,
+      season ? Number(season) : undefined,
+      episode ? Number(episode) : undefined,
+      fileIdx
+    );
+
+    logger.info(`Cached stream result: ${cachedStream ? 'found' : 'not found'}`);
+
+    if (!cachedStream) {
+      logger.info(`Getting streams for ${type}:${imdbId}`);
+      const streams = await streamService.getStreams(
+        type,
+        imdbId,
+        season ? Number(season) : undefined,
+        episode ? Number(episode) : undefined
+      );
+      logger.info(`Found ${streams.length} streams, looking for index ${fileIdx}`);
+      cachedStream = streams[fileIdx];
+      if (!cachedStream) {
+        logger.warn(`Stream not found at index ${fileIdx}`);
+        return res.status(404).send("Stream not found");
+      }
+    }
+
+    logger.info(`Stream details: infoHash=${cachedStream.infoHash}, sources=${cachedStream.sources?.length || 0}, url=${cachedStream.url ? 'present' : 'none'}`);
+
+    // If there's a magnet link – download and stream
+    if (cachedStream.infoHash && cachedStream.sources?.length) {
+      const magnetUri = cachedStream.sources[0];
+      logger.info(`Attempting to stream magnet: ${magnetUri.substring(0, 50)}...`);
+      
+      let tempFile = cacheManager.get(magnetUri);
+
+      if (!tempFile) {
+        logger.info('Downloading file from magnet...');
+        const torrentStream = await torrentService.getStream(magnetUri);
+        const file = torrentStream.file;
+
+        const tempPath = path.join(TEMP_DIR, `${cachedStream.infoHash}-${file.name}`);
+        await new Promise((resolve, reject) => {
+          const writeStream = fs.createWriteStream(tempPath);
+          file.createReadStream()
+            .on("error", reject)
+            .pipe(writeStream)
+            .on("finish", resolve)
+            .on("error", reject);
+        });
+
+        tempFile = { filePath: tempPath, lastAccessed: Date.now() };
+        await cacheManager.set(magnetUri, tempFile);
+        torrentStream.destroy();
+        logger.info(`File downloaded to: ${tempPath}`);
+      } else {
+        tempFile.lastAccessed = Date.now();
+        await cacheManager.set(magnetUri, tempFile); // Update access time
+        logger.info(`Using cached file: ${tempFile.filePath}`);
+      }
+
+      // Range streaming
+      const stat = fs.statSync(tempFile.filePath);
+      const fileSize = stat.size;
+      const range = req.headers.range;
+      const mimeType = mime.lookup(tempFile.filePath) || "video/mp4";
+
+      if (range) {
+        const parts = range.replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunkSize = (end - start) + 1;
+
+        res.writeHead(206, {
+          "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+          "Accept-Ranges": "bytes",
+          "Content-Length": chunkSize,
+          "Content-Type": mimeType
+        });
+
+        fs.createReadStream(tempFile.filePath, { start, end }).pipe(res);
+      } else {
+        res.writeHead(200, {
+          "Content-Length": fileSize,
+          "Content-Type": mimeType
+        });
+        fs.createReadStream(tempFile.filePath).pipe(res);
+      }
+      return;
+    }
+
+    // Otherwise external URL
+    if (cachedStream.url) {
+      logger.info(`Redirecting to external URL: ${cachedStream.url}`);
+      return res.redirect(cachedStream.url);
+    }
+
+    logger.warn('No playable stream available');
+    res.status(404).send("No playable stream available");
+  } catch (err) {
+    logger.error(`Error playing stream for ${imdbId} index ${fileIdx}:`, err);
+    res.status(500).send("Failed to play stream");
+  }
+});
+
 // Initialize server
 async function startServer() {
     try {
@@ -308,12 +508,16 @@ async function startServer() {
 // Clean up on process termination
 process.on('SIGINT', () => {
     logger.info('Shutting down...');
+    // Stop scalable cache manager
+    cacheManager.stop();
     // Graceful shutdown
     process.exit(0);
 });
 
 process.on('SIGTERM', () => {
     logger.info('Shutting down...');
+    // Stop scalable cache manager
+    cacheManager.stop();
     // Graceful shutdown
     process.exit(0);
 });
