@@ -121,7 +121,7 @@ app.get("/stream/proxy/:infoHash", async (req, res) => {
         // If no stream info is cached, provide mock data for testing
         if (!streamInfo) {
             // Check if this is the specific test hash used in the test page
-            const isTestHash = infoHash === 'c12fe1c06bba254a9dc9f519b335aa7c1367a88a';
+            const isTestHash = infoHash === '39730aa7c09b864432bc8c878c20c933059241fd';
             const isDevelopment = process.env.NODE_ENV !== 'production';
             const isTestKeyword = infoHash.startsWith('test_') || infoHash.startsWith('mock_test_');
             
@@ -152,31 +152,6 @@ app.get("/stream/proxy/:infoHash", async (req, res) => {
     }
 });
 
-// Main streaming endpoint
-app.get("/stream/:type/:imdbId", async (req, res) => {
-    try {
-        const { type, imdbId } = req.params;
-        const userAgent = req.headers['user-agent'] || '';
-        
-        // Input validation
-        if (!type || !['movie', 'series'].includes(type)) {
-            logger.warn(`Invalid type parameter: ${type}`);
-            return res.status(400).json({ error: 'Invalid type. Must be "movie" or "series"', streams: [] });
-        }
-
-        if (!imdbId || !imdbId.match(/^tt\d+/)) {
-            logger.warn(`Invalid IMDb ID format: ${imdbId}`);
-            return res.status(400).json({ error: 'Invalid IMDb ID format', streams: [] });
-        }
-
-        const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent);
-        res.json({ streams });
-    } catch (error) {
-        logger.error('Stream request error:', error);
-        res.status(500).json({ error: 'Internal server error', streams: [] });
-    }
-});
-
 // iOS-specific stream endpoint that provides HTTP streams instead of magnets
 app.get("/stream/:type/:imdbId.json", async (req, res) => {
     try {
@@ -204,6 +179,9 @@ app.get("/stream/:type/:imdbId.json", async (req, res) => {
         
         if (streams.length > 0) {
             logger.info(`Found ${streams.length} streams for ${imdbId} (iOS: ${isIOS})`);
+            // Log first stream details for debugging
+            const firstStream = streams[0];
+            logger.info(`First stream: name="${firstStream.name}", url="${firstStream.url || 'null'}", infoHash="${firstStream.infoHash || 'null'}"`);
         } else {
             logger.warn(`No streams found for ${imdbId}`);
         }
@@ -211,6 +189,31 @@ app.get("/stream/:type/:imdbId.json", async (req, res) => {
         res.json({ streams });
     } catch (error) {
         logger.error('Stream endpoint error:', error);
+        res.status(500).json({ error: 'Internal server error', streams: [] });
+    }
+});
+
+// Main streaming endpoint
+app.get("/stream/:type/:imdbId", async (req, res) => {
+    try {
+        const { type, imdbId } = req.params;
+        const userAgent = req.headers['user-agent'] || '';
+        
+        // Input validation
+        if (!type || !['movie', 'series'].includes(type)) {
+            logger.warn(`Invalid type parameter: ${type}`);
+            return res.status(400).json({ error: 'Invalid type. Must be "movie" or "series"', streams: [] });
+        }
+
+        if (!imdbId || !imdbId.match(/^tt\d+/)) {
+            logger.warn(`Invalid IMDb ID format: ${imdbId}`);
+            return res.status(400).json({ error: 'Invalid IMDb ID format', streams: [] });
+        }
+
+        const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent);
+        res.json({ streams });
+    } catch (error) {
+        logger.error('Stream request error:', error);
         res.status(500).json({ error: 'Internal server error', streams: [] });
     }
 });

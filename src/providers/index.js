@@ -42,11 +42,11 @@ class SearchService {
         });
     }
 
-    async search(imdbId, type) {
+    async search(imdbId, type, season, episode) {
         // Clean the IMDB ID by removing .json and any other extensions
         const cleanImdbId = imdbId.replace(/\.(json|txt|html)$/, '');
         
-        const cacheKey = `${type}:${cleanImdbId}`;
+        const cacheKey = `${type}:${cleanImdbId}:${season || 0}:${episode || 0}`;
         const cached = this.cache.get(cacheKey);
         if (cached) {
             logger.info(`Cache hit for ${cacheKey}`);
@@ -62,13 +62,28 @@ class SearchService {
                 return [];
             }
             
-            logger.info(`Searching with metadata: ${metadata.title} (${metadata.year})`);
+            // Build search query based on type
+            let searchQuery = metadata.title;
+            if (type === 'series' && season && episode) {
+                // For series, include season and episode in search
+                searchQuery = `${metadata.title} S${season.toString().padStart(2, '0')}E${episode.toString().padStart(2, '0')}`;
+                logger.info(`Searching for series: ${searchQuery} (${metadata.year})`);
+            } else if (type === 'series' && season) {
+                // For series season pack
+                searchQuery = `${metadata.title} Season ${season}`;
+                logger.info(`Searching for series season: ${searchQuery} (${metadata.year})`);
+            } else {
+                logger.info(`Searching with metadata: ${metadata.title} (${metadata.year})`);
+            }
             
             const params = {
                 imdbId: cleanImdbId,
                 type,
-                query: metadata.title,
-                year: metadata.year
+                query: searchQuery,
+                originalTitle: metadata.title,
+                year: metadata.year,
+                season,
+                episode
             };
 
             // Search with timeout to prevent long loading times
