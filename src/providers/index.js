@@ -31,8 +31,8 @@ class SearchService {
         this.externalProviders = [
             torrentioProvider,
             jackettProvider,
-            fallbackProvider,
-            mockProvider  // Add mock provider for testing when external services fail
+            fallbackProvider
+            // mockProvider  // Temporarily disabled to test real behavior
         ];
 
         this.cache = new NodeCache({
