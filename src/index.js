@@ -187,6 +187,33 @@ async function startServer() {
         const port = process.env.PORT || 7000;
         const host = process.env.HOST || '0.0.0.0';
         
+// iOS-specific stream endpoint that provides HTTP streams instead of magnets
+app.get("/stream/:type/:imdbId.json", async (req, res) => {
+    try {
+        const { type, imdbId } = req.params;
+        const userAgent = req.headers['user-agent'] || '';
+        
+        logger.info(`Stream request: ${type}:${imdbId} from ${userAgent.substring(0, 50)}...`);
+        
+        // Detect iOS
+        const isIOS = streamService.isIOSDevice(userAgent);
+        logger.info(`iOS device detected: ${isIOS}`);
+        
+        const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent);
+        
+        if (streams.length > 0) {
+            logger.info(`Found ${streams.length} streams for ${imdbId} (iOS: ${isIOS})`);
+        } else {
+            logger.warn(`No streams found for ${imdbId}`);
+        }
+
+        res.json({ streams });
+    } catch (error) {
+        logger.error('Stream endpoint error:', error);
+        res.status(500).json({ streams: [] });
+    }
+});
+
         // For now, disable the addon mounting until we fix the interface issue
         // app.use('/', addonApp);
 
