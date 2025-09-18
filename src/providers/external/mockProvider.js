@@ -30,6 +30,7 @@ class MockProvider {
             const source = sources[index % sources.length];
             const seeders = Math.floor(Math.random() * 1000) + 50;
             const size = this.generateSize(quality);
+            const infoHash = this.generateMockInfoHash(imdbId, quality);
             
             return {
                 name: 'MockProvider',
@@ -38,9 +39,9 @@ class MockProvider {
                 size: size,
                 seeders: seeders,
                 source: 'mock',
-                // Generate a fake magnet link for testing
-                magnet: this.generateMockMagnet(title, year, quality),
-                infoHash: this.generateMockInfoHash(imdbId, quality),
+                // Generate a fake magnet link for testing with consistent hash
+                magnet: this.generateMockMagnet(title, year, quality, infoHash),
+                infoHash: infoHash,
                 type: type
             };
         });
@@ -55,10 +56,9 @@ class MockProvider {
         return sizes[quality] || '1.2 GB';
     }
 
-    generateMockMagnet(title, year, quality) {
-        // Generate a fake but valid-looking magnet link
-        const hash = this.generateMockInfoHash(title + year + quality);
-        return `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(title + ' ' + year + ' ' + quality)}&tr=udp%3A%2F%2Ftracker.example.com%3A1337`;
+    generateMockMagnet(title, year, quality, infoHash) {
+        // Use the same hash that's in the infoHash property to ensure consistency
+        return `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(title + ' ' + year + ' ' + quality)}&tr=udp%3A%2F%2Ftracker.example.com%3A1337`;
     }
 
     generateMockInfoHash(input, quality = '') {
