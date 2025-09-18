@@ -4,9 +4,7 @@
 
 **A Powerful Self-Hosted Streaming Server with Stremio Integration**
 
-[![License](https://img.shields.io/badge/license-Private-red.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
-[![Stremio](https://img.shields.io/badge/platform-Stremio-blue.svg)](https://www.stremio.com/)
+**License:** [Private](LICENSE) | **Node.js:** ≥18.0.0 | **Platform:** [Stremio](https://www.stremio.com/)
 
 *Transform your media library into a professional streaming platform*
 
