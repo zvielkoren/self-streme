@@ -47,18 +47,36 @@ class TorrentService {
                     return resolve(existing);
                 }
 
-                logger.info(`Adding new torrent: ${magnetUri.substring(0, 50)}...`);
-                const torrent = this.client.add(magnetUri, { path: config.torrent.downloadPath });
-                
-                const timeout = setTimeout(() => {
-                    logger.error(`Torrent timeout for: ${magnetUri.substring(0, 50)}...`);
-                    torrent.destroy();
-                    reject(new Error('Torrent adding timeout'));
-                }, 60000); // Increased timeout to 60 seconds
+                // Extract info hash from magnet URI for duplicate checking
+                const infoHashMatch = magnetUri.match(/xt=urn:btih:([^&]+)/i);
+                if (!infoHashMatch) {
+                    return reject(new Error('Invalid magnet URI: no info hash found'));
+                }
+                const infoHash = infoHashMatch[1];
+                logger.info(`Extracted info hash: ${infoHash}`);
 
-                torrent.on('ready', () => {
-                    clearTimeout(timeout);
-                    logger.info(`Torrent ready: ${torrent.name}, files: ${torrent.files.length}`);
+                // Check if torrent already exists by searching through active torrents
+                let torrent = this.client.torrents.find(t => t.infoHash === infoHash);
+                
+                if (torrent) {
+                    logger.info(`Found existing torrent for ${infoHash}`);
+                } else {
+                    logger.info(`Adding new torrent: ${magnetUri.substring(0, 50)}...`);
+                    torrent = this.client.add(magnetUri, { path: config.torrent.downloadPath });
+                    logger.info(`Torrent add initiated`);
+                }
+                
+                // Validate torrent object
+                if (!torrent || typeof torrent.on !== 'function') {
+                    logger.error(`Invalid torrent object - type: ${typeof torrent}, constructor: ${torrent && torrent.constructor ? torrent.constructor.name : 'unknown'}`);
+                    return reject(new Error('Invalid torrent object'));
+                }
+
+                logger.info(`Valid torrent object confirmed`);
+
+                // Function to process torrent when it's ready
+                const processTorrent = () => {
+                    logger.info(`Torrent ready: ${torrent.name || 'Unknown'}, files: ${torrent.files.length}`);
                     
                     const videoExtensions = ['mp4','mkv','avi','mov','m4v','webm','flv'];
                     const files = torrent.files.filter(f => {
@@ -89,6 +107,27 @@ class TorrentService {
 
                     this.activeTorrents.set(magnetUri, stream);
                     resolve(stream);
+                };
+
+                // Check if torrent is already ready (for existing torrents)
+                if (torrent.ready) {
+                    logger.debug(`Torrent already ready for ${magnetUri.substring(0, 50)}...`);
+                    processTorrent();
+                    return;
+                }
+
+                // For new torrents or torrents that aren't ready yet, set up event listeners
+                const timeout = setTimeout(() => {
+                    logger.error(`Torrent timeout for: ${magnetUri.substring(0, 50)}...`);
+                    if (torrent && typeof torrent.destroy === 'function') {
+                        torrent.destroy();
+                    }
+                    reject(new Error('Torrent adding timeout'));
+                }, 60000); // Increased timeout to 60 seconds
+
+                torrent.on('ready', () => {
+                    clearTimeout(timeout);
+                    processTorrent();
                 });
 
                 torrent.on('error', error => {
