@@ -28,7 +28,9 @@ Self-Streme is a sophisticated Stremio addon that seamlessly bridges your local 
 
 ### 🚀 **Advanced Streaming Capabilities**
 - **Hash-Based Caching** - Intelligent file caching with automatic cleanup
-- **Magnet Link Support** - Direct torrent-to-stream functionality with 30s timeout
+- **Enhanced Torrent Streaming** - Direct torrent-to-stream with 60s timeout, progressive backoff, and DHT support
+- **Reliable Connectivity** - 12 high-quality trackers, NAT traversal, and local service discovery
+- **Smart Retry Logic** - 3 retry attempts with exponential backoff for improved reliability
 - **Direct URL Streaming** - Seamless redirection to external streaming sources
 - **iOS Optimization** - Enhanced compatibility for iOS devices
 - **Proxy-Aware URLs** - Seamless operation behind proxies and load balancers
@@ -115,6 +117,10 @@ CACHE_PERSISTENT=false     # Enable persistent cache storage
 JACKETT_URL=http://localhost:9117    # Jackett server URL
 JACKETT_API_KEY=your_api_key_here    # Jackett API key
 OMDB_API_KEY=your_omdb_api_key      # OMDB API key for metadata
+
+# Torrent Configuration
+TORRENT_TIMEOUT=60000            # Torrent connection timeout in ms (default: 60s)
+TORRENT_MAX_RETRIES=3            # Maximum retry attempts for failed torrents
 ```
 
 ### Scaling Configuration
