@@ -76,6 +76,24 @@ app.get('/test-source-selection', (req, res) => {
     res.sendFile('/tmp/test-source-selection.html');
 });
 
+// Test endpoint for source selection with direct URL
+app.get('/test-stream/:fileIdx', (req, res) => {
+    const { fileIdx } = req.params;
+    const testStreams = [
+        { url: 'https://file-examples.com/storage/fe5deb0ffdce38e1fe1e39a/2017/10/file_example_MP4_1280_10MG.mp4', title: 'Sample Video 1' },
+        { url: 'https://file-examples.com/storage/fe5deb0ffdce38e1fe1e39a/2017/10/file_example_MP4_640_3MG.mp4', title: 'Sample Video 2' },
+        { url: 'https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4', title: 'Sample Video 3' }
+    ];
+    
+    const stream = testStreams[parseInt(fileIdx) || 0];
+    if (stream) {
+        logger.info(`Test stream redirect to: ${stream.url}`);
+        res.redirect(stream.url);
+    } else {
+        res.status(404).send('Test stream not found');
+    }
+});
+
 // Serve static files from src directory
 app.use(express.static(path.join(__dirname)));
 
@@ -303,6 +321,8 @@ app.get("/play/:type/:imdbId/:fileIdx/:season?/:episode?", async (req, res) => {
   fileIdx = parseInt(fileIdx, 10);
 
   try {
+    logger.info(`Play request: ${type}:${imdbId}:${fileIdx} S${season || '-'}E${episode || '-'}`);
+    
     // Get stream from cache or create new one
     let cachedStream = streamService.getCachedStream(
       imdbId,
@@ -311,23 +331,35 @@ app.get("/play/:type/:imdbId/:fileIdx/:season?/:episode?", async (req, res) => {
       fileIdx
     );
 
+    logger.info(`Cached stream result: ${cachedStream ? 'found' : 'not found'}`);
+
     if (!cachedStream) {
+      logger.info(`Getting streams for ${type}:${imdbId}`);
       const streams = await streamService.getStreams(
         type,
         imdbId,
         season ? Number(season) : undefined,
         episode ? Number(episode) : undefined
       );
+      logger.info(`Found ${streams.length} streams, looking for index ${fileIdx}`);
       cachedStream = streams[fileIdx];
-      if (!cachedStream) return res.status(404).send("Stream not found");
+      if (!cachedStream) {
+        logger.warn(`Stream not found at index ${fileIdx}`);
+        return res.status(404).send("Stream not found");
+      }
     }
+
+    logger.info(`Stream details: infoHash=${cachedStream.infoHash}, sources=${cachedStream.sources?.length || 0}, url=${cachedStream.url ? 'present' : 'none'}`);
 
     // If there's a magnet link – download and stream
     if (cachedStream.infoHash && cachedStream.sources?.length) {
       const magnetUri = cachedStream.sources[0];
+      logger.info(`Attempting to stream magnet: ${magnetUri.substring(0, 50)}...`);
+      
       let tempFile = tempCache.get(magnetUri);
 
       if (!tempFile) {
+        logger.info('Downloading file from magnet...');
         const torrentStream = await torrentService.getStream(magnetUri);
         const file = torrentStream.file;
 
@@ -344,8 +376,10 @@ app.get("/play/:type/:imdbId/:fileIdx/:season?/:episode?", async (req, res) => {
         tempFile = { filePath: tempPath, lastAccessed: Date.now() };
         tempCache.set(magnetUri, tempFile);
         torrentStream.destroy();
+        logger.info(`File downloaded to: ${tempPath}`);
       } else {
         tempFile.lastAccessed = Date.now();
+        logger.info(`Using cached file: ${tempFile.filePath}`);
       }
 
       // Range streaming
@@ -379,8 +413,12 @@ app.get("/play/:type/:imdbId/:fileIdx/:season?/:episode?", async (req, res) => {
     }
 
     // Otherwise external URL
-    if (cachedStream.url) return res.redirect(cachedStream.url);
+    if (cachedStream.url) {
+      logger.info(`Redirecting to external URL: ${cachedStream.url}`);
+      return res.redirect(cachedStream.url);
+    }
 
+    logger.warn('No playable stream available');
     res.status(404).send("No playable stream available");
   } catch (err) {
     logger.error(`Error playing stream for ${imdbId} index ${fileIdx}:`, err);
