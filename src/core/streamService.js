@@ -85,7 +85,7 @@ class StreamService {
       const isIOS = this.isIOSDevice(userAgent);
       const streams = streamsData
         .filter(result => result && (result.title || result.name || result.magnet || result.url || result.ytId))
-        .map(result => this.convertToStremioStream(result, isIOS))
+        .map(result => this.convertToStremioStream(result, isIOS, baseUrl))
         .filter(stream => stream !== null && stream && (stream.infoHash || stream.url || stream.ytId)); // Filter out invalid streams and nulls
 
       logger.info(`Processed ${streams.length} valid streams for ${cacheKey}`);
@@ -132,8 +132,9 @@ class StreamService {
    * ממיר אובייקט מקור ל־Stremio Stream
    * @param {object} result - מקור stream
    * @param {boolean} isIOS - האם זה מכשיר iOS
+   * @param {string} baseUrl - Base URL for proxy-aware stream URLs
    */
-  convertToStremioStream(result, isIOS = false) {
+  convertToStremioStream(result, isIOS = false, baseUrl = null) {
     const stream = {
       name: result.title || result.name || "Self-Streme",
       title: result.title || result.name || "Unknown Title",
@@ -145,7 +146,7 @@ class StreamService {
 
     // Log iOS detection for debugging
     if (isIOS) {
-      logger.debug(`Converting stream for iOS device: ${stream.name}`);
+      logger.debug(`Converting stream for iOS device: ${stream.name}, baseUrl: ${baseUrl}`);
     }
 
     // magnet
