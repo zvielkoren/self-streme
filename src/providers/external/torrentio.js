@@ -42,14 +42,23 @@ class TorrentioProvider {
                 return [];
             }
 
-            const streams = response.data.streams.map(stream => ({
-                ...stream,
-                provider: 'torrentio',
-                source: stream.name,
-                title: `${stream.title} [Torrentio]`,
-                quality: this.parseQuality(stream.title),
-                type
-            }));
+            const streams = response.data.streams.map(stream => {
+                const mappedStream = {
+                    ...stream,
+                    provider: 'torrentio',
+                    source: stream.name || 'Torrentio',
+                    title: stream.title ? `${stream.title} [Torrentio]` : `${stream.name || 'Unknown'} [Torrentio]`,
+                    quality: this.parseQuality(stream.title || stream.name || ''),
+                    type
+                };
+                
+                // Log streams that might be problematic
+                if (!mappedStream.infoHash && !mappedStream.url && !mappedStream.ytId) {
+                    logger.warn(`[Torrentio] Stream without valid source: ${JSON.stringify(stream)}`);
+                }
+                
+                return mappedStream;
+            });
 
             logger.debug(`[Torrentio] Found ${streams.length} streams for ${imdbId}`);
             return streams;
