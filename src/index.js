@@ -68,7 +68,7 @@ app.get('/test-ios-fix', (req, res) => {
 
 // Serve source selection test page
 app.get('/test-source-selection', (req, res) => {
-    res.sendFile('/tmp/test-source-selection.html');
+    res.sendFile(path.join(__dirname, 'test-source-selection.html'));
 });
 
 // Test endpoint for source selection with direct URL
