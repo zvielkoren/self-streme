@@ -157,8 +157,10 @@ class StreamService {
         
         if (isIOS) {
           // For iOS devices, provide HTTP stream URL instead of magnet
-          stream.url = `/stream/proxy/${infoHash}`;
-          logger.debug(`iOS stream: providing HTTP URL for ${infoHash}`);
+          // Use full URL with base URL/IP for iOS compatibility
+          const baseUrl = config.server.baseUrl || `http://127.0.0.1:${config.server.port}`;
+          stream.url = `${baseUrl}/stream/proxy/${infoHash}`;
+          logger.debug(`iOS stream: providing HTTP URL ${stream.url} for ${infoHash}`);
           // Don't set infoHash for iOS to ensure Stremio uses HTTP URL
         } else {
           // For desktop/Android, provide magnet link
