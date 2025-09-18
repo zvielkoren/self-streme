@@ -57,17 +57,24 @@ const config = {
     },
     trackers: [
       "udp://tracker.opentrackr.org:1337",
-      "udp://tracker.leechers-paradise.org:6969",
-      "udp://tracker.coppersurfer.tk:6969",
-      "udp://p4p.arenabg.com:1337",
-      "udp://eddie4.nl:6969",
-      "udp://tracker.tiny-vps.com:6969",
+      "udp://tracker.openbittorrent.com:6969",
+      "udp://9.rarbg.com:2810",
+      "udp://tracker.torrent.eu.org:451",
+      "udp://tracker.internetwarriors.net:1337",
+      "udp://bt2.archive.org:6969",
+      "udp://tracker.moeking.me:6969",
+      "udp://exodus.desync.com:6969",
       "udp://open.stealth.si:80",
+      "udp://tracker.tiny-vps.com:6969",
+      "udp://retracker.lanta-net.ru:2710",
+      "udp://tracker.dler.org:6969",
     ],
     maxConnections: 100,
     downloadLimit: 0, // 0 for unlimited
     uploadLimit: 0, // 0 for unlimited
     cleanupInterval: 3600000, // 1 hour
+    timeout: parseInt(process.env.TORRENT_TIMEOUT, 10) || 60000, // 60 seconds default
+    maxRetries: parseInt(process.env.TORRENT_MAX_RETRIES, 10) || 3,
   },
   addon: {
     id: "com.stremio.selfstreme",
