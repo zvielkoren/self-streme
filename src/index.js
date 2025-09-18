@@ -47,6 +47,17 @@ app.get('/test-ios-fix', (req, res) => {
 // Serve static files from src directory
 app.use(express.static(path.join(__dirname)));
 
+// Serve static assets (like placeholder video)
+app.use('/static', express.static(path.join(__dirname, 'static')));
+
+// Placeholder video endpoint for when no streams are available
+app.get('/static/placeholder.mp4', (req, res) => {
+    // Return a proper error response for video requests
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(__dirname, 'static', 'placeholder-error.html'));
+});
+
 // Status endpoints
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
