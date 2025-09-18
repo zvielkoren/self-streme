@@ -1,6 +1,9 @@
 import express from "express";
 import cors from "cors";
 import path from "path";
+import fs from "fs";
+import os from "os";
+import mime from "mime-types";
 import { fileURLToPath } from "url";
 import { config } from "./config/index.js";
 import logger from "./utils/logger.js";
@@ -13,6 +16,29 @@ import { getProxyAwareBaseUrl, getBaseUrlFromRequest } from "./utils/urlHelper.j
 // File paths
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Temporary cache for downloaded files
+const TEMP_DIR = path.join(os.tmpdir(), "self-streme");
+if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+
+// Cache Map – infoHash -> { filePath, lastAccessed }
+const tempCache = new Map();
+const CACHE_LIFETIME = 60 * 60 * 1000; // 1 hour
+
+// Automatic cleanup
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of tempCache.entries()) {
+    if (now - val.lastAccessed > CACHE_LIFETIME) {
+      try {
+        if (fs.existsSync(val.filePath)) fs.unlinkSync(val.filePath);
+      } catch (err) {
+        logger.error("Error cleaning temp file:", err);
+      }
+      tempCache.delete(key);
+    }
+  }
+}, 15 * 60 * 1000); // Every 15 minutes
 
 
 // Initialize Express app
@@ -43,6 +69,11 @@ app.get('/', (req, res) => {
 // Serve iOS fix test page
 app.get('/test-ios-fix', (req, res) => {
     res.sendFile(path.join(__dirname, 'test-ios-fix.html'));
+});
+
+// Serve source selection test page
+app.get('/test-source-selection', (req, res) => {
+    res.sendFile('/tmp/test-source-selection.html');
 });
 
 // Serve static files from src directory
@@ -264,6 +295,97 @@ app.get("/stream/:type/:imdbId", async (req, res) => {
         logger.error('Stream request error:', error);
         res.status(500).json({ error: 'Internal server error', streams: [] });
     }
+});
+
+// Source selection and streaming endpoint
+app.get("/play/:type/:imdbId/:fileIdx/:season?/:episode?", async (req, res) => {
+  let { type, imdbId, fileIdx, season, episode } = req.params;
+  fileIdx = parseInt(fileIdx, 10);
+
+  try {
+    // Get stream from cache or create new one
+    let cachedStream = streamService.getCachedStream(
+      imdbId,
+      season ? Number(season) : undefined,
+      episode ? Number(episode) : undefined,
+      fileIdx
+    );
+
+    if (!cachedStream) {
+      const streams = await streamService.getStreams(
+        type,
+        imdbId,
+        season ? Number(season) : undefined,
+        episode ? Number(episode) : undefined
+      );
+      cachedStream = streams[fileIdx];
+      if (!cachedStream) return res.status(404).send("Stream not found");
+    }
+
+    // If there's a magnet link – download and stream
+    if (cachedStream.infoHash && cachedStream.sources?.length) {
+      const magnetUri = cachedStream.sources[0];
+      let tempFile = tempCache.get(magnetUri);
+
+      if (!tempFile) {
+        const torrentStream = await torrentService.getStream(magnetUri);
+        const file = torrentStream.file;
+
+        const tempPath = path.join(TEMP_DIR, `${cachedStream.infoHash}-${file.name}`);
+        await new Promise((resolve, reject) => {
+          const writeStream = fs.createWriteStream(tempPath);
+          file.createReadStream()
+            .on("error", reject)
+            .pipe(writeStream)
+            .on("finish", resolve)
+            .on("error", reject);
+        });
+
+        tempFile = { filePath: tempPath, lastAccessed: Date.now() };
+        tempCache.set(magnetUri, tempFile);
+        torrentStream.destroy();
+      } else {
+        tempFile.lastAccessed = Date.now();
+      }
+
+      // Range streaming
+      const stat = fs.statSync(tempFile.filePath);
+      const fileSize = stat.size;
+      const range = req.headers.range;
+      const mimeType = mime.lookup(tempFile.filePath) || "video/mp4";
+
+      if (range) {
+        const parts = range.replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunkSize = (end - start) + 1;
+
+        res.writeHead(206, {
+          "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+          "Accept-Ranges": "bytes",
+          "Content-Length": chunkSize,
+          "Content-Type": mimeType
+        });
+
+        fs.createReadStream(tempFile.filePath, { start, end }).pipe(res);
+      } else {
+        res.writeHead(200, {
+          "Content-Length": fileSize,
+          "Content-Type": mimeType
+        });
+        fs.createReadStream(tempFile.filePath).pipe(res);
+      }
+      return;
+    }
+
+    // Otherwise external URL
+    if (cachedStream.url) return res.redirect(cachedStream.url);
+
+    res.status(404).send("No playable stream available");
+  } catch (err) {
+    logger.error(`Error playing stream for ${imdbId} index ${fileIdx}:`, err);
+    res.status(500).send("Failed to play stream");
+  }
 });
 
 // Initialize server
