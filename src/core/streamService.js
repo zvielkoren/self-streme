@@ -129,9 +129,9 @@ class StreamService {
     // YouTube ID
     if (result.ytId) stream.ytId = result.ytId;
 
-    // fallback אם אין מקור
+    // אם אין מקור תקף, החזר null כדי שהסטרים יסוננו החוצה
     if (!stream.infoHash && !stream.url && !stream.ytId) {
-      stream.url = "https://example.com/placeholder.mp4";
+      return null;
     }
 
     // behaviorHints

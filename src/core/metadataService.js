@@ -9,11 +9,12 @@ class MetadataService {
   /**
    * מחזיר metadata לסרט או סדרה
    * @param {string} imdbId - ה-ID הבסיסי של הסרט/סדרה
+   * @param {string} [type] - 'movie' או 'series'
    * @param {number} [season] - מספר עונה אם מדובר בסדרה
    * @param {number} [episode] - מספר פרק אם מדובר בפרק
    * @returns {Promise<Object|null>}
    */
-  async getMetadata(imdbId, season, episode) {
+  async getMetadata(imdbId, type = 'movie', season, episode) {
     // Clean the IMDB ID by removing .json and any other extensions
     const cleanImdbId = imdbId.replace(/\.(json|txt|html)$/, '');
     
@@ -31,17 +32,17 @@ class MetadataService {
         logger.warn(`No OMDB API key, using fallback metadata for ${cleanImdbId}`);
         
         // Try to extract basic info from IMDb ID or generate reasonable defaults
-        const fallbackTitle = this.generateFallbackTitle(cleanImdbId);
+        const fallbackTitle = this.generateFallbackTitle(cleanImdbId, type);
         const fallbackYear = this.generateFallbackYear();
         
         const metadata = {
           id: cleanImdbId,
           title: fallbackTitle,
-          type: "movie", 
+          type: type, 
           year: fallbackYear,
           poster: "N/A",
           imdbRating: "7.0",
-          genre: "Drama"
+          genre: type === 'series' ? "Drama" : "Drama"
         };
         this.cache.set(cacheKey, metadata);
         return metadata;
@@ -109,12 +110,14 @@ class MetadataService {
   /**
    * Generate a fallback title based on IMDb ID
    * @param {string} imdbId 
+   * @param {string} type - 'movie' or 'series'
    * @returns {string}
    */
-  generateFallbackTitle(imdbId) {
+  generateFallbackTitle(imdbId, type = 'movie') {
     // Extract numeric part of IMDb ID to create a unique but readable title
     const idNum = imdbId.replace(/^tt/, '');
     const titleMap = {
+      // Popular movies
       '0111161': 'The Shawshank Redemption',
       '0068646': 'The Godfather',
       '0071562': 'The Godfather Part II',
@@ -124,10 +127,27 @@ class MetadataService {
       '0167260': 'The Lord of the Rings: The Return of the King',
       '0110912': 'Pulp Fiction',
       '0060196': 'The Good, the Bad and the Ugly',
-      '0167261': 'The Lord of the Rings: The Fellowship of the Ring'
+      '0167261': 'The Lord of the Rings: The Fellowship of the Ring',
+      // Popular series
+      '0903747': 'Breaking Bad',
+      '0944947': 'Game of Thrones',
+      '1375666': 'Stranger Things',
+      '0141842': 'The Sopranos',
+      '0306414': 'The Wire',
+      '0773262': 'Dexter',
+      '2356777': 'True Detective',
+      '1439629': 'Community',
+      '0460649': 'How I Met Your Mother',
+      '0386676': 'The Office'
     };
     
-    return titleMap[idNum] || `Movie ${idNum}`;
+    const knownTitle = titleMap[idNum];
+    if (knownTitle) {
+      return knownTitle;
+    }
+    
+    // If not in our known list, generate a reasonable fallback based on type
+    return type === 'series' ? `Series ${idNum}` : `Movie ${idNum}`;
   }
 
   /**
