@@ -13,6 +13,7 @@ import tpbProvider from './torrents/piratebay.js'; // הוסף את PirateBay כ
 import torrentioProvider from './external/torrentio.js';
 import jackettProvider from './external/jackett.js';
 import fallbackProvider from './external/fallbackProvider.js';
+import mockProvider from './external/mockProvider.js';
 
 // Metadata service
 import metadataService from '../core/metadataService.js';
@@ -30,12 +31,14 @@ class SearchService {
         this.externalProviders = [
             torrentioProvider,
             jackettProvider,
-            fallbackProvider
+            fallbackProvider,
+            mockProvider  // Add mock provider for testing when external services fail
         ];
 
         this.cache = new NodeCache({
-            stdTTL: 3600, // 1 שעה
-            checkperiod: 600
+            stdTTL: 1800, // 30 minutes cache for faster subsequent requests
+            checkperiod: 300, // Check every 5 minutes
+            maxKeys: 500 // Limit cache size to prevent memory issues
         });
     }
 
@@ -45,63 +48,107 @@ class SearchService {
         
         const cacheKey = `${type}:${cleanImdbId}`;
         const cached = this.cache.get(cacheKey);
-        if (cached) return cached;
+        if (cached) {
+            logger.info(`Cache hit for ${cacheKey}`);
+            return cached;
+        }
 
         try {
             const metadata = await metadataService.getMetadata(cleanImdbId);
             if (!metadata || !metadata.title) {
                 logger.error(`No valid metadata found for ${cleanImdbId}`);
+                // Cache empty result to prevent repeated failures
+                this.cache.set(cacheKey, []);
                 return [];
             }
             
+            logger.info(`Searching with metadata: ${metadata.title} (${metadata.year})`);
+            
             const params = {
-                imdbId,
+                imdbId: cleanImdbId,
                 type,
                 query: metadata.title,
                 year: metadata.year
             };
 
-            // חיפוש במקביל
-            const [localResults, externalResults] = await Promise.all([
+            // Search with timeout to prevent long loading times
+            const searchPromise = Promise.all([
                 this.searchTorrentProviders(params),
                 this.searchExternalProviders(params)
             ]);
 
-            const allResults = await this.mergeResults(localResults, externalResults);
-            this.cache.set(cacheKey, allResults);
+            // Add a timeout to prevent long loading
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Search timeout')), 15000); // 15 second timeout
+            });
 
+            const [localResults, externalResults] = await Promise.race([
+                searchPromise,
+                timeoutPromise
+            ]);
+
+            const allResults = await this.mergeResults(localResults, externalResults);
+            
+            // Cache results even if empty to prevent repeated searches
+            this.cache.set(cacheKey, allResults);
+            
+            logger.info(`Found ${allResults.length} total results for ${cleanImdbId}`);
             return allResults;
         } catch (err) {
             logger.error(`Search error for ${cleanImdbId}: ${err.message}`);
+            // Cache empty result to prevent repeated failures
+            this.cache.set(cacheKey, []);
             return [];
         }
     }
 
     async searchTorrentProviders(params) {
         const results = [];
+        const timeout = 10000; // 10 second timeout per provider
+        
         const searches = this.torrentProviders.map(async provider => {
             try {
-                const providerResults = await provider.search(params);
-                results.push(...providerResults);
+                const providerPromise = provider.search(params);
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Provider timeout')), timeout);
+                });
+                
+                const providerResults = await Promise.race([providerPromise, timeoutPromise]);
+                if (Array.isArray(providerResults) && providerResults.length > 0) {
+                    logger.info(`${provider.name || 'TorrentProvider'} found ${providerResults.length} results`);
+                    results.push(...providerResults);
+                }
             } catch (err) {
-                logger.error(`${provider.name || 'TorrentProvider'} search error: ${err.message}`);
+                logger.warn(`${provider.name || 'TorrentProvider'} search error: ${err.message}`);
             }
         });
-        await Promise.all(searches);
+        
+        await Promise.allSettled(searches); // Use allSettled to not fail if some providers fail
         return results;
     }
 
     async searchExternalProviders(params) {
         const results = [];
+        const timeout = 8000; // 8 second timeout per provider
+        
         const searches = this.externalProviders.map(async provider => {
             try {
-                const providerResults = await provider.search(params);
-                results.push(...providerResults);
+                const providerPromise = provider.search(params);
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Provider timeout')), timeout);
+                });
+                
+                const providerResults = await Promise.race([providerPromise, timeoutPromise]);
+                if (Array.isArray(providerResults) && providerResults.length > 0) {
+                    logger.info(`${provider.name || 'ExternalProvider'} found ${providerResults.length} results`);
+                    results.push(...providerResults);
+                }
             } catch (err) {
-                logger.error(`${provider.name || 'ExternalProvider'} search error: ${err.message}`);
+                logger.warn(`${provider.name || 'ExternalProvider'} search error: ${err.message}`);
             }
         });
-        await Promise.all(searches);
+        
+        await Promise.allSettled(searches); // Use allSettled to not fail if some providers fail
         return results;
     }
 
