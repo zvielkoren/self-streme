@@ -8,6 +8,7 @@ import addon, { addonApp } from "./addon.js";
 import streamService from "./core/streamService.js";
 import torrentService from "./core/torrentService.js";
 import manifest from "./manifest.js";
+import { getProxyAwareBaseUrl, getBaseUrlFromRequest } from "./utils/urlHelper.js";
 
 // File paths
 const __filename = fileURLToPath(import.meta.url);
@@ -65,15 +66,14 @@ app.get('/health', (req, res) => {
 
 // Explicit manifest endpoint
 app.get('/manifest.json', (req, res) => {
-    const isProduction = process.env.NODE_ENV === 'production';
-    const hostName = isProduction ? 'self-streme.onrender.com' : req.get('host');
-    const protocol = isProduction ? 'https' : req.protocol;
+    // Get proxy-aware URL information
+    const { protocol, host, baseUrl } = getBaseUrlFromRequest(req);
     
     // Create a copy of the manifest with the correct URL
     const manifestResponse = {
         ...manifest,
-        url: `${protocol}://${hostName}`,
-        logo: `${protocol}://${hostName}/logo.png`
+        url: baseUrl,
+        logo: `${baseUrl}/logo.png`
     };
     
     res.setHeader('Content-Type', 'application/json');
@@ -88,6 +88,16 @@ app.get('/status', (req, res) => {
         uptime: process.uptime(),
         memory: process.memoryUsage(),
         timestamp: new Date().toISOString()
+    });
+});
+
+// API endpoint to get current base URL for frontend
+app.get('/api/base-url', (req, res) => {
+    const { baseUrl } = getBaseUrlFromRequest(req);
+    res.json({
+        baseUrl: baseUrl,
+        manifestUrl: `${baseUrl}/manifest.json`,
+        stremioUrl: `stremio://${getBaseUrlFromRequest(req).host}/manifest.json`
     });
 });
 
@@ -175,7 +185,9 @@ app.get("/stream/:type/:imdbId.json", async (req, res) => {
         const isIOS = streamService.isIOSDevice(userAgent);
         logger.info(`iOS device detected: ${isIOS}`);
         
-        const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent);
+        // Get proxy-aware base URL for iOS stream URLs
+        const streamBaseUrl = getProxyAwareBaseUrl(req);
+        const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent, streamBaseUrl);
         
         if (streams.length > 0) {
             logger.info(`Found ${streams.length} streams for ${imdbId} (iOS: ${isIOS})`);
@@ -210,7 +222,9 @@ app.get("/stream/:type/:imdbId", async (req, res) => {
             return res.status(400).json({ error: 'Invalid IMDb ID format', streams: [] });
         }
 
-        const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent);
+        // Get proxy-aware base URL for stream URLs
+        const streamBaseUrl = getProxyAwareBaseUrl(req);
+        const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent, streamBaseUrl);
         res.json({ streams });
     } catch (error) {
         logger.error('Stream request error:', error);
@@ -228,17 +242,27 @@ async function startServer() {
         // app.use('/', addonApp);
 
         app.listen(port, host, () => {
-            const isProduction = process.env.NODE_ENV === 'production';
-            const hostName = isProduction ? 'self-streme.onrender.com' : `${host}:${port}`;
+            // Determine expected URLs for logging
+            let expectedUrl;
+            let expectedStremioUrl;
             
-            // For HTTP/HTTPS URLs
-            const protocol = isProduction ? 'https' : 'http';
-            const fullUrl = `${protocol}://${hostName}`;
+            if (process.env.BASE_URL) {
+                expectedUrl = process.env.BASE_URL;
+                const urlParts = new URL(process.env.BASE_URL);
+                expectedStremioUrl = `stremio://${urlParts.host}/manifest.json`;
+            } else {
+                const isProduction = process.env.NODE_ENV === 'production';
+                const hostName = isProduction ? 'self-streme.onrender.com' : `${host}:${port}`;
+                const protocol = isProduction ? 'https' : 'http';
+                expectedUrl = `${protocol}://${hostName}`;
+                expectedStremioUrl = `stremio://${hostName}/manifest.json`;
+            }
             
             logger.info(`Server running on port ${port}`);
             logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
-            logger.info(`Full URL: ${fullUrl}`);
-            logger.info(`Add to Stremio: stremio://${hostName}/manifest.json`);
+            logger.info(`Expected URL: ${expectedUrl}`);
+            logger.info(`Add to Stremio: ${expectedStremioUrl}`);
+            logger.info(`Note: Actual URLs will be proxy-aware based on request headers`);
         });
 
     } catch (error) {

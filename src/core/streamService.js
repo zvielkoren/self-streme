@@ -18,8 +18,9 @@ class StreamService {
    * @param {number} [season]
    * @param {number} [episode]
    * @param {string} [userAgent] - User agent for iOS detection
+   * @param {string} [baseUrl] - Base URL for proxy-aware stream URLs
    */
-  async getStreams(type, imdbId, season, episode, userAgent) {
+  async getStreams(type, imdbId, season, episode, userAgent, baseUrl) {
     try {
       // Input validation
       if (!imdbId || typeof imdbId !== 'string') {
@@ -157,10 +158,10 @@ class StreamService {
         
         if (isIOS) {
           // For iOS devices, provide HTTP stream URL instead of magnet
-          // Use full URL with base URL/IP for iOS compatibility
-          const baseUrl = config.server.baseUrl || `http://127.0.0.1:${config.server.port}`;
-          stream.url = `${baseUrl}/stream/proxy/${infoHash}`;
-          logger.debug(`iOS stream: providing HTTP URL ${stream.url} for ${infoHash}`);
+          // Use proxy-aware base URL if provided, otherwise fall back to config
+          const streamBaseUrl = baseUrl || config.server.baseUrl || `http://127.0.0.1:${config.server.port}`;
+          stream.url = `${streamBaseUrl}/stream/proxy/${infoHash}`;
+          logger.debug(`iOS stream: providing proxy-aware HTTP URL ${stream.url} for ${infoHash}`);
           // Don't set infoHash for iOS to ensure Stremio uses HTTP URL
         } else {
           // For desktop/Android, provide magnet link

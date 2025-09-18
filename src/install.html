@@ -57,23 +57,52 @@ h1 { font-size: 2.5rem; margin-bottom: 1rem; }
 <div class="footer">&copy; 2025 Self-Streme</div>
 
 <script>
-// Set the manual URL on page load
-document.addEventListener('DOMContentLoaded', function() {
-    const host = window.location.host;
-    const protocol = window.location.protocol.replace(/:$/, ''); // Remove trailing colon
-    document.getElementById('manual-url').textContent = `${protocol}://${host}/manifest.json`;
+// Set the manual URL on page load using proxy-aware API
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        // Fetch the current base URL from the server (proxy-aware)
+        const response = await fetch('/api/base-url');
+        const data = await response.json();
+        
+        document.getElementById('manual-url').textContent = data.manifestUrl;
+        
+        // Store the URLs for the install function
+        window.manifestUrl = data.manifestUrl;
+        window.stremioUrl = data.stremioUrl;
+    } catch (error) {
+        console.error('Failed to fetch base URL:', error);
+        // Fallback to client-side detection
+        const host = window.location.host;
+        const protocol = window.location.protocol.replace(/:$/, '');
+        document.getElementById('manual-url').textContent = `${protocol}://${host}/manifest.json`;
+        window.manifestUrl = `${protocol}://${host}/manifest.json`;
+        window.stremioUrl = `stremio://${host}/manifest.json`;
+    }
 });
+
 function installAddon() {
-    const host = window.location.host;
-    const protocol = window.location.protocol.replace(/:$/, ''); // Remove trailing colon
-    
-    // Install URL using stremio protocol
-    window.location.href = `stremio://${host}/manifest.json`;
-    
-    // Fallback to web URL
-    setTimeout(() => {
-        window.location.href = `${protocol}://${host}/manifest.json`;
-    }, 1000);
+    // Use the proxy-aware URLs if available, otherwise fallback to client-side detection
+    if (window.stremioUrl && window.manifestUrl) {
+        // Install URL using stremio protocol
+        window.location.href = window.stremioUrl;
+        
+        // Fallback to web URL
+        setTimeout(() => {
+            window.location.href = window.manifestUrl;
+        }, 1000);
+    } else {
+        // Fallback method
+        const host = window.location.host;
+        const protocol = window.location.protocol.replace(/:$/, '');
+        
+        // Install URL using stremio protocol
+        window.location.href = `stremio://${host}/manifest.json`;
+        
+        // Fallback to web URL
+        setTimeout(() => {
+            window.location.href = `${protocol}://${host}/manifest.json`;
+        }, 1000);
+    }
 }
 </script>
 </body>
