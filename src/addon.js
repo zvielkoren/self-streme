@@ -17,7 +17,7 @@ builder.defineMetaHandler(async ({ type, id }) => {
     try {
         // Import metadataService directly since streamService doesn't have getMetadata
         const metadataService = (await import('./core/metadataService.js')).default;
-        const meta = await metadataService.getMetadata(id);
+        const meta = await metadataService.getMetadata(id, type);
         return { meta };
     } catch (error) {
         logger.error('Meta handler error:', error.message);

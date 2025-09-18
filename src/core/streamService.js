@@ -54,9 +54,26 @@ class StreamService {
       const streamsData = await searchService.search(imdbId, type, season, episode);
       if (!streamsData || !Array.isArray(streamsData) || streamsData.length === 0) {
         logger.warn(`No streams found from searchService for ${cacheKey}`);
-        // Cache empty result for a shorter time to retry sooner
-        this.cache.set(cacheKey, [], 300); // 5 minutes for empty results
-        return [];
+        
+        // Return a placeholder stream instead of empty array
+        const placeholderStream = {
+          name: "No Stream Available - Check Self-Streme Addon",
+          title: "No Stream Available - Check Self-Streme Addon", 
+          url: "/static/placeholder.mp4",
+          quality: "N/A",
+          size: "0 MB",
+          seeders: 0,
+          source: "placeholder",
+          behaviorHints: {
+            notWebReady: false,
+            bingeGroup: "self-streme-placeholder"
+          }
+        };
+        
+        const placeholderResult = [placeholderStream];
+        // Cache placeholder result for a shorter time to retry sooner
+        this.cache.set(cacheKey, placeholderResult, 300); // 5 minutes for placeholder results
+        return placeholderResult;
       }
 
       // מיפוי ותיקון metadata מתוך מקור ה־streams
@@ -129,9 +146,11 @@ class StreamService {
     // YouTube ID
     if (result.ytId) stream.ytId = result.ytId;
 
-    // fallback אם אין מקור
+    // fallback למקרה שאין מקור תקף - הצג הודעת שגיאה
     if (!stream.infoHash && !stream.url && !stream.ytId) {
-      stream.url = "https://example.com/placeholder.mp4";
+      stream.url = "/static/placeholder.mp4";
+      stream.title = "No Stream Available - Check Self-Streme Addon";
+      stream.name = "Error: No valid stream source found";
     }
 
     // behaviorHints

@@ -32,7 +32,7 @@ class SearchService {
             torrentioProvider,
             jackettProvider,
             fallbackProvider,
-            mockProvider  // Add mock provider for testing when external services fail
+            mockProvider  // Keep mock provider as last resort
         ];
 
         this.cache = new NodeCache({
@@ -54,7 +54,7 @@ class SearchService {
         }
 
         try {
-            const metadata = await metadataService.getMetadata(cleanImdbId);
+            const metadata = await metadataService.getMetadata(cleanImdbId, type);
             if (!metadata || !metadata.title) {
                 logger.error(`No valid metadata found for ${cleanImdbId}`);
                 // Cache empty result to prevent repeated failures
