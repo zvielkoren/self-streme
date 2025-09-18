@@ -185,7 +185,9 @@ app.get("/stream/:type/:imdbId.json", async (req, res) => {
         const isIOS = streamService.isIOSDevice(userAgent);
         logger.info(`iOS device detected: ${isIOS}`);
         
-        const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent);
+        // Get proxy-aware base URL for iOS stream URLs
+        const streamBaseUrl = getProxyAwareBaseUrl(req);
+        const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent, streamBaseUrl);
         
         if (streams.length > 0) {
             logger.info(`Found ${streams.length} streams for ${imdbId} (iOS: ${isIOS})`);
@@ -220,7 +222,9 @@ app.get("/stream/:type/:imdbId", async (req, res) => {
             return res.status(400).json({ error: 'Invalid IMDb ID format', streams: [] });
         }
 
-        const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent);
+        // Get proxy-aware base URL for stream URLs
+        const streamBaseUrl = getProxyAwareBaseUrl(req);
+        const streams = await streamService.getStreams(type, imdbId, undefined, undefined, userAgent, streamBaseUrl);
         res.json({ streams });
     } catch (error) {
         logger.error('Stream request error:', error);
