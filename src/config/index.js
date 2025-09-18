@@ -12,7 +12,7 @@ const config = {
   server: {
     port: process.env.PORT || 7000,
     addonPort: process.env.ADDON_PORT || 7001,
-    baseUrl: process.env.BASE_URL || "http://127.0.0.1:7000",
+    baseUrl: process.env.BASE_URL || `http://127.0.0.1:${process.env.PORT || 7000}`,
   },
   external: {
     jackett: {
