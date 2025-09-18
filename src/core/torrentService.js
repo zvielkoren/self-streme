@@ -136,14 +136,14 @@ class TorrentService {
                     return;
                 }
 
-                // For new torrents or torrents that aren't ready yet, set up event listeners
+                // Shorter timeout for faster results
                 const timeout = setTimeout(() => {
                     logger.error(`Torrent timeout for: ${magnetUri.substring(0, 50)}...`);
                     if (torrent && typeof torrent.destroy === 'function') {
                         torrent.destroy();
                     }
                     reject(new Error('Torrent adding timeout'));
-                }, 120000); // Increased timeout to 120 seconds for better reliability
+                }, 30000); // Reduced timeout to 30 seconds for faster results
 
                 torrent.on('ready', () => {
                     clearTimeout(timeout);

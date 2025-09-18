@@ -23,22 +23,35 @@ if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
 // Cache Map – infoHash -> { filePath, lastAccessed }
 const tempCache = new Map();
-const CACHE_LIFETIME = 60 * 60 * 1000; // 1 hour
+const CACHE_LIFETIME = 30 * 60 * 1000; // Reduced to 30 minutes for faster cleanup
+const CLEANUP_INTERVAL = 5 * 60 * 1000; // Reduced to 5 minutes for more frequent cleanup
 
-// Automatic cleanup
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, val] of tempCache.entries()) {
-    if (now - val.lastAccessed > CACHE_LIFETIME) {
-      try {
-        if (fs.existsSync(val.filePath)) fs.unlinkSync(val.filePath);
-      } catch (err) {
-        logger.error("Error cleaning temp file:", err);
+// Configurable scheduling for cache cleanup
+const scheduleCleanup = (interval = CLEANUP_INTERVAL) => {
+  return setInterval(() => {
+    const now = Date.now();
+    let cleanedCount = 0;
+    for (const [key, val] of tempCache.entries()) {
+      if (now - val.lastAccessed > CACHE_LIFETIME) {
+        try {
+          if (fs.existsSync(val.filePath)) {
+            fs.unlinkSync(val.filePath);
+            cleanedCount++;
+          }
+        } catch (err) {
+          logger.error("Error cleaning temp file:", err);
+        }
+        tempCache.delete(key);
       }
-      tempCache.delete(key);
     }
-  }
-}, 15 * 60 * 1000); // Every 15 minutes
+    if (cleanedCount > 0) {
+      logger.info(`Scheduled cleanup: removed ${cleanedCount} cached files`);
+    }
+  }, interval);
+};
+
+// Start automatic cleanup with shorter intervals
+const cleanupSchedule = scheduleCleanup();
 
 
 // Initialize Express app
@@ -148,6 +161,45 @@ app.get('/api/base-url', (req, res) => {
         manifestUrl: `${baseUrl}/manifest.json`,
         stremioUrl: `stremio://${getBaseUrlFromRequest(req).host}/manifest.json`
     });
+});
+
+// API endpoint to configure cache scheduling
+app.get('/api/cache-config', (req, res) => {
+    res.json({
+        cacheLifetime: CACHE_LIFETIME,
+        cleanupInterval: CLEANUP_INTERVAL,
+        cacheCount: tempCache.size,
+        lastCleanup: new Date().toISOString()
+    });
+});
+
+app.post('/api/cache-config', express.json(), (req, res) => {
+    try {
+        const { forceCleanup } = req.body;
+        
+        if (forceCleanup) {
+            const now = Date.now();
+            let cleanedCount = 0;
+            for (const [key, val] of tempCache.entries()) {
+                try {
+                    if (fs.existsSync(val.filePath)) {
+                        fs.unlinkSync(val.filePath);
+                        cleanedCount++;
+                    }
+                } catch (err) {
+                    logger.error("Error in forced cleanup:", err);
+                }
+                tempCache.delete(key);
+            }
+            logger.info(`Forced cleanup: removed ${cleanedCount} cached files`);
+            res.json({ message: `Cleaned ${cleanedCount} files`, cacheCount: tempCache.size });
+        } else {
+            res.json({ message: 'No action specified' });
+        }
+    } catch (error) {
+        logger.error('Cache config error:', error);
+        res.status(500).json({ error: 'Configuration error' });
+    }
 });
 
 // iOS stream caching endpoint
@@ -468,12 +520,22 @@ async function startServer() {
 // Clean up on process termination
 process.on('SIGINT', () => {
     logger.info('Shutting down...');
+    // Clear scheduled tasks
+    if (cleanupSchedule) {
+        clearInterval(cleanupSchedule);
+        logger.info('Cleanup schedule cleared');
+    }
     // Graceful shutdown
     process.exit(0);
 });
 
 process.on('SIGTERM', () => {
     logger.info('Shutting down...');
+    // Clear scheduled tasks
+    if (cleanupSchedule) {
+        clearInterval(cleanupSchedule);
+        logger.info('Cleanup schedule cleared');
+    }
     // Graceful shutdown
     process.exit(0);
 });

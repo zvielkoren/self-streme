@@ -3,10 +3,10 @@ import NodeCache from 'node-cache';
 
 class StreamHandler {
     constructor() {
-        // Cache for storing torrent info
+        // Cache for storing torrent info with shorter TTL for faster results
         this.hashCache = new NodeCache({
-            stdTTL: 3600, // 1 hour cache
-            checkperiod: 600
+            stdTTL: 1800, // Reduced to 30 minutes for faster results
+            checkperiod: 300 // Reduced to 5 minutes for more frequent cleanup
         });
     }
 
