@@ -1,9 +1,14 @@
 import logger from '../utils/logger.js';
 import WebTorrent from 'webtorrent';
 import { config } from '../config/index.js';
+import fs from 'fs';
+import path from 'path';
 
 class TorrentService {
     constructor() {
+        // Ensure download directory exists
+        this.ensureDownloadPath();
+        
         this.client = new WebTorrent({
             maxConns: config.torrent.maxConnections,
             downloadLimit: config.torrent.downloadLimit,
@@ -11,6 +16,17 @@ class TorrentService {
         });
         this.activeTorrents = new Map();
         this.initialize();
+    }
+
+    ensureDownloadPath() {
+        try {
+            if (!fs.existsSync(config.torrent.downloadPath)) {
+                fs.mkdirSync(config.torrent.downloadPath, { recursive: true });
+                logger.info(`Created download directory: ${config.torrent.downloadPath}`);
+            }
+        } catch (error) {
+            logger.error('Failed to create download directory:', error);
+        }
     }
 
     initialize() {
@@ -21,26 +37,54 @@ class TorrentService {
     async getStream(magnetUri, fileIdx = 0) {
         return new Promise((resolve, reject) => {
             try {
-                const existing = this.activeTorrents.get(magnetUri);
-                if (existing) return resolve(existing);
+                if (!magnetUri || !magnetUri.startsWith('magnet:')) {
+                    return reject(new Error('Invalid magnet URI'));
+                }
 
+                const existing = this.activeTorrents.get(magnetUri);
+                if (existing && existing.file) {
+                    logger.debug(`Using existing torrent stream for ${magnetUri.substring(0, 50)}...`);
+                    return resolve(existing);
+                }
+
+                logger.info(`Adding new torrent: ${magnetUri.substring(0, 50)}...`);
                 const torrent = this.client.add(magnetUri, { path: config.torrent.downloadPath });
+                
                 const timeout = setTimeout(() => {
+                    logger.error(`Torrent timeout for: ${magnetUri.substring(0, 50)}...`);
                     torrent.destroy();
                     reject(new Error('Torrent adding timeout'));
-                }, 30000);
+                }, 60000); // Increased timeout to 60 seconds
 
                 torrent.on('ready', () => {
                     clearTimeout(timeout);
-                    const files = torrent.files.filter(f => ['mp4','mkv','avi','mov','m4v'].includes(f.name.split('.').pop().toLowerCase()));
-                    if (files.length === 0) return reject(new Error('No video files found'));
+                    logger.info(`Torrent ready: ${torrent.name}, files: ${torrent.files.length}`);
+                    
+                    const videoExtensions = ['mp4','mkv','avi','mov','m4v','webm','flv'];
+                    const files = torrent.files.filter(f => {
+                        const ext = f.name.split('.').pop().toLowerCase();
+                        return videoExtensions.includes(ext);
+                    });
+                    
+                    if (files.length === 0) {
+                        logger.error(`No video files found in torrent. Files: ${torrent.files.map(f => f.name).join(', ')}`);
+                        return reject(new Error('No video files found'));
+                    }
+                    
                     const file = files[fileIdx] || files[0];
+                    logger.info(`Selected file: ${file.name} (${file.length} bytes)`);
 
                     const stream = {
                         file,
                         torrent,
-                        createStream: (start,end) => file.createReadStream({start,end}),
-                        destroy: () => torrent.destroy()
+                        createStream: (start, end) => {
+                            if (start !== undefined && end !== undefined) {
+                                return file.createReadStream({ start, end });
+                            }
+                            return file.createReadStream();
+                        },
+                        destroy: () => torrent.destroy(),
+                        lastAccessed: Date.now()
                     };
 
                     this.activeTorrents.set(magnetUri, stream);
@@ -49,10 +93,17 @@ class TorrentService {
 
                 torrent.on('error', error => {
                     clearTimeout(timeout);
+                    logger.error(`Torrent error for ${magnetUri.substring(0, 50)}...:`, error);
                     reject(error);
                 });
 
+                // Log progress for debugging
+                torrent.on('download', () => {
+                    logger.debug(`Download progress: ${(torrent.progress * 100).toFixed(1)}%`);
+                });
+
             } catch (error) {
+                logger.error('getStream error:', error);
                 reject(error);
             }
         });
@@ -66,22 +117,61 @@ class TorrentService {
      */
     async streamTorrent(req, res, infoHash) {
         try {
-            // Convert infoHash to magnet URI
-            const magnetUri = `magnet:?xt=urn:btih:${infoHash}`;
+            if (!infoHash) {
+                logger.error('No infoHash provided for streaming');
+                return res.status(400).json({ error: 'Missing torrent info hash' });
+            }
+
+            // Convert infoHash to magnet URI - add trackers for better connectivity
+            const trackers = config.torrent.trackers.map(t => `&tr=${encodeURIComponent(t)}`).join('');
+            const magnetUri = `magnet:?xt=urn:btih:${infoHash}${trackers}`;
             logger.info(`Starting torrent stream for hash: ${infoHash}`);
             
+            // Check if response is already sent (avoid multiple headers)
+            if (res.headersSent) {
+                logger.warn(`Headers already sent for ${infoHash}`);
+                return;
+            }
+
             const torrentStream = await this.getStream(magnetUri);
-            const file = torrentStream.file;
             
+            if (!torrentStream || !torrentStream.file) {
+                logger.error(`No valid torrent stream found for ${infoHash}`);
+                return res.status(404).json({ error: 'Stream not found' });
+            }
+
+            const file = torrentStream.file;
+            const fileSize = file.length;
+            
+            if (!fileSize || fileSize <= 0) {
+                logger.error(`Invalid file size for ${infoHash}: ${fileSize}`);
+                return res.status(500).json({ error: 'Invalid file size' });
+            }
+
             // Get range header for partial content support
             const range = req.headers.range;
-            const fileSize = file.length;
+            
+            // Handle connection cleanup
+            req.on('close', () => {
+                logger.debug(`Connection closed for ${infoHash}`);
+            });
+
+            req.on('error', (err) => {
+                logger.error(`Request error for ${infoHash}:`, err);
+            });
             
             if (range) {
                 // Parse range header
                 const parts = range.replace(/bytes=/, "").split("-");
                 const start = parseInt(parts[0], 10);
                 const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+                
+                // Validate range
+                if (start >= fileSize || end >= fileSize || start > end) {
+                    logger.error(`Invalid range for ${infoHash}: ${start}-${end}/${fileSize}`);
+                    return res.status(416).json({ error: 'Invalid range' });
+                }
+                
                 const chunksize = (end - start) + 1;
                 
                 // Set headers for partial content
@@ -96,6 +186,9 @@ class TorrentService {
                 
                 // Create read stream for the range
                 const stream = torrentStream.createStream(start, end);
+                stream.on('error', (err) => {
+                    logger.error(`Stream error for ${infoHash}:`, err);
+                });
                 stream.pipe(res);
                 
             } else {
@@ -107,6 +200,9 @@ class TorrentService {
                 });
                 
                 const stream = torrentStream.createStream();
+                stream.on('error', (err) => {
+                    logger.error(`Full stream error for ${infoHash}:`, err);
+                });
                 stream.pipe(res);
             }
             
@@ -115,7 +211,11 @@ class TorrentService {
             
         } catch (error) {
             logger.error(`Torrent streaming error for ${infoHash}:`, error);
-            res.status(500).json({ error: 'Failed to stream torrent' });
+            
+            // Only send error response if headers not already sent
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Failed to stream torrent' });
+            }
         }
     }
 

@@ -108,11 +108,12 @@ class StreamService {
       const magnetLink = result.magnet || result.sources.find(s => s.startsWith("magnet:"));
       const infoHash = this.extractInfoHash(magnetLink);
       if (infoHash) {
+        // Always cache stream info for proxy serving (needed for both iOS and testing)
+        this.handler.cacheStream(infoHash, result.type || 'movie', result.title || result.name, result.quality || 'unknown');
+        
         if (isIOS) {
           // For iOS devices, provide HTTP stream URL instead of magnet
           stream.url = `/stream/proxy/${infoHash}`;
-          // Cache the stream info for proxy serving
-          this.handler.cacheStream(infoHash, 'movie', result.title || result.name, result.quality || 'unknown');
         } else {
           // For desktop/Android, provide magnet link
           stream.infoHash = infoHash;
