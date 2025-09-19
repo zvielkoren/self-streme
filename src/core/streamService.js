@@ -97,7 +97,7 @@ class StreamService {
 
       // מיפוי ותיקון metadata מתוך מקור ה־streams
       const streams = streamsData
-        .filter(result => result && (result.title || result.name || result.magnet || result.url || result.ytId))
+        .filter(result => result && (result.title || result.name || result.magnet || result.url || result.ytId || result.infoHash))
         .map(result => this.convertToStremioStream(result, isIOS, baseUrl))
         .filter(stream => stream !== null && stream && (stream.infoHash || stream.url || stream.ytId)); // Filter out invalid streams and nulls
 
