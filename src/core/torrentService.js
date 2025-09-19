@@ -12,7 +12,11 @@ class TorrentService {
         this.client = new WebTorrent({
             maxConns: config.torrent.maxConnections,
             downloadLimit: config.torrent.downloadLimit,
-            uploadLimit: config.torrent.uploadLimit
+            uploadLimit: config.torrent.uploadLimit,
+            dht: true, // Enable DHT for better peer discovery
+            lsd: true, // Enable local service discovery
+            natUpmp: true, // Enable NAT traversal
+            natPmp: true // Enable NAT port mapping
         });
         this.activeTorrents = new Map();
         this.initialize();
@@ -35,7 +39,7 @@ class TorrentService {
     }
 
     async getStream(magnetUri, fileIdx = 0, retryCount = 0) {
-        const maxRetries = 2; // Maximum number of retries
+        const maxRetries = config.torrent.maxRetries; // Use configurable max retries
         
         return new Promise((resolve, reject) => {
             try {
@@ -78,14 +82,15 @@ class TorrentService {
                 if (!torrent || typeof torrent.on !== 'function') {
                     logger.error(`Invalid torrent object - type: ${typeof torrent}, constructor: ${torrent && torrent.constructor ? torrent.constructor.name : 'unknown'}`);
                     
-                    // Retry logic for failed torrent creation
+                    // Enhanced retry logic with exponential backoff
                     if (retryCount < maxRetries) {
-                        logger.info(`Retrying torrent creation (${retryCount + 1}/${maxRetries})`);
+                        const backoffDelay = Math.min(5000 * Math.pow(2, retryCount), 30000); // Max 30s delay
+                        logger.info(`Retrying torrent creation (${retryCount + 1}/${maxRetries}) in ${backoffDelay}ms`);
                         setTimeout(() => {
                             this.getStream(magnetUri, fileIdx, retryCount + 1)
                                 .then(resolve)
                                 .catch(reject);
-                        }, 5000); // Wait 5 seconds before retry
+                        }, backoffDelay);
                         return;
                     }
                     
@@ -136,17 +141,19 @@ class TorrentService {
                     return;
                 }
 
-                // Shorter timeout for faster results
+                // Progressive timeout strategy - longer timeout for initial attempts
+                const timeoutDuration = config.torrent.timeout + (retryCount * 10000); // Add 10s per retry
                 const timeout = setTimeout(() => {
-                    logger.error(`Torrent timeout for: ${magnetUri.substring(0, 50)}...`);
+                    logger.error(`Torrent timeout for: ${magnetUri.substring(0, 50)}... (attempt ${retryCount + 1}/${maxRetries + 1}, timeout: ${timeoutDuration}ms)`);
                     if (torrent && typeof torrent.destroy === 'function') {
                         torrent.destroy();
                     }
-                    reject(new Error('Torrent adding timeout'));
-                }, 30000); // Reduced timeout to 30 seconds for faster results
+                    reject(new Error(`Torrent adding timeout after ${timeoutDuration}ms`));
+                }, timeoutDuration);
 
                 torrent.on('ready', () => {
                     clearTimeout(timeout);
+                    logger.info(`Torrent ready after ${Date.now() - startTime}ms, peers: ${torrent.numPeers}, seeds: ${torrent.seeders || 0}`);
                     processTorrent();
                 });
 
@@ -156,10 +163,34 @@ class TorrentService {
                     reject(error);
                 });
 
-                // Log progress for debugging
+                // Enhanced progress and connection logging
+                let lastLogTime = 0;
                 torrent.on('download', () => {
-                    logger.debug(`Download progress: ${(torrent.progress * 100).toFixed(1)}%`);
+                    const now = Date.now();
+                    if (now - lastLogTime > 5000) { // Log every 5 seconds
+                        logger.debug(`Download progress: ${(torrent.progress * 100).toFixed(1)}%, peers: ${torrent.numPeers}, downloaded: ${torrent.downloaded}, speed: ${torrent.downloadSpeed}`);
+                        lastLogTime = now;
+                    }
                 });
+
+                // Log peer connections
+                torrent.on('wire', (wire) => {
+                    logger.debug(`New peer connected, total peers: ${torrent.numPeers}`);
+                });
+
+                // Track connection attempts
+                const startTime = Date.now();
+                const connectionTimer = setInterval(() => {
+                    if (torrent.ready) {
+                        clearInterval(connectionTimer);
+                        return;
+                    }
+                    const elapsed = Date.now() - startTime;
+                    logger.debug(`Connecting... elapsed: ${elapsed}ms, peers: ${torrent.numPeers}, discovery: ${torrent.discovery?.tracker ? 'tracker' : ''} ${torrent.discovery?.dht ? 'dht' : ''}`);
+                }, 10000); // Log every 10 seconds
+
+                // Clean up timer if timeout occurs
+                setTimeout(() => clearInterval(connectionTimer), timeoutDuration);
 
             } catch (error) {
                 logger.error('getStream error:', error);
@@ -517,14 +548,30 @@ class TorrentService {
      * @returns {string} Enhanced magnet URI with additional trackers
      */
     enhanceMagnetUri(magnetUri) {
-        // If magnet already has trackers, don't duplicate
-        if (magnetUri.includes('&tr=')) {
+        // Extract existing trackers to avoid duplication
+        const existingTrackers = [];
+        const trMatches = magnetUri.match(/&tr=([^&]+)/g);
+        if (trMatches) {
+            trMatches.forEach(match => {
+                const tracker = decodeURIComponent(match.replace('&tr=', ''));
+                existingTrackers.push(tracker);
+            });
+        }
+        
+        // Add configured trackers that aren't already present
+        const newTrackers = config.torrent.trackers.filter(tracker => 
+            !existingTrackers.includes(tracker)
+        );
+        
+        if (newTrackers.length === 0) {
+            logger.debug(`Magnet URI already has all configured trackers`);
             return magnetUri;
         }
         
-        // Add configured trackers to magnet URI
-        const trackers = config.torrent.trackers.map(t => `&tr=${encodeURIComponent(t)}`).join('');
-        return magnetUri + trackers;
+        const trackersParam = newTrackers.map(t => `&tr=${encodeURIComponent(t)}`).join('');
+        const enhanced = magnetUri + trackersParam;
+        logger.debug(`Enhanced magnet URI with ${newTrackers.length} additional trackers`);
+        return enhanced;
     }
 
     cleanup() {
