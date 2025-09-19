@@ -195,46 +195,63 @@ class StreamService {
       logger.debug(`Converting stream for iOS device: ${stream.name}, baseUrl: ${baseUrl}`);
     }
 
-    // magnet handling with improved hash to video conversion
-    if (result.magnet || (result.sources && result.sources.some(s => s.startsWith("magnet:")))) {
+    // Enhanced handling for infoHash - check direct property first, then extract from magnet
+    let infoHash = null;
+    
+    // Check if infoHash is provided directly (common in Torrentio streams)
+    if (result.infoHash && typeof result.infoHash === 'string') {
+      infoHash = result.infoHash.toLowerCase();
+      logger.debug(`Using direct infoHash: ${infoHash}`);
+    }
+    // Try to extract from magnet if no direct infoHash
+    else if (result.magnet || (result.sources && result.sources.some(s => s.startsWith("magnet:")))) {
       const magnetLink = result.magnet || result.sources.find(s => s.startsWith("magnet:"));
-      const infoHash = this.extractInfoHash(magnetLink);
+      infoHash = this.extractInfoHash(magnetLink);
       if (infoHash) {
-        // Always cache stream info for proxy serving (needed for both iOS and testing)
-        this.handler.cacheStream(infoHash, result.type || 'movie', result.title || result.name, result.quality || 'unknown');
+        logger.debug(`Extracted infoHash from magnet: ${infoHash}`);
+      }
+    }
+    
+    // If we have a valid infoHash, set up streaming
+    if (infoHash && (infoHash.length === 40 || infoHash.length === 32)) {
+      // Always cache stream info for proxy serving (needed for both iOS and testing)
+      this.handler.cacheStream(infoHash, result.type || 'movie', result.title || result.name, result.quality || 'unknown');
+      
+      if (isIOS) {
+        // For iOS devices, provide HTTP stream URL instead of magnet
+        // Use proxy-aware base URL if provided, otherwise fall back to config
+        const streamBaseUrl = baseUrl || config.server.baseUrl || `http://127.0.0.1:${config.server.port}`;
+        stream.url = `${streamBaseUrl}/stream/proxy/${infoHash}`;
+        logger.debug(`iOS stream: providing proxy-aware HTTP URL ${stream.url} for ${infoHash}`);
         
-        if (isIOS) {
-          // For iOS devices, provide HTTP stream URL instead of magnet
-          // Use proxy-aware base URL if provided, otherwise fall back to config
-          const streamBaseUrl = baseUrl || config.server.baseUrl || `http://127.0.0.1:${config.server.port}`;
-          stream.url = `${streamBaseUrl}/stream/proxy/${infoHash}`;
-          logger.debug(`iOS stream: providing proxy-aware HTTP URL ${stream.url} for ${infoHash}`);
-          
-          // Add metadata for better iOS playback
-          stream.behaviorHints = {
-            notWebReady: false, // iOS streams are web-ready
-            bingeGroup: `self-streme-ios-${infoHash.substring(0, 8)}`,
-            proxyHeaders: {
-              request: {
-                'User-Agent': 'Stremio/iOS'
-              }
+        // Add metadata for better iOS playback
+        stream.behaviorHints = {
+          notWebReady: false, // iOS streams are web-ready
+          bingeGroup: `self-streme-ios-${infoHash.substring(0, 8)}`,
+          proxyHeaders: {
+            request: {
+              'User-Agent': 'Stremio/iOS'
             }
-          };
-          
-          // Don't set infoHash for iOS to ensure Stremio uses HTTP URL
-        } else {
-          // For desktop/Android, provide magnet link
-          stream.infoHash = infoHash;
-          stream.fileIdx = result.fileIdx || 0;
-          stream.sources = [magnetLink];
-          logger.debug(`Desktop stream: providing magnet link for ${infoHash}`);
-          
-          // Desktop behavior hints
-          stream.behaviorHints = {
-            notWebReady: true,
-            bingeGroup: `self-streme-desktop-${stream.quality || "default"}`
-          };
-        }
+          }
+        };
+        
+        // Don't set infoHash for iOS to ensure Stremio uses HTTP URL
+      } else {
+        // For desktop/Android, provide magnet link
+        stream.infoHash = infoHash;
+        stream.fileIdx = result.fileIdx || 0;
+        
+        // Create magnet link if we only have infoHash
+        const magnetLink = result.magnet || result.sources?.find(s => s.startsWith("magnet:")) || 
+                          `magnet:?xt=urn:btih:${infoHash}`;
+        stream.sources = [magnetLink];
+        logger.debug(`Desktop stream: providing magnet link for ${infoHash}`);
+        
+        // Desktop behavior hints
+        stream.behaviorHints = {
+          notWebReady: true,
+          bingeGroup: `self-streme-desktop-${stream.quality || "default"}`
+        };
       }
     }
 
@@ -280,12 +297,35 @@ class StreamService {
   }
 
   /**
-   * מוציא infoHash ממגנט URI
+   * מוציא infoHash ממגנט URI - Enhanced to handle more formats
    */
   extractInfoHash(magnetUri) {
-    if (!magnetUri) return null;
-    const match = magnetUri.match(/btih:([a-fA-F0-9]+)/i);
-    return match ? match[1].toLowerCase() : null;
+    if (!magnetUri || typeof magnetUri !== 'string') return null;
+    
+    // Try multiple patterns for infoHash extraction
+    const patterns = [
+      /btih:([a-fA-F0-9]{40})/i,           // Standard 40-char hex
+      /btih:([a-fA-F0-9]{32})/i,           // 32-char hex (base32 converted)
+      /xt=urn:btih:([a-fA-F0-9]{40})/i,    // Full urn format 40-char
+      /xt=urn:btih:([a-fA-F0-9]{32})/i,    // Full urn format 32-char
+      /hash=([a-fA-F0-9]{40})/i,           // Alternative hash parameter
+      /hash=([a-fA-F0-9]{32})/i            // Alternative hash parameter 32-char
+    ];
+    
+    for (const pattern of patterns) {
+      const match = magnetUri.match(pattern);
+      if (match && match[1]) {
+        const hash = match[1].toLowerCase();
+        // Validate hash length (32 or 40 characters)
+        if (hash.length === 40 || hash.length === 32) {
+          logger.debug(`Extracted infoHash: ${hash} from magnet: ${magnetUri.substring(0, 50)}...`);
+          return hash;
+        }
+      }
+    }
+    
+    logger.debug(`Failed to extract infoHash from: ${magnetUri.substring(0, 100)}...`);
+    return null;
   }
 
   /**

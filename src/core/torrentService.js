@@ -41,6 +41,17 @@ class TorrentService {
     async getStream(magnetUri, fileIdx = 0, retryCount = 0) {
         const maxRetries = config.torrent.maxRetries; // Use configurable max retries
         
+        // Check if we have too many active torrents and cleanup first
+        if (this.client.torrents.length >= config.torrent.maxConnections) {
+            logger.warn(`Torrent limit reached (${this.client.torrents.length}/${config.torrent.maxConnections}), running cleanup`);
+            this.cleanup();
+            
+            // If still too many after cleanup, reject
+            if (this.client.torrents.length >= config.torrent.maxConnections) {
+                return Promise.reject(new Error('Too many active torrents, try again later'));
+            }
+        }
+        
         return new Promise((resolve, reject) => {
             try {
                 if (!magnetUri || !magnetUri.startsWith('magnet:')) {
@@ -50,6 +61,7 @@ class TorrentService {
                 const existing = this.activeTorrents.get(magnetUri);
                 if (existing && existing.file) {
                     logger.debug(`Using existing torrent stream for ${magnetUri.substring(0, 50)}...`);
+                    existing.lastAccessed = Date.now(); // Update access time
                     return resolve(existing);
                 }
 
@@ -59,6 +71,7 @@ class TorrentService {
                     return reject(new Error('Invalid magnet URI: no info hash found'));
                 }
                 const infoHash = infoHashMatch[1];
+                logger.info(`Starting torrent stream for hash: ${infoHash}`);
                 logger.info(`Extracted info hash: ${infoHash}, retry: ${retryCount}`);
 
                 // Check if torrent already exists by searching through active torrents
@@ -66,6 +79,7 @@ class TorrentService {
                 
                 if (torrent) {
                     logger.info(`Found existing torrent for ${infoHash}`);
+                    torrent.lastAccessTime = Date.now(); // Track access time
                 } else {
                     logger.info(`Adding new torrent: ${magnetUri.substring(0, 50)}...`);
                     
@@ -75,6 +89,7 @@ class TorrentService {
                         path: config.torrent.downloadPath,
                         announce: config.torrent.trackers
                     });
+                    torrent.lastAccessTime = Date.now(); // Track creation time
                     logger.info(`Torrent add initiated with enhanced trackers`);
                 }
                 
@@ -142,13 +157,28 @@ class TorrentService {
                 }
 
                 // Progressive timeout strategy - longer timeout for initial attempts
-                const timeoutDuration = config.torrent.timeout + (retryCount * 10000); // Add 10s per retry
+                const baseTimeout = config.torrent.timeout;
+                const timeoutDuration = Math.min(baseTimeout + (retryCount * 15000), 180000); // Max 3 minutes
+                const startTime = Date.now();
+                
                 const timeout = setTimeout(() => {
                     logger.error(`Torrent timeout for: ${magnetUri.substring(0, 50)}... (attempt ${retryCount + 1}/${maxRetries + 1}, timeout: ${timeoutDuration}ms)`);
                     if (torrent && typeof torrent.destroy === 'function') {
-                        torrent.destroy();
+                        try {
+                            torrent.destroy();
+                        } catch (destroyError) {
+                            logger.warn(`Error destroying timed-out torrent: ${destroyError.message}`);
+                        }
                     }
-                    reject(new Error(`Torrent adding timeout after ${timeoutDuration}ms`));
+                    
+                    // Enhanced retry logic with exponential backoff
+                    if (retryCount < maxRetries) {
+                        logger.info(`Will retry torrent stream in a moment (${retryCount + 1}/${maxRetries})`);
+                        // Don't immediately retry from timeout - let the main retry logic handle it
+                        reject(new Error(`Torrent timeout after ${timeoutDuration}ms - retry ${retryCount + 1}/${maxRetries}`));
+                    } else {
+                        reject(new Error(`Torrent timeout after ${timeoutDuration}ms - max retries exceeded`));
+                    }
                 }, timeoutDuration);
 
                 torrent.on('ready', () => {
@@ -179,7 +209,6 @@ class TorrentService {
                 });
 
                 // Track connection attempts
-                const startTime = Date.now();
                 const connectionTimer = setInterval(() => {
                     if (torrent.ready) {
                         clearInterval(connectionTimer);
@@ -193,8 +222,29 @@ class TorrentService {
                 setTimeout(() => clearInterval(connectionTimer), timeoutDuration);
 
             } catch (error) {
-                logger.error('getStream error:', error);
-                reject(error);
+                logger.error('getStream error:', error.message);
+                
+                // Enhanced retry logic for connection failures
+                if (retryCount < maxRetries && 
+                    (error.message.includes('timeout') || 
+                     error.message.includes('connection') || 
+                     error.message.includes('Invalid torrent object'))) {
+                    
+                    const backoffDelay = Math.min(2000 * Math.pow(2, retryCount), 15000); // Max 15s delay
+                    logger.info(`Retrying torrent stream (${retryCount + 1}/${maxRetries}) in ${backoffDelay}ms for ${infoHash}`);
+                    
+                    setTimeout(() => {
+                        this.getStream(magnetUri, fileIdx, retryCount + 1)
+                            .then(resolve)
+                            .catch(retryError => {
+                                logger.error(`Failed to get torrent stream for ${infoHash}: ${retryError.message}`);
+                                reject(retryError);
+                            });
+                    }, backoffDelay);
+                } else {
+                    logger.error(`Failed to get torrent stream for ${infoHash}: ${error.message}`);
+                    reject(error);
+                }
             }
         });
     }
@@ -576,12 +626,53 @@ class TorrentService {
 
     cleanup() {
         const now = Date.now();
+        let cleanedCount = 0;
+        
         for (const [magnetUri, stream] of this.activeTorrents.entries()) {
             const lastAccessed = stream.lastAccessed || 0;
+            // More aggressive cleanup - 30 minutes instead of 1 hour
             if (now - lastAccessed > config.torrent.cleanupInterval) {
-                stream.destroy();
-                this.activeTorrents.delete(magnetUri);
+                try {
+                    if (stream.destroy && typeof stream.destroy === 'function') {
+                        stream.destroy();
+                    }
+                    if (stream.torrent && typeof stream.torrent.destroy === 'function') {
+                        stream.torrent.destroy();
+                    }
+                    this.activeTorrents.delete(magnetUri);
+                    cleanedCount++;
+                } catch (error) {
+                    logger.warn(`Error cleaning up torrent ${magnetUri.substring(0, 50)}...:`, error.message);
+                    // Still delete from map even if cleanup failed
+                    this.activeTorrents.delete(magnetUri);
+                    cleanedCount++;
+                }
             }
+        }
+        
+        // Also clean up torrents from WebTorrent client if we have too many
+        const clientTorrents = this.client.torrents;
+        if (clientTorrents.length > config.torrent.maxConnections) {
+            logger.warn(`Too many active torrents in client (${clientTorrents.length}), cleaning up oldest ones`);
+            
+            // Sort torrents by last access time and remove oldest ones
+            const sortedTorrents = clientTorrents
+                .filter(torrent => torrent.lastAccessTime || 0)
+                .sort((a, b) => (a.lastAccessTime || 0) - (b.lastAccessTime || 0));
+            
+            const toRemove = sortedTorrents.slice(0, clientTorrents.length - config.torrent.maxConnections + 5);
+            toRemove.forEach(torrent => {
+                try {
+                    torrent.destroy();
+                    cleanedCount++;
+                } catch (error) {
+                    logger.warn(`Error destroying torrent in client cleanup:`, error.message);
+                }
+            });
+        }
+        
+        if (cleanedCount > 0) {
+            logger.info(`Cleaned up ${cleanedCount} inactive torrents. Active torrents: ${this.activeTorrents.size}, Client torrents: ${this.client.torrents.length}`);
         }
     }
 
