@@ -222,8 +222,6 @@ class TorrentService {
                 setTimeout(() => clearInterval(connectionTimer), timeoutDuration);
 
             } catch (error) {
-                logger.error('getStream error:', error.message);
-                
                 // Enhanced retry logic for connection failures
                 if (retryCount < maxRetries && 
                     (error.message.includes('timeout') || 
@@ -237,12 +235,12 @@ class TorrentService {
                         this.getStream(magnetUri, fileIdx, retryCount + 1)
                             .then(resolve)
                             .catch(retryError => {
-                                logger.error(`Failed to get torrent stream for ${infoHash}: ${retryError.message}`);
+                                logger.error(`Failed to get torrent stream for ${infoHash}: ${retryError.message || retryError}`);
                                 reject(retryError);
                             });
                     }, backoffDelay);
                 } else {
-                    logger.error(`Failed to get torrent stream for ${infoHash}: ${error.message}`);
+                    logger.error(`Failed to get torrent stream for ${infoHash}: ${error.message || error}`);
                     reject(error);
                 }
             }
