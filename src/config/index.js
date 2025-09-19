@@ -69,11 +69,11 @@ const config = {
       "udp://retracker.lanta-net.ru:2710",
       "udp://tracker.dler.org:6969",
     ],
-    maxConnections: 100,
+    maxConnections: 25, // Reduced from 100 to prevent port exhaustion
     downloadLimit: 0, // 0 for unlimited
     uploadLimit: 0, // 0 for unlimited
-    cleanupInterval: 3600000, // 1 hour
-    timeout: parseInt(process.env.TORRENT_TIMEOUT, 10) || 60000, // 60 seconds default
+    cleanupInterval: 1800000, // Reduced to 30 minutes for better cleanup
+    timeout: parseInt(process.env.TORRENT_TIMEOUT, 10) || 90000, // Increased to 90 seconds
     maxRetries: parseInt(process.env.TORRENT_MAX_RETRIES, 10) || 3,
   },
   addon: {
