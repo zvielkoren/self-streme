@@ -16,7 +16,15 @@ class TorrentService {
             dht: true, // Enable DHT for better peer discovery
             lsd: true, // Enable local service discovery
             natUpmp: true, // Enable NAT traversal
-            natPmp: true // Enable NAT port mapping
+            natPmp: true, // Enable NAT port mapping
+            // Additional options for better connectivity
+            tracker: {
+                announce: config.torrent.trackers,
+                wrtc: false // Disable WebRTC for better server compatibility
+            },
+            // Increase timeouts for better connectivity in poor network conditions
+            blocklist: false, // Don't block any IPs to maximize peer pool
+            pieceTimeout: 30000 // 30 second piece timeout
         });
         this.activeTorrents = new Map();
         this.initialize();
@@ -79,22 +87,21 @@ class TorrentService {
         
         return new Promise((resolve, reject) => {
             try {
-                if (!magnetUri || !magnetUri.startsWith('magnet:')) {
+                // Validate and enhance magnet URI
+                const validatedMagnetUri = this.validateAndEnhanceMagnetUri(magnetUri);
+                if (!validatedMagnetUri) {
                     return reject(new Error('Invalid magnet URI'));
                 }
 
-                const existing = this.activeTorrents.get(magnetUri);
+                const existing = this.activeTorrents.get(validatedMagnetUri);
                 if (existing && existing.file) {
-                    logger.debug(`Using existing torrent stream for ${magnetUri.substring(0, 50)}...`);
+                    logger.debug(`Using existing torrent stream for ${validatedMagnetUri.substring(0, 50)}...`);
                     existing.lastAccessed = Date.now(); // Update access time
                     return resolve(existing);
                 }
 
                 // Extract info hash from magnet URI for duplicate checking
-                const infoHashMatch = magnetUri.match(/xt=urn:btih:([^&]+)/i);
-                if (!infoHashMatch) {
-                    return reject(new Error('Invalid magnet URI: no info hash found'));
-                }
+                const infoHashMatch = validatedMagnetUri.match(/xt=urn:btih:([^&]+)/i);
                 const infoHash = infoHashMatch[1];
                 logger.info(`Starting torrent stream for hash: ${infoHash}`);
                 logger.info(`Extracted info hash: ${infoHash}, retry: ${retryCount}`);
@@ -106,11 +113,9 @@ class TorrentService {
                     logger.info(`Found existing torrent for ${infoHash}`);
                     torrent.lastAccessTime = Date.now(); // Track access time
                 } else {
-                    logger.info(`Adding new torrent: ${magnetUri.substring(0, 50)}...`);
+                    logger.info(`Adding new torrent: ${validatedMagnetUri.substring(0, 50)}...`);
                     
-                    // Add additional trackers to improve connectivity
-                    const enhancedMagnetUri = this.enhanceMagnetUri(magnetUri);
-                    torrent = this.client.add(enhancedMagnetUri, { 
+                    torrent = this.client.add(validatedMagnetUri, { 
                         path: config.torrent.downloadPath,
                         announce: config.torrent.trackers
                     });
@@ -170,7 +175,7 @@ class TorrentService {
                         lastAccessed: Date.now()
                     };
 
-                    this.activeTorrents.set(magnetUri, stream);
+                    this.activeTorrents.set(validatedMagnetUri, stream);
                     resolve(stream);
                 };
 
@@ -181,13 +186,26 @@ class TorrentService {
                     return;
                 }
 
-                // Progressive timeout strategy - longer timeout for initial attempts
+                // Progressive timeout strategy - use different timeout for each retry
                 const baseTimeout = config.torrent.timeout;
-                const timeoutDuration = Math.min(baseTimeout + (retryCount * 15000), 180000); // Max 3 minutes
+                const timeoutDuration = config.torrent.timeoutProgression 
+                    ? (config.torrent.timeoutProgression[retryCount] || config.torrent.timeoutProgression[config.torrent.timeoutProgression.length - 1])
+                    : Math.min(baseTimeout + (retryCount * 30000), 300000); // Max 5 minutes fallback
+                
                 const startTime = Date.now();
+                let peerDiscoveryTimeout = null;
+                let hasFoundPeers = false;
                 
                 const timeout = setTimeout(() => {
-                    logger.error(`Torrent timeout for: ${magnetUri.substring(0, 50)}... (attempt ${retryCount + 1}/${maxRetries + 1}, timeout: ${timeoutDuration}ms)`);
+                    const elapsed = Date.now() - startTime;
+                    const peersFound = torrent.numPeers || 0;
+                    
+                    logger.error(`Torrent timeout for: ${validatedMagnetUri.substring(0, 50)}... (attempt ${retryCount + 1}/${maxRetries + 1}, timeout: ${timeoutDuration}ms, elapsed: ${elapsed}ms, peers: ${peersFound})`);
+                    
+                    if (peerDiscoveryTimeout) {
+                        clearTimeout(peerDiscoveryTimeout);
+                    }
+                    
                     if (torrent && typeof torrent.destroy === 'function') {
                         try {
                             torrent.destroy();
@@ -206,20 +224,40 @@ class TorrentService {
                     }
                 }, timeoutDuration);
 
+                // Implement early peer discovery check
+                if (config.torrent.minPeersBeforeTimeout) {
+                    peerDiscoveryTimeout = setTimeout(() => {
+                        const peersFound = torrent.numPeers || 0;
+                        if (peersFound === 0) {
+                            logger.warn(`No peers found after initial discovery period. Peers: ${peersFound}, continuing to wait...`);
+                        } else {
+                            hasFoundPeers = true;
+                            logger.info(`Found ${peersFound} peers, continuing to connect...`);
+                        }
+                    }, Math.min(30000, timeoutDuration / 4)); // Check after 30 seconds or 1/4 of timeout
+                }
+
                 torrent.on('ready', () => {
                     clearTimeout(timeout);
+                    if (peerDiscoveryTimeout) {
+                        clearTimeout(peerDiscoveryTimeout);
+                    }
                     logger.info(`Torrent ready after ${Date.now() - startTime}ms, peers: ${torrent.numPeers}, seeds: ${torrent.seeders || 0}`);
                     processTorrent();
                 });
 
                 torrent.on('error', error => {
                     clearTimeout(timeout);
-                    logger.error(`Torrent error for ${magnetUri.substring(0, 50)}...:`, error);
+                    if (peerDiscoveryTimeout) {
+                        clearTimeout(peerDiscoveryTimeout);
+                    }
+                    logger.error(`Torrent error for ${validatedMagnetUri.substring(0, 50)}...:`, error);
                     reject(error);
                 });
 
                 // Enhanced progress and connection logging
                 let lastLogTime = 0;
+                let lastPeerCount = 0;
                 torrent.on('download', () => {
                     const now = Date.now();
                     if (now - lastLogTime > 5000) { // Log every 5 seconds
@@ -228,20 +266,35 @@ class TorrentService {
                     }
                 });
 
-                // Log peer connections
+                // Log peer connections with more detail
                 torrent.on('wire', (wire) => {
-                    logger.debug(`New peer connected, total peers: ${torrent.numPeers}`);
+                    if (torrent.numPeers !== lastPeerCount) {
+                        logger.info(`Peer connected, total peers: ${torrent.numPeers} (was ${lastPeerCount})`);
+                        lastPeerCount = torrent.numPeers;
+                        hasFoundPeers = torrent.numPeers > 0;
+                    }
                 });
 
-                // Track connection attempts
+                // Track peer disconnections
+                torrent.on('noPeers', () => {
+                    logger.warn(`No peers available for ${infoHash}, continuing to search...`);
+                });
+
+                // Track connection attempts with more detailed logging
                 const connectionTimer = setInterval(() => {
                     if (torrent.ready) {
                         clearInterval(connectionTimer);
                         return;
                     }
                     const elapsed = Date.now() - startTime;
-                    logger.debug(`Connecting... elapsed: ${elapsed}ms, peers: ${torrent.numPeers}, discovery: ${torrent.discovery?.tracker ? 'tracker' : ''} ${torrent.discovery?.dht ? 'dht' : ''}`);
-                }, 10000); // Log every 10 seconds
+                    const dhtNodes = torrent.discovery?.dht?.nodes?.length || 0;
+                    logger.info(`Connecting... elapsed: ${elapsed}ms, peers: ${torrent.numPeers}, progress: ${(torrent.progress * 100).toFixed(1)}%, DHT nodes: ${dhtNodes}`);
+                    
+                    // Log tracker status if available
+                    if (torrent.discovery?.tracker) {
+                        logger.debug(`Tracker status available`);
+                    }
+                }, 15000); // Log every 15 seconds
 
                 // Clean up timer if timeout occurs
                 setTimeout(() => clearInterval(connectionTimer), timeoutDuration);
@@ -266,9 +319,24 @@ class TorrentService {
                             });
                     }, backoffDelay);
                 } else {
-                    const errorMessage = error.message || error.toString() || 'Unknown error';
-                    logger.error(`Failed to get torrent stream for ${infoHash}: ${errorMessage}`);
-                    reject(error);
+                    // If all retries failed, try alternative sources before giving up
+                    logger.warn(`All retries exhausted for ${infoHash}, trying alternative sources...`);
+                    this.tryAlternativeSources(infoHash, retryCount)
+                        .then(alternative => {
+                            if (alternative) {
+                                logger.info(`Using alternative source for ${infoHash}`);
+                                resolve(alternative);
+                            } else {
+                                const errorMessage = error.message || error.toString() || 'Unknown error';
+                                logger.error(`Failed to get torrent stream for ${infoHash}: ${errorMessage}`);
+                                reject(error);
+                            }
+                        })
+                        .catch(altError => {
+                            const errorMessage = error.message || error.toString() || 'Unknown error';
+                            logger.error(`Failed to get torrent stream for ${infoHash}: ${errorMessage}`);
+                            reject(error);
+                        });
                 }
             }
         });
@@ -653,6 +721,59 @@ class TorrentService {
         const enhanced = magnetUri + trackersParam;
         logger.debug(`Enhanced magnet URI with ${newTrackers.length} additional trackers`);
         return enhanced;
+    }
+
+    /**
+     * Validate and enhance magnet URI before processing
+     * @param {string} magnetUri - Original magnet URI
+     * @returns {string|null} Enhanced magnet URI or null if invalid
+     */
+    validateAndEnhanceMagnetUri(magnetUri) {
+        if (!magnetUri || !magnetUri.startsWith('magnet:')) {
+            logger.warn(`Invalid magnet URI format: ${magnetUri}`);
+            return null;
+        }
+
+        // Check for info hash
+        const infoHashMatch = magnetUri.match(/xt=urn:btih:([^&]+)/i);
+        if (!infoHashMatch) {
+            logger.warn(`No info hash found in magnet URI: ${magnetUri.substring(0, 50)}...`);
+            return null;
+        }
+
+        const infoHash = infoHashMatch[1];
+        if (infoHash.length !== 40 && infoHash.length !== 32) {
+            logger.warn(`Invalid info hash length: ${infoHash.length}, expected 40 or 32`);
+            return null;
+        }
+
+        // Enhance with additional trackers
+        return this.enhanceMagnetUri(magnetUri);
+    }
+
+    /**
+     * Try alternative torrent sources when primary fails
+     * @param {string} infoHash - The torrent info hash that failed
+     * @param {number} retryCount - Current retry count
+     * @returns {Promise<object|null>} Alternative stream or null
+     */
+    async tryAlternativeSources(infoHash, retryCount = 0) {
+        logger.info(`Trying alternative sources for ${infoHash}, retry: ${retryCount}`);
+        
+        // TODO: In future, could implement:
+        // 1. Try different tracker sets
+        // 2. Try HTTP/HTTPS fallbacks if available
+        // 3. Try cached/partial files
+        // 4. Try alternative torrent sources with same content
+        
+        // For now, check if we have any cached partial downloads
+        const fallbackStream = await this.tryFallbackFileStream(infoHash);
+        if (fallbackStream) {
+            logger.info(`Found alternative file source for ${infoHash}`);
+            return fallbackStream;
+        }
+        
+        return null;
     }
 
     cleanup() {
