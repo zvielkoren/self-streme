@@ -22,6 +22,31 @@ class TorrentService {
         this.initialize();
     }
 
+    /**
+     * Get proper MIME type based on file extension
+     * @param {string} filename - The filename or file path
+     * @returns {string} The appropriate MIME type
+     */
+    getVideoMimeType(filename) {
+        if (!filename) return 'video/mp4'; // default fallback
+        
+        const ext = path.extname(filename).toLowerCase();
+        const mimeTypes = {
+            '.mp4': 'video/mp4',
+            '.m4v': 'video/mp4',
+            '.mkv': 'video/x-matroska',
+            '.avi': 'video/x-msvideo',
+            '.mov': 'video/quicktime',
+            '.webm': 'video/webm',
+            '.flv': 'video/x-flv',
+            '.wmv': 'video/x-ms-wmv',
+            '.3gp': 'video/3gpp',
+            '.ogv': 'video/ogg'
+        };
+        
+        return mimeTypes[ext] || 'video/mp4'; // default to mp4 for unknown types
+    }
+
     ensureDownloadPath() {
         try {
             if (!fs.existsSync(config.torrent.downloadPath)) {
@@ -310,13 +335,15 @@ class TorrentService {
 
             const file = torrentStream.file;
             const fileSize = file.length;
+            const fileName = file.name || '';
+            const contentType = this.getVideoMimeType(fileName);
             
             if (!fileSize || fileSize <= 0) {
                 logger.error(`Invalid file size for ${infoHash}: ${fileSize}`);
                 return res.status(500).json({ error: 'Invalid file size' });
             }
 
-            logger.info(`Hash to video conversion successful: ${infoHash} -> ${file.name} (${fileSize} bytes)`);
+            logger.info(`Hash to video conversion successful: ${infoHash} -> ${fileName} (${fileSize} bytes, ${contentType})`);
 
             // Check if file exists on disk and use file stream for better performance
             const filePath = path.join(config.torrent.downloadPath, file.path);
@@ -360,7 +387,7 @@ class TorrentService {
                     'Content-Range': `bytes ${start}-${end}/${fileSize}`,
                     'Accept-Ranges': 'bytes',
                     'Content-Length': chunksize,
-                    'Content-Type': 'video/mp4',
+                    'Content-Type': contentType,
                     'Access-Control-Allow-Origin': '*',
                     'Access-Control-Allow-Headers': 'Range'
                 });
@@ -376,7 +403,7 @@ class TorrentService {
                 // No range requested, send entire file
                 res.writeHead(200, {
                     'Content-Length': fileSize,
-                    'Content-Type': 'video/mp4',
+                    'Content-Type': contentType,
                     'Access-Control-Allow-Origin': '*'
                 });
                 
@@ -448,6 +475,7 @@ class TorrentService {
     async streamFromFile(req, res, filePath, fileSize, infoHash) {
         try {
             const range = req.headers.range;
+            const contentType = this.getVideoMimeType(filePath);
             
             // Handle connection cleanup
             req.on('close', () => {
@@ -477,7 +505,7 @@ class TorrentService {
                     'Content-Range': `bytes ${start}-${end}/${fileSize}`,
                     'Accept-Ranges': 'bytes',
                     'Content-Length': chunksize,
-                    'Content-Type': 'video/mp4',
+                    'Content-Type': contentType,
                     'Access-Control-Allow-Origin': '*',
                     'Access-Control-Allow-Headers': 'Range'
                 });
@@ -493,7 +521,7 @@ class TorrentService {
                 // No range requested, send entire file
                 res.writeHead(200, {
                     'Content-Length': fileSize,
-                    'Content-Type': 'video/mp4',
+                    'Content-Type': contentType,
                     'Access-Control-Allow-Origin': '*'
                 });
                 
@@ -802,17 +830,97 @@ class TorrentService {
      * @returns {Buffer} A minimal MP4 video buffer
      */
     generateMockMP4() {
-        // This is a minimal MP4 header that creates a tiny black video
-        // It's enough for iOS to recognize as a valid video file
-        const mp4Header = Buffer.from([
-            // ftyp box
-            0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6F, 0x6D, 0x00, 0x00, 0x02, 0x00,
-            0x69, 0x73, 0x6F, 0x6D, 0x69, 0x73, 0x6F, 0x32, 0x61, 0x76, 0x63, 0x31, 0x6D, 0x70, 0x34, 0x31,
-            // mdat box (minimal)
-            0x00, 0x00, 0x00, 0x08, 0x6D, 0x64, 0x61, 0x74
+        // Generate a proper minimal MP4 that iOS can handle
+        // This creates a small black video with proper structure
+        const ftypBox = Buffer.from([
+            // ftyp box (32 bytes)
+            0x00, 0x00, 0x00, 0x20, // box size
+            0x66, 0x74, 0x79, 0x70, // 'ftyp'
+            0x69, 0x73, 0x6F, 0x6D, // major brand 'isom'
+            0x00, 0x00, 0x02, 0x00, // minor version
+            0x69, 0x73, 0x6F, 0x6D, // compatible brand 'isom'
+            0x69, 0x73, 0x6F, 0x32, // compatible brand 'iso2'
+            0x61, 0x76, 0x63, 0x31, // compatible brand 'avc1'
+            0x6D, 0x70, 0x34, 0x31  // compatible brand 'mp41'
         ]);
         
-        return mp4Header;
+        const moovBox = Buffer.from([
+            // moov box (minimal movie header + track)
+            0x00, 0x00, 0x01, 0x08, // box size (264 bytes)
+            0x6D, 0x6F, 0x6F, 0x76, // 'moov'
+            
+            // mvhd box (movie header)
+            0x00, 0x00, 0x00, 0x6C, // box size (108 bytes)
+            0x6D, 0x76, 0x68, 0x64, // 'mvhd'
+            0x00, 0x00, 0x00, 0x00, // version and flags
+            0x00, 0x00, 0x00, 0x00, // creation time
+            0x00, 0x00, 0x00, 0x00, // modification time
+            0x00, 0x00, 0x03, 0xE8, // timescale (1000)
+            0x00, 0x00, 0x03, 0xE8, // duration (1000 = 1 second)
+            0x00, 0x01, 0x00, 0x00, // rate (1.0)
+            0x01, 0x00, 0x00, 0x00, // volume (1.0) + reserved
+            0x00, 0x00, 0x00, 0x00, // reserved
+            0x00, 0x00, 0x00, 0x00, // reserved
+            // transformation matrix (identity)
+            0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00,
+            // reserved
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x02, // next track ID
+            
+            // trak box (minimal track)
+            0x00, 0x00, 0x00, 0x90, // box size (144 bytes)
+            0x74, 0x72, 0x61, 0x6B, // 'trak'
+            
+            // tkhd box (track header)
+            0x00, 0x00, 0x00, 0x5C, // box size (92 bytes)
+            0x74, 0x6B, 0x68, 0x64, // 'tkhd'
+            0x00, 0x00, 0x00, 0x07, // version and flags (track enabled, in movie, in preview)
+            0x00, 0x00, 0x00, 0x00, // creation time
+            0x00, 0x00, 0x00, 0x00, // modification time
+            0x00, 0x00, 0x00, 0x01, // track ID
+            0x00, 0x00, 0x00, 0x00, // reserved
+            0x00, 0x00, 0x03, 0xE8, // duration (1000)
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // reserved
+            0x00, 0x00, 0x00, 0x00, // layer + alternate group
+            0x00, 0x00, 0x00, 0x00, // volume + reserved
+            // transformation matrix (identity)
+            0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00,
+            0x01, 0x40, 0x00, 0x00, // width (320)
+            0x00, 0xF0, 0x00, 0x00, // height (240)
+            
+            // mdia box (minimal media)
+            0x00, 0x00, 0x00, 0x2C, // box size (44 bytes)
+            0x6D, 0x64, 0x69, 0x61, // 'mdia'
+            
+            // mdhd box (media header)
+            0x00, 0x00, 0x00, 0x20, // box size (32 bytes)
+            0x6D, 0x64, 0x68, 0x64, // 'mdhd'
+            0x00, 0x00, 0x00, 0x00, // version and flags
+            0x00, 0x00, 0x00, 0x00, // creation time
+            0x00, 0x00, 0x00, 0x00, // modification time
+            0x00, 0x00, 0x03, 0xE8, // timescale (1000)
+            0x00, 0x00, 0x03, 0xE8, // duration (1000)
+            0x55, 0xC4, 0x00, 0x00, // language (und) + quality
+            
+            // Empty hdlr and minf boxes to complete structure
+            0x00, 0x00, 0x00, 0x08, // box size (8 bytes - minimal)
+            0x68, 0x64, 0x6C, 0x72  // 'hdlr'
+        ]);
+        
+        const mdatBox = Buffer.from([
+            // mdat box with minimal data
+            0x00, 0x00, 0x00, 0x10, // box size (16 bytes)
+            0x6D, 0x64, 0x61, 0x74, // 'mdat'
+            // Minimal video data (8 bytes of zeros)
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        ]);
+        
+        return Buffer.concat([ftypBox, moovBox, mdatBox]);
     }
 
     destroy() {
