@@ -235,12 +235,14 @@ class TorrentService {
                         this.getStream(magnetUri, fileIdx, retryCount + 1)
                             .then(resolve)
                             .catch(retryError => {
-                                logger.error(`Failed to get torrent stream for ${infoHash}: ${retryError.message || retryError}`);
+                                const errorMessage = retryError.message || retryError.toString() || 'Unknown retry error';
+                                logger.error(`Failed to get torrent stream for ${infoHash}: ${errorMessage}`);
                                 reject(retryError);
                             });
                     }, backoffDelay);
                 } else {
-                    logger.error(`Failed to get torrent stream for ${infoHash}: ${error.message || error}`);
+                    const errorMessage = error.message || error.toString() || 'Unknown error';
+                    logger.error(`Failed to get torrent stream for ${infoHash}: ${errorMessage}`);
                     reject(error);
                 }
             }
@@ -282,7 +284,10 @@ class TorrentService {
             try {
                 torrentStream = await this.getStream(magnetUri);
             } catch (streamError) {
-                logger.error(`Failed to get torrent stream for ${infoHash}:`, streamError.message);
+                // Extract meaningful error information
+                const errorMessage = streamError.message || streamError.toString() || 'Unknown error';
+                const errorDetails = streamError.stack || JSON.stringify(streamError);
+                logger.error(`Failed to get torrent stream for ${infoHash}: ${errorMessage}`, errorDetails);
                 
                 // Try fallback: direct file access if available
                 const fallbackStream = await this.tryFallbackFileStream(infoHash);
