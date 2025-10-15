@@ -210,15 +210,25 @@ app.get("/stream/cache/:infoHash", async (req, res) => {
 });
 
 // Direct streaming endpoint
-// Proxy streaming endpoint
+// Proxy streaming endpoint - Downloads torrent on server and streams as HTTP
 app.get("/stream/proxy/:infoHash", async (req, res) => {
     try {
         const { infoHash } = req.params;
+        const userAgent = req.headers['user-agent'] || '';
+        const isIOS = userAgent.toLowerCase().includes('iphone') || 
+                      userAgent.toLowerCase().includes('ipad') || 
+                      userAgent.toLowerCase().includes('ipod') ||
+                      userAgent.toLowerCase().includes('ios');
+        
+        logger.info(`Proxy stream request for ${infoHash} from ${isIOS ? 'iOS' : 'other'} device`);
+        
         let streamInfo = streamService.handler.getStreamInfo(infoHash);
         
-        // If no stream info is cached, provide mock data for testing
+        // If no stream info is cached, log warning but still try to stream
         if (!streamInfo) {
-            // Check if this is the specific test hash used in the test page
+            logger.warn(`No cached stream info for ${infoHash}, will attempt to stream anyway`);
+            
+            // Check if this is a test/mock hash
             const isTestHash = infoHash === '39730aa7c09b864432bc8c878c20c933059241fd';
             const isDevelopment = process.env.NODE_ENV !== 'production';
             const isTestKeyword = infoHash.startsWith('test_') || infoHash.startsWith('mock_test_');
@@ -236,17 +246,21 @@ app.get("/stream/proxy/:infoHash", async (req, res) => {
                 // Cache the mock data
                 streamService.handler.cacheStream(infoHash, 'movie', 'Test Stream', '1080p');
                 logger.info(`Created mock stream info for testing: ${infoHash}`);
-            } else {
-                return res.status(404).json({ error: 'Stream not found' });
             }
+            // For real torrents without cached info, we'll still try to stream them
+            // torrentService will handle the magnet URI construction
         }
 
-        // Stream through our proxy service
+        // Stream through our proxy service - this downloads the torrent and streams it
+        // This is the key part that makes iOS work - torrent is downloaded on server
+        logger.info(`Initiating torrent download and stream for ${infoHash}`);
         await torrentService.streamTorrent(req, res, infoHash);
         
     } catch (error) {
         logger.error('Proxy stream error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Internal server error' });
+        }
     }
 });
 

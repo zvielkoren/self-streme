@@ -235,7 +235,9 @@ class StreamService {
           }
         };
         
-        // Don't set infoHash for iOS to ensure Stremio uses HTTP URL
+        // CRITICAL: Don't set infoHash for iOS - only URL should be present
+        // This ensures Stremio uses the HTTP stream instead of trying to download the torrent
+        // Do NOT set stream.infoHash or stream.sources here!
       } else {
         // For desktop/Android, provide magnet link
         stream.infoHash = infoHash;
