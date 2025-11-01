@@ -185,8 +185,42 @@ NODE_ENV=production pm2 start src/index.js --name self-streme
 
 # Save PM2 config
 pm2 save
-pm2 startup
+
+# For systemd-based systems (Ubuntu/Debian with systemd)
+pm2 startup systemd
+
+# For containers or non-systemd environments, skip pm2 startup
+# Instead, use pm2-runtime in your container CMD:
+# CMD ["pm2-runtime", "src/index.js"]
 ```
+
+**Note for Docker/Containers:**
+If you see `System has not been booted with systemd as init system (PID 1)`, you're in a container or non-systemd environment. Just use:
+```bash
+pm2 start src/index.js --name self-streme
+pm2 save
+```
+Skip the `pm2 startup` command and ensure PM2 is started when your container starts.
+
+### Step 5: Verify Installation
+
+```bash
+# Check PM2 status
+pm2 list
+
+# Test the manifest endpoint
+curl -I http://127.0.0.1:7000/manifest.json
+# Should return: HTTP/1.1 200 OK
+
+# Test HTTPS detection (if behind nginx)
+curl -I https://your-domain.com/manifest.json
+# Should return: HTTP/2 200 with https URLs in the JSON
+```
+
+Visit these URLs in your browser:
+- `https://your-domain.com/health` - Should return `{"status":"ok"}`
+- `https://your-domain.com/debug/url` - Should show `"protocol":"https"`
+- `https://your-domain.com/manifest.json` - Should have https URLs
 
 ---
 
@@ -481,11 +515,62 @@ sudo systemctl status self-streme
 
 ### Step 4: Setup nginx (See nginx section above)
 
+### Troubleshooting Systemd Issues
+
+**Error: "System has not been booted with systemd as init system (PID 1)"**
+
+This means you're in a Docker container or non-systemd environment. Use PM2 instead:
+
+```bash
+# Install PM2
+npm install -g pm2
+
+# Start app
+cd /opt/self-streme
+pm2 start src/index.js --name self-streme
+
+# Save PM2 process list
+pm2 save
+
+# Verify it's running
+pm2 list
+curl -I http://127.0.0.1:7000/manifest.json
+```
+
+**Error: "sudo: unable to resolve host..."**
+
+Fix the hostname resolution:
+
+```bash
+echo "127.0.0.1 $(hostname)" >> /etc/hosts
+```
+
+This is harmless and won't affect the app, but the command above will silence it.
+
+---
+
 ---
 
 ## Troubleshooting
 
-### Issue: Getting HTTP URLs instead of HTTPS
+### Container/Non-systemd Environments
+
+If you see these errors:
+```
+System has not been booted with systemd as init system (PID 1). Can't operate.
+Failed to connect to system scope bus via local transport: Host is down
+```
+
+**Solution:** You're in a container or non-systemd environment. Use PM2 or pm2-runtime:
+
+```bash
+# Option 1: PM2 (interactive)
+pm2 start src/index.js --name self-streme
+pm2 save
+
+# Option 2: pm2-runtime (Docker CMD)
+# Add to your Dockerfile:
+# CMD ["pmGetting HTTP URLs instead of HTTPS
 
 **Diagnosis:**
 
