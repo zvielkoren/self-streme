@@ -73,7 +73,7 @@ Self-Streme is a sophisticated Stremio addon that seamlessly bridges your local 
    ```bash
    # Create environment file (optional)
    cp example.env .env
-   
+
    # Create media directories
    mkdir -p media temp
    ```
@@ -90,7 +90,7 @@ Self-Streme is a sophisticated Stremio addon that seamlessly bridges your local 
    - Enter: `http://127.0.0.1:7000/manifest.json`
    - Click **Install**
 
-> **📦 Production Deployment?** See [DEPLOYMENT.md](./DEPLOYMENT.md) for Cloudflare, Plesk, nginx, Render, Docker, and more!
+> **📦 Production Deployment?** See [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for Cloudflare, Plesk, nginx, Render, Docker, and more!
 
 ## ⚙️ Configuration
 
@@ -105,7 +105,7 @@ The app **automatically detects** HTTPS and your domain from proxy headers. Work
 
 **No configuration needed for most deployments!**
 
-> **Behind Cloudflare?** Quick setup: [QUICK_START_CLOUDFLARE.md](./QUICK_START_CLOUDFLARE.md)
+> **Behind Cloudflare?** Quick setup: [QUICK_START_CLOUDFLARE.md](./docs/QUICK_START_CLOUDFLARE.md)
 
 ### Environment Variables
 
@@ -263,7 +263,7 @@ Visit `http://localhost:7000/test-source-selection` for a comprehensive test int
 - Visit `/debug/url` to see what the app detected
 - Ensure Cloudflare SSL mode is "Full" or "Full (strict)" (NOT "Flexible")
 - Set `BASE_URL=https://your-domain.com` if auto-detection fails
-- See [QUICK_START_CLOUDFLARE.md](./QUICK_START_CLOUDFLARE.md) for 2-minute fix
+- See [QUICK_START_CLOUDFLARE.md](./docs/QUICK_START_CLOUDFLARE.md) for 2-minute fix
 
 **Connection Problems**
 - Ensure port 7000 is not blocked by firewall
@@ -295,7 +295,7 @@ Visit `http://localhost:7000/test-source-selection` for a comprehensive test int
 ### Getting Help
 
 1. Check `/debug/url` endpoint to see detected configuration
-2. Review deployment guides: [DEPLOYMENT.md](./DEPLOYMENT.md)
+2. Review deployment guides: [DEPLOYMENT.md](./docs/DEPLOYMENT.md)
 3. Check server logs for error messages
 4. Verify proxy headers if using reverse proxy
 5. Ensure all dependencies are properly installed
@@ -307,7 +307,7 @@ Visit `http://localhost:7000/test-source-selection` for a comprehensive test int
 Self-Streme includes several performance optimizations:
 
 - **⚡ Faster Results**: 30-second timeout (reduced from 2 minutes)
-- **📅 Smart Scheduling**: Configurable cache cleanup intervals  
+- **📅 Smart Scheduling**: Configurable cache cleanup intervals
 - **🗂️ Scalable Cache**: Multiple backend support (Memory/SQLite/Redis)
 - **📊 Resource Limits**: Intelligent disk usage and file count management
 - **🔄 Persistent Storage**: Optional cache persistence across restarts
@@ -327,7 +327,7 @@ CACHE_BACKEND=memory
 CACHE_MAX_SIZE=100
 CACHE_MAX_DISK_MB=1000
 
-# Production Environment  
+# Production Environment
 CACHE_BACKEND=redis
 CACHE_MAX_SIZE=10000
 CACHE_MAX_DISK_MB=50000
