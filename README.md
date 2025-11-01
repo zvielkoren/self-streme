@@ -87,23 +87,40 @@ Self-Streme is a sophisticated Stremio addon that seamlessly bridges your local 
    - Open Stremio application
    - Navigate to **Addons** → **Community Addons**
    - Click **"Install from URL"**
-   - Enter: `http://127.0.0.1:7001/manifest.json`
+   - Enter: `http://127.0.0.1:7000/manifest.json`
    - Click **Install**
+
+> **📦 Production Deployment?** See [DEPLOYMENT.md](./DEPLOYMENT.md) for Cloudflare, Plesk, nginx, Render, Docker, and more!
 
 ## ⚙️ Configuration
 
+### 🌐 Auto-Detection (Default)
+
+The app **automatically detects** HTTPS and your domain from proxy headers. Works with:
+- ✅ Cloudflare
+- ✅ nginx, Apache, Caddy
+- ✅ Plesk, cPanel
+- ✅ Render, Heroku, Railway
+- ✅ Docker reverse proxies (Traefik, nginx-proxy)
+
+**No configuration needed for most deployments!**
+
+> **Behind Cloudflare?** Quick setup: [QUICK_START_CLOUDFLARE.md](./QUICK_START_CLOUDFLARE.md)
+
 ### Environment Variables
 
-Create a `.env` file in the root directory:
+Create a `.env` file in the root directory (optional for local development):
 
 ```env
 # Server Configuration
 PORT=7000                    # Main server port
-ADDON_PORT=7001             # Stremio addon port
-BASE_URL=http://127.0.0.1:7000  # Server base URL
+BASE_URL=http://127.0.0.1:7000  # Server base URL (auto-detected if not set)
 
 # Media Configuration
 MEDIA_PATH=./media          # Local media library path
+
+# Production Deployment (Optional - auto-detected if behind proxy)
+# BASE_URL=https://your-domain.com  # Only set if auto-detection fails
 
 # Scalable Cache Configuration
 CACHE_BACKEND=memory        # Cache backend: memory, sqlite, redis
@@ -242,10 +259,16 @@ Visit `http://localhost:7000/test-source-selection` for a comprehensive test int
 
 ### Common Issues
 
+**TLS/HTTPS Issues (Cloudflare, nginx, etc.)**
+- Visit `/debug/url` to see what the app detected
+- Ensure Cloudflare SSL mode is "Full" or "Full (strict)" (NOT "Flexible")
+- Set `BASE_URL=https://your-domain.com` if auto-detection fails
+- See [QUICK_START_CLOUDFLARE.md](./QUICK_START_CLOUDFLARE.md) for 2-minute fix
+
 **Connection Problems**
-- Ensure ports 7000 and 7001 are not blocked by firewall
-- Check if another service is using these ports
-- Verify Stremio can access `http://127.0.0.1:7001/manifest.json`
+- Ensure port 7000 is not blocked by firewall
+- Check if another service is using the port
+- Verify Stremio can access your manifest URL
 
 **Media Not Appearing**
 - Confirm files are in supported formats
@@ -271,9 +294,11 @@ Visit `http://localhost:7000/test-source-selection` for a comprehensive test int
 
 ### Getting Help
 
-1. Check server logs for error messages
-2. Verify configuration in `src/config/index.js`
-3. Ensure all dependencies are properly installed
+1. Check `/debug/url` endpoint to see detected configuration
+2. Review deployment guides: [DEPLOYMENT.md](./DEPLOYMENT.md)
+3. Check server logs for error messages
+4. Verify proxy headers if using reverse proxy
+5. Ensure all dependencies are properly installed
 
 ## 🛠️ Development
 
@@ -316,6 +341,7 @@ CACHE_PERSISTENT=true
 - `GET /manifest.json` - Stremio addon manifest
 - `GET /health` - Health check
 - `GET /status` - Server status
+- `GET /debug/url` - URL detection info (for troubleshooting proxies/CDN)
 
 #### Streaming Endpoints
 - `GET /stream/{type}/{id}` - Get available sources for content
