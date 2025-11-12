@@ -1029,6 +1029,15 @@ class TorrentService {
         `Cleaned up ${cleanedCount} inactive torrents. Active torrents: ${this.activeTorrents.size}, Client torrents: ${this.client.torrents.length}`,
       );
     }
+
+    // Clean up old log timestamps to prevent memory leaks
+    // Remove entries older than 1 hour
+    const logCleanupThreshold = 60 * 60 * 1000; // 1 hour
+    for (const [key, timestamp] of this.lastLogTimes.entries()) {
+      if (now - timestamp > logCleanupThreshold) {
+        this.lastLogTimes.delete(key);
+      }
+    }
   }
 
   /**
