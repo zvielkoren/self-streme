@@ -1,0 +1,22 @@
+{
+  "providers": {
+    "yts": {
+      "enabled": true,
+      "baseUrl": "https://yts.mx/api/v2",
+      "timeout": 10000
+    },
+    "piratebay": {
+      "enabled": true,
+      "baseUrl": "https://apibay.org",
+      "timeout": 10000
+    },
+    "torrentgalaxy": {
+      "enabled": true,
+      "baseUrl": "https://torrentgalaxy.to",
+      "timeout": 10000
+    }
+  },
+  "fallbackEnabled": true,
+  "maxRetries": 3,
+  "retryDelay": 1000
+}
