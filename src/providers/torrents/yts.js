@@ -55,17 +55,19 @@ class YTSProvider {
 
             for (const movie of data.movies) {
                 for (const torrent of movie.torrents || []) {
-                    const magnetParams = new URLSearchParams({
-                        dn: movie.title_long,
-                        tr: config.torrent.trackers
-                    });
+                    // Build magnet URI with trackers properly
+                    const trackerParams = config.torrent.trackers
+                        .map(tracker => `tr=${encodeURIComponent(tracker)}`)
+                        .join('&');
+                    
+                    const magnet = `magnet:?xt=urn:btih:${torrent.hash}&dn=${encodeURIComponent(movie.title_long)}&${trackerParams}`;
 
                     results.push({
                         name: `${movie.title_long} [${torrent.quality}] [YTS]`,
                         seeders: torrent.seeds || 0,
                         leechers: torrent.peers || 0,
                         size: torrent.size,
-                        magnet: `magnet:?xt=urn:btih:${torrent.hash}&${magnetParams.toString()}`,
+                        magnet: magnet,
                         quality: torrent.quality,
                         provider: 'yts',
                         type: 'movies',

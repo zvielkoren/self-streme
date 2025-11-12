@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import logger from '../../utils/logger.js';
 import proxyService from '../../core/proxyService.js';
+import { config } from '../../config/index.js';
 
 class TorrentGalaxyProvider {
     constructor() {
@@ -116,12 +117,31 @@ class TorrentGalaxyProvider {
 
             if (!name || !magnet || seeders === 0) return null;
 
+            // Extract info hash and enhance magnet URI with our trackers
+            const infoHashMatch = magnet.match(/btih:([a-fA-F0-9]+)/);
+            const infoHash = infoHashMatch ? infoHashMatch[1] : null;
+            
+            let enhancedMagnet = magnet;
+            if (infoHash) {
+                // Check if magnet already has trackers
+                const existingTrackers = (magnet.match(/&tr=[^&]+/g) || []).length;
+                
+                // Add our trackers if there are few or no existing trackers
+                if (existingTrackers < 5) {
+                    const trackerParams = config.torrent.trackers
+                        .map(tracker => `&tr=${encodeURIComponent(tracker)}`)
+                        .join('');
+                    enhancedMagnet = magnet + trackerParams;
+                }
+            }
+
             return {
                 name,
                 seeders,
                 leechers,
                 size,
-                magnet,
+                magnet: enhancedMagnet,
+                infoHash: infoHash,
                 provider: 'torrentgalaxy',
                 type,
                 quality: name.match(/\b(720p|1080p|2160p|4K)\b/i)?.[0] || 'unknown'
