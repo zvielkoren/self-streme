@@ -35,6 +35,9 @@ class TorrentService {
       pieceTimeout: 30000, // 30 second piece timeout
     });
     this.activeTorrents = new Map();
+    
+    // Track last log times for rate-limiting repetitive messages
+    this.lastLogTimes = new Map();
 
     // Log DHT status for debugging
     this.client.on("error", (err) => {
@@ -90,6 +93,24 @@ class TorrentService {
     this.client.on("warning", (warning) =>
       logger.warn("WebTorrent warning:", warning),
     );
+  }
+
+  /**
+   * Check if we should log a message based on rate limiting
+   * @param {string} key - Unique key for this log message (e.g., "noPeers:hash")
+   * @param {number} minInterval - Minimum milliseconds between logs (default: 30000)
+   * @returns {boolean} True if we should log this message
+   */
+  shouldLog(key, minInterval = 30000) {
+    const now = Date.now();
+    const lastTime = this.lastLogTimes.get(key);
+    
+    if (!lastTime || now - lastTime >= minInterval) {
+      this.lastLogTimes.set(key, now);
+      return true;
+    }
+    
+    return false;
   }
 
   async getStream(magnetUri, fileIdx = 0, retryCount = 0) {
@@ -297,9 +318,12 @@ class TorrentService {
             () => {
               const peersFound = torrent.numPeers || 0;
               if (peersFound === 0) {
-                logger.warn(
-                  `No peers found after initial discovery period. Peers: ${peersFound}, continuing to wait...`,
-                );
+                // Rate limit this log to prevent spam when multiple torrents timeout
+                if (this.shouldLog(`noPeersDiscovery:${infoHash}`, 30000)) {
+                  logger.warn(
+                    `No peers found after initial discovery period. Peers: ${peersFound}, continuing to wait...`,
+                  );
+                }
               } else {
                 hasFoundPeers = true;
                 logger.info(
@@ -361,9 +385,12 @@ class TorrentService {
 
         // Track peer disconnections
         torrent.on("noPeers", () => {
-          logger.warn(
-            `No peers available for ${infoHash}, continuing to search...`,
-          );
+          // Rate limit this log to prevent spam - only log once every 30 seconds per hash
+          if (this.shouldLog(`noPeers:${infoHash}`, 30000)) {
+            logger.warn(
+              `No peers available for ${infoHash}, continuing to search...`,
+            );
+          }
         });
 
         // Track connection attempts with more detailed logging
@@ -379,9 +406,12 @@ class TorrentService {
           const dhtReady = this.client.dht?.ready ? "ready" : "not ready";
           const dhtNodes = this.client.dht?.nodes?.toArray?.()?.length || 0;
 
-          logger.info(
-            `Connecting... elapsed: ${elapsed}ms, peers: ${torrent.numPeers}, progress: ${(torrent.progress * 100).toFixed(1)}%, DHT: ${dhtEnabled}/${dhtReady}, DHT nodes: ${dhtNodes}`,
-          );
+          // Rate limit connection logs per hash to prevent spam from multiple retries
+          if (this.shouldLog(`connecting:${infoHash}`, 30000)) {
+            logger.info(
+              `Connecting... elapsed: ${elapsed}ms, peers: ${torrent.numPeers}, progress: ${(torrent.progress * 100).toFixed(1)}%, DHT: ${dhtEnabled}/${dhtReady}, DHT nodes: ${dhtNodes}`,
+            );
+          }
 
           // Log tracker status if available
           if (torrent.discovery?.tracker) {
