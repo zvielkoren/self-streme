@@ -1,5 +1,6 @@
 import axios from 'axios';
 import logger from '../../utils/logger.js';
+import { config } from '../../config/index.js';
 
 class RARBGProvider {
     constructor() {
@@ -60,12 +61,30 @@ class RARBGProvider {
 
             if (response.data?.torrent_results) {
                 for (const torrent of response.data.torrent_results) {
+                    // Enhance magnet URI with our trackers
+                    let magnet = torrent.download;
+                    
+                    // Extract info hash to check if we can enhance the magnet
+                    const infoHashMatch = magnet.match(/btih:([a-fA-F0-9]+)/);
+                    if (infoHashMatch) {
+                        // Check if magnet already has trackers
+                        const existingTrackers = (magnet.match(/&tr=[^&]+/g) || []).length;
+                        
+                        // Add our trackers if there are few existing trackers
+                        if (existingTrackers < 5) {
+                            const trackerParams = config.torrent.trackers
+                                .map(tracker => `&tr=${encodeURIComponent(tracker)}`)
+                                .join('');
+                            magnet = magnet + trackerParams;
+                        }
+                    }
+                    
                     results.push({
                         name: torrent.title,
                         seeders: torrent.seeders,
                         leechers: torrent.leechers,
                         size: `${Math.round(torrent.size / (1024 * 1024))} MB`,
-                        magnet: torrent.download,
+                        magnet: magnet,
                         provider: 'rarbg',
                         type,
                         quality: this.parseQuality(torrent.title),

@@ -1,6 +1,7 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 import logger from "../../utils/logger.js";
+import { config } from "../../config/index.js";
 
 async function search(metadata) {
     const query = `${metadata.title} ${metadata.year}`;
@@ -38,11 +39,30 @@ async function search(metadata) {
                 const magnet = $page("a[href^='magnet:?xt=urn:btih']").attr("href");
 
                 if (magnet) {
+                    // Extract info hash
+                    const infoHashMatch = magnet.match(/btih:([a-fA-F0-9]+)/);
+                    const infoHash = infoHashMatch ? infoHashMatch[1] : null;
+                    
+                    // Enhance magnet URI with our trackers if we have an info hash
+                    let enhancedMagnet = magnet;
+                    if (infoHash) {
+                        // Check if magnet already has trackers
+                        const existingTrackers = (magnet.match(/&tr=[^&]+/g) || []).length;
+                        
+                        // Add our trackers if there are few or no existing trackers
+                        if (existingTrackers < 5) {
+                            const trackerParams = config.torrent.trackers
+                                .map(tracker => `&tr=${encodeURIComponent(tracker)}`)
+                                .join('');
+                            enhancedMagnet = magnet + trackerParams;
+                        }
+                    }
+                    
                     streams.push({
                         name: "1337x",
                         title: `${r.name} [1337x]`,
-                        infoHash: magnet.match(/btih:([a-fA-F0-9]+)/)?.[1],
-                        sources: [magnet],
+                        infoHash: infoHash,
+                        sources: [enhancedMagnet],
                         seeders: r.seeders,
                         source: "1337x"
                     });
