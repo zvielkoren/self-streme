@@ -1,5 +1,10 @@
 version: "3.8"
 
+# Alternative Docker Compose configuration with port mappings
+# Use this if you can't use network_mode: host (e.g., on macOS/Windows Docker Desktop)
+#
+# Usage: docker-compose -f docker-compose.ports.yml up
+
 services:
   self-streme:
     build:
@@ -8,44 +13,38 @@ services:
     container_name: self-streme
     restart: unless-stopped
 
-    # Network mode for P2P connectivity
-    # Use 'host' for better peer discovery (recommended for torrents)
-    # Comment out and use 'ports' instead if you need network isolation
-    network_mode: "host"
-
-    # Port mapping (only works when network_mode is commented out)
-    # ports:
-    #   - "3000:3000"
+    # Port mappings for P2P connectivity
+    # BitTorrent/DHT requires UDP ports for peer discovery
+    ports:
+      - "7000:7000/tcp"      # Application HTTP server
+      - "6881:6881/tcp"      # BitTorrent TCP
+      - "6881:6881/udp"      # BitTorrent UDP
+      - "6882-6889:6882-6889/udp"  # Additional DHT/tracker ports
+      # Add more UDP ports if needed: "6890-6900:6890-6900/udp"
 
     # Environment variables
     environment:
       # Application settings
-      # NOTE: When using network_mode: host, the app binds to the host's ports directly
-      # Make sure PORT 7000 (or your configured port) is available on the host
       - NODE_ENV=production
-      - PORT=7000 # Changed from 3000 to match your app's default
+      - PORT=7000
 
       # Cloudflare Tunnel Token (optional)
-      # Get your token from: https://one.dash.cloudflare.com/
-      # If set, the app will automatically connect to Cloudflare Tunnel
-      # If not set, the app runs normally without tunnel
       - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
 
-      # Add your other environment variables here
-      # - DATABASE_URL=
-      # - API_KEY=
-      # - LOG_LEVEL=info
+      # Torrent configuration - optimize for limited ports
+      - TORRENT_TIMEOUT=180000        # 3 minutes timeout
+      - TORRENT_MAX_RETRIES=5         # More retries
+      - LOG_LEVEL=info
 
     # Alternative: Load environment variables from .env file
-    # env_file:
-    #   - .env
+    env_file:
+      - .env
 
     # Volumes for persistent data
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
-      # Uncomment to mount temp directory for caching
-      # - ./temp:/tmp/self-streme
+      - ./temp:/app/temp      # Mount temp for torrent downloads
 
     # Resource limits (optional)
     deploy:
@@ -64,7 +63,7 @@ services:
         max-size: "10m"
         max-file: "3"
 
-    # Health check (override default if needed)
+    # Health check
     healthcheck:
       test:
         [
@@ -78,12 +77,22 @@ services:
       retries: 3
       start_period: 40s
 
+    # Sysctls for better networking (Linux only)
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.conf.all.forwarding=1
+
 # Optional: Create named volumes for better management
 volumes:
   app_data:
   app_logs:
+  app_temp:
 
-# Optional: Custom network
+# Optional: Custom network with specific configuration
 networks:
   default:
     name: self-streme-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

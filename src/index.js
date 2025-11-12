@@ -166,6 +166,49 @@ app.get("/debug/url", (req, res) => {
   });
 });
 
+// Debug endpoint - shows torrent/DHT status
+app.get("/debug/torrent-status", (req, res) => {
+  try {
+    const client = torrentService.client;
+
+    res.json({
+      status: "ok",
+      dht: {
+        enabled: !!client.dht,
+        ready: client.dht?.ready || false,
+        nodes: client.dht?.nodes?.toArray?.()?.length || 0,
+      },
+      torrents: {
+        active: client.torrents.length,
+        details: client.torrents.map((t) => ({
+          infoHash: t.infoHash,
+          name: t.name || "Unknown",
+          peers: t.numPeers || 0,
+          progress: Math.round((t.progress || 0) * 100 * 10) / 10,
+          downloadSpeed: Math.round((t.downloadSpeed || 0) / 1024),
+          uploadSpeed: Math.round((t.uploadSpeed || 0) / 1024),
+          downloaded: Math.round((t.downloaded || 0) / 1024 / 1024),
+          uploaded: Math.round((t.uploaded || 0) / 1024 / 1024),
+          timeRemaining: t.timeRemaining || 0,
+        })),
+      },
+      config: {
+        maxConnections: config.torrent.maxConnections,
+        timeout: config.torrent.timeout,
+        maxRetries: config.torrent.maxRetries,
+        trackerCount: config.torrent.trackers.length,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Error getting torrent status:", error);
+    res.status(500).json({
+      error: "Failed to get torrent status",
+      message: error.message,
+    });
+  }
+});
+
 // Explicit manifest endpoint
 app.get("/manifest.json", (req, res) => {
   // Get proxy-aware URL information
