@@ -59,13 +59,34 @@ app.use((err, req, res, next) => {
 // Trust proxy headers from any reverse proxy (Cloudflare, nginx, Apache, etc.)
 app.set("trust proxy", true);
 
-// CORS configuration for Render
+// Enhanced CORS configuration for streaming from all devices
+// This allows the app to work from localhost, LAN devices, and remote connections
+// SECURITY NOTE: origin: "*" is intentional for this self-hosted streaming server.
+// Stremio addons must be accessible from various devices and networks.
+// This is designed for personal/private use, not as a public API.
+// For production environments, consider restricting to specific origins if needed.
 app.use(
   cors({
-    origin: "*",
-    methods: ["GET", "HEAD", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Accept", "Origin"],
+    origin: "*", // Allow all origins (required for Stremio and cross-device access)
+    methods: ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Accept",
+      "Origin",
+      "Range", // Critical for video streaming (seek/skip functionality)
+      "Accept-Ranges",
+      "Content-Range",
+      "Authorization",
+      "X-Requested-With",
+    ],
+    exposedHeaders: [
+      "Content-Length",
+      "Content-Range",
+      "Accept-Ranges", // Expose range headers for video streaming
+      "Content-Type",
+    ],
     credentials: true,
+    maxAge: 86400, // Cache preflight requests for 24 hours
   }),
 );
 
@@ -782,6 +803,7 @@ async function startServer() {
 
       logger.info(`🚀 Server running on port ${port}`);
       logger.info(`📍 Environment: ${process.env.NODE_ENV || "development"}`);
+      logger.info(`🌐 Listening on: ${host} (all network interfaces)`);
       logger.info(
         `🔧 Trust Proxy: enabled (supports Cloudflare, nginx, Apache, Plesk, etc.)`,
       );
@@ -796,16 +818,20 @@ async function startServer() {
         );
       } else {
         logger.info(`🌐 Base URL: Auto-detect mode (will use proxy headers)`);
-        logger.info(`   - Local: http://${host}:${port}`);
+        logger.info(`   - Localhost: http://localhost:${port}`);
+        logger.info(`   - LAN/Network: http://<YOUR_IP>:${port}`);
         if (process.env.RENDER_EXTERNAL_URL) {
           logger.info(`   - Render: ${process.env.RENDER_EXTERNAL_URL}`);
         }
         logger.info(`📺 Stremio URL will be generated from first request`);
       }
 
-      logger.info(`🔍 Debug URL detection: http://${host}:${port}/debug/url`);
-      logger.info(`💚 Health check: http://${host}:${port}/health`);
+      logger.info(`🔍 Debug URL detection: http://localhost:${port}/debug/url`);
+      logger.info(`💚 Health check: http://localhost:${port}/health`);
       logger.info(``);
+      logger.info(`ℹ️  Access from devices on the same network:`);
+      logger.info(`   1. Find your server's IP address (use 'hostname -I' or 'ipconfig')`);
+      logger.info(`   2. Use: http://<YOUR_IP>:${port}/manifest.json`);
       logger.info(`ℹ️  URLs are automatically detected from request headers`);
       logger.info(
         `ℹ️  Works with: Cloudflare, nginx, Apache, Plesk, Render, Heroku, Railway`,
