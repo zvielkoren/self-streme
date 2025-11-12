@@ -61,6 +61,10 @@ app.set("trust proxy", true);
 
 // Enhanced CORS configuration for streaming from all devices
 // This allows the app to work from localhost, LAN devices, and remote connections
+// SECURITY NOTE: origin: "*" is intentional for this self-hosted streaming server.
+// Stremio addons must be accessible from various devices and networks.
+// This is designed for personal/private use, not as a public API.
+// For production environments, consider restricting to specific origins if needed.
 app.use(
   cors({
     origin: "*", // Allow all origins (required for Stremio and cross-device access)
