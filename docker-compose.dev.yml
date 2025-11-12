@@ -1,0 +1,146 @@
+version: "3.8"
+
+# Development Docker Compose Configuration
+# This setup includes hot-reloading and development tools
+# Usage: docker-compose -f docker-compose.dev.yml up
+
+services:
+  self-streme-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: self-streme-dev
+    restart: unless-stopped
+
+    # Port mapping for local access
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+      - "${ADDON_PORT:-7001}:${ADDON_PORT:-7001}"
+
+    # Environment variables for development
+    environment:
+      - NODE_ENV=development
+      - PORT=${PORT:-3000}
+      - ADDON_PORT=${ADDON_PORT:-7001}
+
+      # Cloudflare Tunnel (optional)
+      # Uncomment and set token to test tunnel in development
+      # - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+
+      # Base URL
+      - BASE_URL=${BASE_URL:-http://localhost:3000}
+
+      # Cache settings (lighter for dev)
+      - CACHE_BACKEND=${CACHE_BACKEND:-memory}
+      - CACHE_TTL=${CACHE_TTL:-1800}
+      - CACHE_MAX_SIZE=${CACHE_MAX_SIZE:-100}
+      - CACHE_MAX_DISK_MB=${CACHE_MAX_DISK_MB:-1000}
+
+      # Jackett (optional)
+      - JACKETT_URL=${JACKETT_URL:-}
+      - JACKETT_API_KEY=${JACKETT_API_KEY:-}
+
+      # External APIs
+      - OMDB_API_KEY=${OMDB_API_KEY:-}
+
+      # Logging (verbose for development)
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+
+    # Load from .env file
+    env_file:
+      - .env
+
+    # Volume mounts for hot-reloading
+    volumes:
+      # Mount source code for live updates
+      - ./src:/app/src:ro
+      - ./package.json:/app/package.json:ro
+
+      # Mount data directories
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./temp:/tmp/self-streme
+
+      # Exclude node_modules (use container's version)
+      - /app/node_modules
+
+    # Use nodemon for auto-restart on file changes
+    command: ["npx", "nodemon", "--watch", "src", "src/index.js"]
+
+    # Development-friendly resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+
+    # Health check (more frequent in dev)
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:' + (process.env.PORT || 3000) + '/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+
+    # Network
+    networks:
+      - dev-network
+
+  # Optional: Jackett service for development
+  # Uncomment to run Jackett alongside your app
+  # jackett:
+  #   image: linuxserver/jackett:latest
+  #   container_name: jackett-dev
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9117:9117"
+  #   environment:
+  #     - PUID=1000
+  #     - PGID=1000
+  #     - TZ=UTC
+  #   volumes:
+  #     - ./jackett-config:/config
+  #     - ./jackett-downloads:/downloads
+  #   networks:
+  #     - dev-network
+
+  # Optional: Redis for cache backend testing
+  # Uncomment to test Redis cache backend
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: redis-dev
+  #   restart: unless-stopped
+  #   ports:
+  #     - "6379:6379"
+  #   command: redis-server --appendonly yes
+  #   volumes:
+  #     - redis-data:/data
+  #   networks:
+  #     - dev-network
+
+# Networks
+networks:
+  dev-network:
+    name: self-streme-dev-network
+    driver: bridge
+
+# Volumes
+volumes:
+  redis-data:
+    name: self-streme-redis-dev

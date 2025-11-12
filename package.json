@@ -6,7 +6,18 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "dev:docker": "docker-compose -f docker-compose.dev.yml up",
+    "docker:build": "docker build -t self-streme .",
+    "docker:run": "docker-compose up -d",
+    "docker:stop": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:restart": "docker-compose restart",
+    "docker:clean": "docker-compose down -v && docker system prune -f",
+    "docker:shell": "docker-compose exec self-streme sh",
+    "docker:health": "docker inspect --format='{{.State.Health.Status}}' self-streme",
+    "test:tunnel": "./scripts/test-tunnel.sh",
+    "test:health": "curl http://localhost:3000/health"
   },
   "dependencies": {
     "axios": "^1.11.0",

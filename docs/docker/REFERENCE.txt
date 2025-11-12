@@ -1,0 +1,339 @@
+================================================================================
+  SELF-STREME - DOCKER & CLOUDFLARE TUNNEL DEPLOYMENT
+================================================================================
+
+QUICK START
+-----------
+
+1. Configure:
+   cp .env.docker.example .env
+   nano .env   # Add your settings
+
+2. Deploy:
+   docker-compose up -d
+
+3. Access:
+   - Without tunnel: http://localhost:3000
+   - With tunnel: https://your-domain.com
+
+
+CLOUDFLARE TUNNEL SETUP
+-----------------------
+
+1. Get token from: https://one.dash.cloudflare.com/
+   Navigate to: Networks → Tunnels → Create a tunnel
+
+2. Add to .env file:
+   TUNNEL_TOKEN=eyJhIjoiXXXXXXXX...
+
+3. Configure public hostname in Cloudflare:
+   - Subdomain: stream
+   - Domain: yourdomain.com
+   - Service Type: HTTP
+   - URL: localhost:3000
+
+4. Restart:
+   docker-compose restart
+
+That's it! Tunnel connects automatically.
+
+
+HOW IT WORKS
+------------
+
+start.js checks for TUNNEL_TOKEN environment variable:
+  ├─ If set → starts cloudflared tunnel + app
+  └─ If not set → starts app only
+
+Both processes output to Docker logs with prefixes:
+  [TUNNEL] - Cloudflare tunnel logs
+  [APP] - Application logs
+
+
+COMMON COMMANDS
+---------------
+
+Start:           docker-compose up -d
+Stop:            docker-compose down
+View logs:       docker-compose logs -f
+Restart:         docker-compose restart
+Shell access:    docker-compose exec self-streme sh
+Health check:    curl http://localhost:3000/health
+Run tests:       ./scripts/test-tunnel.sh
+
+
+CONFIGURATION FILES
+-------------------
+
+Core files:
+  start.js              - Startup manager with tunnel logic
+  Dockerfile            - Container build instructions
+  docker-compose.yml    - Production orchestration
+  .env                  - Your configuration (create from example)
+  .dockerignore         - Build optimization
+
+Documentation:
+  README_DOCKER.md      - Complete Docker guide
+  DOCKER_SETUP.md       - Detailed setup with troubleshooting
+  DEPLOYMENT_GUIDE.md   - Deployment scenarios
+  QUICK_REFERENCE.md    - Command reference
+  EXAMPLES.md           - Real-world examples
+
+
+ENVIRONMENT VARIABLES
+---------------------
+
+Required:
+  NODE_ENV=production
+  PORT=3000
+
+Optional (Cloudflare Tunnel):
+  TUNNEL_TOKEN=your_token_here
+
+Optional (Configuration):
+  BASE_URL=https://your-domain.com
+  LOG_LEVEL=info
+  CACHE_BACKEND=sqlite
+  CACHE_PERSISTENT=true
+
+
+EXAMPLES
+--------
+
+Local development (no Docker):
+  npm install
+  npm run dev
+
+Docker development with hot reload:
+  docker-compose -f docker-compose.dev.yml up
+
+Production without tunnel:
+  docker-compose up -d
+
+Production with Cloudflare Tunnel:
+  # Add TUNNEL_TOKEN to .env first
+  docker-compose up -d
+
+
+TYPICAL DEPLOYMENT (VPS)
+------------------------
+
+1. SSH to server
+2. Install Docker: curl -fsSL https://get.docker.com | sh
+3. Clone repo: git clone <your-repo>
+4. Configure: cp .env.docker.example .env && nano .env
+5. Deploy: docker-compose up -d
+6. Verify: docker-compose logs -f
+
+
+TROUBLESHOOTING
+---------------
+
+Container won't start:
+  → Check logs: docker-compose logs
+  → Verify .env file exists
+  → Check port availability: netstat -tulpn | grep 3000
+
+Tunnel not connecting:
+  → Verify token: docker-compose logs | grep TUNNEL
+  → Check Cloudflare dashboard
+  → Ensure cloudflared installed: docker-compose exec self-streme which cloudflared
+
+Port already in use:
+  → Change PORT in .env
+  → Or: lsof -i :3000 && kill <PID>
+
+High memory usage:
+  → Reduce CACHE_MAX_SIZE in .env
+  → Set memory limits in docker-compose.yml
+
+
+MONITORING
+----------
+
+Real-time logs:     docker-compose logs -f
+Resource usage:     docker stats self-streme
+Container status:   docker ps | grep self-streme
+Health status:      docker inspect --format='{{.State.Health.Status}}' self-streme
+Health endpoint:    curl http://localhost:3000/health
+
+
+UPDATING
+--------
+
+Standard update:
+  git pull
+  docker-compose down
+  docker-compose build --no-cache
+  docker-compose up -d
+
+Quick restart:
+  docker-compose restart
+
+
+SECURITY NOTES
+--------------
+
+✓ Container runs as non-root user (nodejs:1001)
+✓ Never commit .env files with secrets
+✓ Keep TUNNEL_TOKEN private
+✓ Use strong passwords
+✓ Update regularly: docker-compose pull
+✓ Set resource limits
+✓ Monitor logs for suspicious activity
+
+
+FEATURES
+--------
+
+- Automatic tunnel detection and startup
+- Color-coded logging (tunnel vs app)
+- Graceful shutdown handling
+- Built-in health checks
+- Production-ready defaults
+- Security hardened
+- Multi-architecture support (AMD64/ARM64)
+- Zero-downtime updates possible
+
+
+NPM SCRIPTS
+-----------
+
+npm start              - Production start with tunnel support
+npm run dev            - Development mode with nodemon
+npm run docker:build   - Build Docker image
+npm run docker:run     - Start with docker-compose
+npm run docker:stop    - Stop containers
+npm run docker:logs    - View logs
+npm run test:tunnel    - Run tunnel tests
+npm run test:health    - Test health endpoint
+
+
+TESTING
+-------
+
+Run automated test suite:
+  ./scripts/test-tunnel.sh
+
+Tests include:
+  ✓ Docker installation
+  ✓ Required files present
+  ✓ Dockerfile validation
+  ✓ Image build
+  ✓ cloudflared installation
+  ✓ Container startup
+  ✓ Tunnel connection (if token provided)
+
+Clean up after tests:
+  ./scripts/test-tunnel.sh --cleanup
+
+
+DOCUMENTATION
+-------------
+
+For complete information, see:
+
+  README_DOCKER.md       - Overview and getting started
+  DOCKER_SETUP.md        - Complete setup guide
+  DEPLOYMENT_GUIDE.md    - Deployment scenarios
+  QUICK_REFERENCE.md     - Command reference
+  EXAMPLES.md            - Real-world examples
+
+
+ARCHITECTURE
+------------
+
+Docker Container Structure:
+┌─────────────────────────────────────┐
+│    Docker Container                 │
+├─────────────────────────────────────┤
+│  start.js (Process Manager)         │
+│    │                                 │
+│    ├─► cloudflared (optional)       │
+│    │     └─► Cloudflare Edge        │
+│    │                                 │
+│    └─► node src/index.js            │
+│          └─► Express :3000          │
+└─────────────────────────────────────┘
+
+Startup Logic:
+1. Check TUNNEL_TOKEN environment variable
+2. If set: spawn cloudflared → wait for connection
+3. Always: spawn main application
+4. Monitor both processes
+5. Log all output with color-coded prefixes
+6. Handle graceful shutdown
+
+
+CLOUDFLARE TUNNEL BENEFITS
+---------------------------
+
+✓ No port forwarding needed
+✓ No public IP required
+✓ Automatic HTTPS/SSL
+✓ DDoS protection
+✓ Access from anywhere
+✓ Works behind NAT/firewall
+✓ Free for personal use
+✓ Built-in analytics
+
+
+SYSTEM REQUIREMENTS
+-------------------
+
+Minimum:
+  - Docker 20.10+
+  - Docker Compose 2.0+
+  - 512MB RAM
+  - 1 CPU core
+  - 1GB disk space
+
+Recommended:
+  - Docker 24.0+
+  - 2GB RAM
+  - 2 CPU cores
+  - 5GB disk space
+
+
+SUPPORT
+-------
+
+For issues:
+1. Check logs: docker-compose logs -f
+2. Run tests: ./scripts/test-tunnel.sh
+3. Review documentation in docs/ folder
+4. Check Cloudflare dashboard for tunnel status
+
+
+LINKS
+-----
+
+Cloudflare Dashboard:  https://one.dash.cloudflare.com/
+Docker Documentation:  https://docs.docker.com/
+Compose Reference:     https://docs.docker.com/compose/
+
+
+NOTES
+-----
+
+- The app starts normally without TUNNEL_TOKEN (no tunnel)
+- Setting TUNNEL_TOKEN enables automatic tunnel connection
+- Both modes work in same Docker container
+- Logs clearly show which service is logging
+- Graceful shutdown ensures clean process termination
+- Health checks enable automatic container recovery
+- Compatible with all deployment scenarios
+
+
+VERSION
+-------
+
+Docker Setup Version: 1.0
+Node.js: 20 (Alpine)
+cloudflared: Latest stable
+
+
+================================================================================
+Ready to deploy? Start with: docker-compose up -d
+Need help? Check: README_DOCKER.md or DOCKER_SETUP.md
+================================================================================

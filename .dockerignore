@@ -1,0 +1,77 @@
+# Node modules
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Git
+.git
+.gitignore
+.github
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation
+README.md
+docs
+*.md
+
+# Testing
+test
+tests
+*.test.js
+*.spec.js
+coverage
+.nyc_output
+
+# CI/CD
+.gitlab-ci.yml
+.travis.yml
+.circleci
+
+# Docker files (no need to copy into image)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Logs
+logs
+*.log
+combined.log
+error.log
+
+# Temporary files
+temp
+tmp
+*.tmp
+.cache
+
+# Build artifacts
+dist
+build
+.next
+out
+
+# Development files
+.devcontainer
+scripts
+quick-fix.sh
+testServer.js
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# License and render config (optional, uncomment if not needed)
+# LICENSE
+# render.yaml

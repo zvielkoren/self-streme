@@ -12,6 +12,36 @@
 
 ---
 
+## 🚀 Quick Start
+
+### Docker Deployment (Recommended)
+```bash
+# Copy configuration
+cp .env.docker.example .env
+
+# Start with Docker Compose
+docker-compose up -d
+
+# Access at http://localhost:3000
+```
+
+**With Cloudflare Tunnel:**
+```bash
+# Add your tunnel token to .env
+echo "TUNNEL_TOKEN=your_token_here" >> .env
+docker-compose restart
+```
+
+📚 **Complete Docker Documentation:** [docs/DOCKER.md](docs/DOCKER.md)
+
+### Traditional Setup
+```bash
+npm install
+npm start
+```
+
+---
+
 ## 🌟 Overview
 
 Self-Streme is a sophisticated Stremio addon that seamlessly bridges your local media collection with the Stremio ecosystem. Experience your personal content library with the polish and convenience of professional streaming services.

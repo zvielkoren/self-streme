@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  self-streme:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: self-streme
+    restart: unless-stopped
+
+    # Port mapping (optional if using Cloudflare Tunnel)
+    ports:
+      - "3000:3000"
+
+    # Environment variables
+    environment:
+      # Application settings
+      - NODE_ENV=production
+      - PORT=3000
+
+      # Cloudflare Tunnel Token (optional)
+      # Get your token from: https://one.dash.cloudflare.com/
+      # If set, the app will automatically connect to Cloudflare Tunnel
+      # If not set, the app runs normally without tunnel
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
+
+      # Add your other environment variables here
+      # - DATABASE_URL=
+      # - API_KEY=
+      # - LOG_LEVEL=info
+
+    # Alternative: Load environment variables from .env file
+    # env_file:
+    #   - .env
+
+    # Volumes for persistent data
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      # Uncomment to mount temp directory for caching
+      # - ./temp:/tmp/self-streme
+
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 512M
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Health check (override default if needed)
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# Optional: Create named volumes for better management
+volumes:
+  app_data:
+  app_logs:
+
+# Optional: Custom network
+networks:
+  default:
+    name: self-streme-network

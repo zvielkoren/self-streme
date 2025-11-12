@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 import mime from "mime-types";
+import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import { config } from "./config/index.js";
 import logger from "./utils/logger.js";
@@ -22,6 +23,12 @@ import ScalableCacheManager from "./services/scalableCacheManager.js";
 // File paths
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Environment variables for tunnel
+const TUNNEL_TOKEN = process.env.TUNNEL_TOKEN;
+
+// Store child processes for cleanup
+const childProcesses = [];
 
 // Temporary cache for downloaded files
 const TEMP_DIR = path.join(os.tmpdir(), "self-streme");
@@ -342,12 +349,10 @@ app.get("/stream/:type/:imdbId.json", async (req, res) => {
     // Input validation
     if (!type || !["movie", "series"].includes(type)) {
       logger.warn(`Invalid type parameter: ${type}`);
-      return res
-        .status(400)
-        .json({
-          error: 'Invalid type. Must be "movie" or "series"',
-          streams: [],
-        });
+      return res.status(400).json({
+        error: 'Invalid type. Must be "movie" or "series"',
+        streams: [],
+      });
     }
 
     if (!imdbId || !imdbId.match(/^tt\d+/)) {
@@ -426,12 +431,10 @@ app.get("/stream/:type/:imdbId", async (req, res) => {
     // Input validation
     if (!type || !["movie", "series"].includes(type)) {
       logger.warn(`Invalid type parameter: ${type}`);
-      return res
-        .status(400)
-        .json({
-          error: 'Invalid type. Must be "movie" or "series"',
-          streams: [],
-        });
+      return res.status(400).json({
+        error: 'Invalid type. Must be "movie" or "series"',
+        streams: [],
+      });
     }
 
     if (!imdbId || !imdbId.match(/^tt\d+/)) {
@@ -604,10 +607,129 @@ app.get("/play/:type/:imdbId/:fileIdx/:season?/:episode?", async (req, res) => {
 });
 
 // Initialize server
+// Start Cloudflare Tunnel
+function startCloudfareTunnel(token) {
+  return new Promise((resolve, reject) => {
+    logger.info("[TUNNEL] Starting Cloudflare Tunnel...");
+
+    // Check if cloudflared is available
+    const checkCloudflared = spawn("which", ["cloudflared"]);
+
+    checkCloudflared.on("close", (code) => {
+      if (code !== 0) {
+        logger.error("[TUNNEL] cloudflared binary not found in PATH");
+        logger.error(
+          "[TUNNEL] Please ensure cloudflared is installed in the container",
+        );
+        reject(new Error("cloudflared not found"));
+        return;
+      }
+
+      // Start the tunnel
+      const tunnel = spawn(
+        "cloudflared",
+        ["tunnel", "--no-autoupdate", "run", "--token", token],
+        {
+          stdio: ["ignore", "pipe", "pipe"],
+          env: { ...process.env },
+        },
+      );
+
+      childProcesses.push(tunnel);
+
+      let tunnelReady = false;
+
+      // Handle stdout
+      tunnel.stdout.on("data", (data) => {
+        const output = data.toString().trim();
+        output.split("\n").forEach((line) => {
+          if (line) {
+            logger.info(`[TUNNEL] ${line}`);
+
+            // Check if tunnel is ready
+            if (
+              !tunnelReady &&
+              (line.includes("Registered tunnel connection") ||
+                line.includes("Connection registered") ||
+                line.includes("Started") ||
+                line.includes("serving"))
+            ) {
+              tunnelReady = true;
+              logger.info("[TUNNEL] ✓ Cloudflare Tunnel is ready");
+              resolve(tunnel);
+            }
+          }
+        });
+      });
+
+      // Handle stderr
+      tunnel.stderr.on("data", (data) => {
+        const output = data.toString().trim();
+        output.split("\n").forEach((line) => {
+          if (line) {
+            // Some informational messages come through stderr
+            if (line.includes("INFO") || line.includes("config")) {
+              logger.info(`[TUNNEL] ${line}`);
+            } else {
+              logger.error(`[TUNNEL] ${line}`);
+            }
+          }
+        });
+      });
+
+      // Handle tunnel process errors
+      tunnel.on("error", (err) => {
+        logger.error(`[TUNNEL] Failed to start tunnel: ${err.message}`);
+        if (!tunnelReady) {
+          reject(err);
+        }
+      });
+
+      // Handle tunnel exit
+      tunnel.on("close", (code, signal) => {
+        if (code !== 0 && code !== null) {
+          logger.error(`[TUNNEL] Tunnel exited with code ${code}`);
+        } else if (signal) {
+          logger.warn(`[TUNNEL] Tunnel terminated by signal ${signal}`);
+        } else {
+          logger.info("[TUNNEL] Tunnel process ended");
+        }
+      });
+
+      // Resolve after 3 seconds if no explicit ready signal
+      setTimeout(() => {
+        if (!tunnelReady) {
+          logger.warn("[TUNNEL] Ready signal not detected, but proceeding...");
+          tunnelReady = true;
+          resolve(tunnel);
+        }
+      }, 3000);
+    });
+  });
+}
+
+// Start the server
 async function startServer() {
   try {
     const port = process.env.PORT || 7000;
     const host = process.env.HOST || "0.0.0.0";
+
+    // Start Cloudflare Tunnel if token is provided
+    if (TUNNEL_TOKEN) {
+      logger.info("=".repeat(60));
+      logger.info("🌐 Cloudflare Tunnel Mode Enabled");
+      logger.info("=".repeat(60));
+      try {
+        await startCloudfareTunnel(TUNNEL_TOKEN);
+        logger.info("✓ Cloudflare Tunnel started successfully");
+      } catch (err) {
+        logger.error(`✗ Failed to start Cloudflare Tunnel: ${err.message}`);
+        logger.warn("Continuing without tunnel...");
+      }
+      logger.info("=".repeat(60));
+    } else {
+      logger.info("ℹ️  No TUNNEL_TOKEN provided, skipping Cloudflare Tunnel");
+    }
 
     // For now, disable the addon mounting until we fix the interface issue
     // app.use('/', addonApp);
@@ -658,22 +780,44 @@ async function startServer() {
   }
 }
 
-// Clean up on process termination
-process.on("SIGINT", () => {
-  logger.info("Shutting down...");
-  // Stop scalable cache manager
-  cacheManager.stop();
-  // Graceful shutdown
-  process.exit(0);
-});
+// Graceful shutdown handler
+function setupGracefulShutdown() {
+  const shutdown = (signal) => {
+    logger.warn(`Received ${signal}, shutting down gracefully...`);
 
-process.on("SIGTERM", () => {
-  logger.info("Shutting down...");
-  // Stop scalable cache manager
-  cacheManager.stop();
-  // Graceful shutdown
-  process.exit(0);
-});
+    // Kill all child processes (tunnel)
+    childProcesses.forEach((child, index) => {
+      if (child && !child.killed) {
+        logger.info(`Terminating child process ${index + 1}...`);
+        child.kill("SIGTERM");
+
+        // Force kill after 5 seconds
+        setTimeout(() => {
+          if (!child.killed) {
+            logger.warn(`Force killing child process ${index + 1}...`);
+            child.kill("SIGKILL");
+          }
+        }, 5000);
+      }
+    });
+
+    // Stop scalable cache manager
+    cacheManager.stop();
+
+    // Exit after giving processes time to clean up
+    setTimeout(() => {
+      logger.info("Shutdown complete");
+      process.exit(0);
+    }, 6000);
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGHUP", () => shutdown("SIGHUP"));
+}
+
+// Setup graceful shutdown
+setupGracefulShutdown();
 
 // Start servers
 startServer();
