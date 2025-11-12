@@ -268,7 +268,19 @@ class TorrentService {
 
         const startTime = Date.now();
         let peerDiscoveryTimeout = null;
+        let zeroPeerTimeout = null;
         let hasFoundPeers = false;
+
+        const cleanupTimeouts = () => {
+          if (peerDiscoveryTimeout) {
+            clearTimeout(peerDiscoveryTimeout);
+            peerDiscoveryTimeout = null;
+          }
+          if (zeroPeerTimeout) {
+            clearTimeout(zeroPeerTimeout);
+            zeroPeerTimeout = null;
+          }
+        };
 
         const timeout = setTimeout(() => {
           const elapsed = Date.now() - startTime;
@@ -278,9 +290,7 @@ class TorrentService {
             `Torrent timeout for: ${validatedMagnetUri.substring(0, 50)}... (attempt ${retryCount + 1}/${maxRetries + 1}, timeout: ${timeoutDuration}ms, elapsed: ${elapsed}ms, peers: ${peersFound})`,
           );
 
-          if (peerDiscoveryTimeout) {
-            clearTimeout(peerDiscoveryTimeout);
-          }
+          cleanupTimeouts();
 
           if (torrent && typeof torrent.destroy === "function") {
             try {
@@ -335,11 +345,45 @@ class TorrentService {
           ); // Check after 30 seconds or 1/4 of timeout
         }
 
+        // Early detection for zero-peer torrents - fail fast to save resources
+        // If no peers are found after 60 seconds, abort instead of waiting full timeout
+        zeroPeerTimeout = setTimeout(
+          () => {
+            const peersFound = torrent.numPeers || 0;
+            const elapsed = Date.now() - startTime;
+            
+            if (peersFound === 0 && !hasFoundPeers) {
+              logger.error(
+                `No peers found for torrent ${infoHash} after ${elapsed}ms. This torrent may be dead or unpopular. Aborting to save resources.`,
+              );
+              
+              clearTimeout(timeout);
+              cleanupTimeouts();
+              
+              if (torrent && typeof torrent.destroy === "function") {
+                try {
+                  torrent.destroy();
+                } catch (destroyError) {
+                  logger.warn(
+                    `Error destroying zero-peer torrent: ${destroyError.message}`,
+                  );
+                }
+              }
+              
+              // Don't retry if we never found any peers - the torrent is likely dead
+              reject(
+                new Error(
+                  `No peers available for this torrent. The content may not be available in the torrent network. Please try a different source or check if the torrent is still active.`,
+                ),
+              );
+            }
+          },
+          60000, // Check after 60 seconds
+        );
+
         torrent.on("ready", () => {
           clearTimeout(timeout);
-          if (peerDiscoveryTimeout) {
-            clearTimeout(peerDiscoveryTimeout);
-          }
+          cleanupTimeouts();
           logger.info(
             `Torrent ready after ${Date.now() - startTime}ms, peers: ${torrent.numPeers}, seeds: ${torrent.seeders || 0}`,
           );
@@ -348,9 +392,7 @@ class TorrentService {
 
         torrent.on("error", (error) => {
           clearTimeout(timeout);
-          if (peerDiscoveryTimeout) {
-            clearTimeout(peerDiscoveryTimeout);
-          }
+          cleanupTimeouts();
           logger.error(
             `Torrent error for ${validatedMagnetUri.substring(0, 50)}...:`,
             error,
@@ -424,7 +466,11 @@ class TorrentService {
         setTimeout(() => clearInterval(connectionTimer), timeoutDuration);
       } catch (error) {
         // Enhanced retry logic for connection failures
+        // Don't retry if the error indicates no peers are available (dead torrent)
+        const isNoPeersError = error.message && error.message.includes("No peers available");
+        
         if (
+          !isNoPeersError &&
           retryCount < maxRetries &&
           (error.message.includes("timeout") ||
             error.message.includes("connection") ||
@@ -449,6 +495,12 @@ class TorrentService {
                 reject(retryError);
               });
           }, backoffDelay);
+        } else if (isNoPeersError) {
+          // Don't retry zero-peer torrents - they're likely dead
+          logger.error(
+            `Torrent ${infoHash} has no peers available. Not retrying.`,
+          );
+          reject(error);
         } else {
           // If all retries failed, try alternative sources before giving up
           logger.warn(
