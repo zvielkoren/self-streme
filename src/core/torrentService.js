@@ -38,6 +38,13 @@ class TorrentService {
     
     // Track last log times for rate-limiting repetitive messages
     this.lastLogTimes = new Map();
+    
+    // Track failed torrents to prevent immediate retries and reduce resource waste
+    // Map: infoHash -> { timestamp, reason }
+    this.failedTorrents = new Map();
+    
+    // Cooldown period for failed torrents (5 minutes)
+    this.failedTorrentCooldown = 5 * 60 * 1000;
 
     // Log DHT status for debugging
     this.client.on("error", (err) => {
@@ -113,8 +120,73 @@ class TorrentService {
     return false;
   }
 
+  /**
+   * Check if a torrent recently failed and is in cooldown period
+   * @param {string} infoHash - The torrent info hash
+   * @returns {Object|null} Failed torrent info or null if not in cooldown
+   */
+  checkFailedTorrent(infoHash) {
+    const now = Date.now();
+    const failedInfo = this.failedTorrents.get(infoHash);
+    
+    if (!failedInfo) {
+      return null;
+    }
+    
+    const timeSinceFailure = now - failedInfo.timestamp;
+    
+    // If cooldown period has passed, remove from failed list
+    if (timeSinceFailure >= this.failedTorrentCooldown) {
+      this.failedTorrents.delete(infoHash);
+      return null;
+    }
+    
+    // Still in cooldown
+    return {
+      ...failedInfo,
+      remainingCooldown: this.failedTorrentCooldown - timeSinceFailure,
+    };
+  }
+
+  /**
+   * Mark a torrent as failed to prevent immediate retries
+   * @param {string} infoHash - The torrent info hash
+   * @param {string} reason - Reason for failure
+   */
+  markTorrentAsFailed(infoHash, reason) {
+    this.failedTorrents.set(infoHash, {
+      timestamp: Date.now(),
+      reason: reason,
+    });
+    
+    logger.debug(
+      `Marked torrent ${infoHash} as failed: ${reason}. Will cooldown for ${this.failedTorrentCooldown / 1000}s`,
+    );
+  }
+
   async getStream(magnetUri, fileIdx = 0, retryCount = 0) {
     const maxRetries = config.torrent.maxRetries; // Use configurable max retries
+
+    // Extract info hash early for failed torrent check
+    const infoHashMatch = magnetUri.match(/xt=urn:btih:([^&]+)/i);
+    if (!infoHashMatch) {
+      return Promise.reject(new Error("Invalid magnet URI: no info hash found"));
+    }
+    const infoHash = infoHashMatch[1];
+
+    // Check if this torrent recently failed - prevent wasting resources on dead torrents
+    const failedInfo = this.checkFailedTorrent(infoHash);
+    if (failedInfo) {
+      const cooldownSeconds = Math.ceil(failedInfo.remainingCooldown / 1000);
+      logger.info(
+        `Torrent ${infoHash} recently failed (${failedInfo.reason}). Cooldown: ${cooldownSeconds}s remaining.`,
+      );
+      return Promise.reject(
+        new Error(
+          `This torrent recently failed to find peers and is in cooldown. Please try again in ${cooldownSeconds} seconds or try a different source.`,
+        ),
+      );
+    }
 
     // Check if we have too many active torrents and cleanup first
     if (this.client.torrents.length >= config.torrent.maxConnections) {
@@ -291,6 +363,14 @@ class TorrentService {
           );
 
           cleanupTimeouts();
+          
+          // Mark as failed if this is the last retry to prevent immediate re-attempts
+          if (retryCount >= maxRetries) {
+            this.markTorrentAsFailed(
+              infoHash,
+              `timeout after ${maxRetries + 1} attempts`,
+            );
+          }
 
           if (torrent && typeof torrent.destroy === "function") {
             try {
@@ -356,6 +436,9 @@ class TorrentService {
               logger.error(
                 `No peers found for torrent ${infoHash} after ${elapsed}ms. This torrent may be dead or unpopular. Aborting to save resources.`,
               );
+              
+              // Mark this torrent as failed to prevent immediate retries
+              this.markTorrentAsFailed(infoHash, "no peers found");
               
               clearTimeout(timeout);
               cleanupTimeouts();
@@ -1089,6 +1172,22 @@ class TorrentService {
       if (now - timestamp > logCleanupThreshold) {
         this.lastLogTimes.delete(key);
       }
+    }
+    
+    // Clean up failed torrents that have passed their cooldown period
+    // This happens automatically in checkFailedTorrent, but we do a full sweep here
+    let failedTorrentsCleanedCount = 0;
+    for (const [hash, failedInfo] of this.failedTorrents.entries()) {
+      if (now - failedInfo.timestamp >= this.failedTorrentCooldown) {
+        this.failedTorrents.delete(hash);
+        failedTorrentsCleanedCount++;
+      }
+    }
+    
+    if (failedTorrentsCleanedCount > 0) {
+      logger.debug(
+        `Cleaned up ${failedTorrentsCleanedCount} failed torrent entries from cooldown cache`,
+      );
     }
   }
 

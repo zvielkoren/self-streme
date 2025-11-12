@@ -399,7 +399,22 @@ app.get("/stream/proxy/:infoHash", async (req, res) => {
   } catch (error) {
     logger.error("Proxy stream error:", error);
     if (!res.headersSent) {
-      res.status(500).json({ error: "Internal server error" });
+      // Provide more specific error messages based on the error type
+      if (error.message && error.message.includes("cooldown")) {
+        return res.status(503).json({ 
+          error: "Torrent temporarily unavailable", 
+          message: error.message,
+          type: "cooldown"
+        });
+      } else if (error.message && error.message.includes("No peers")) {
+        return res.status(404).json({ 
+          error: "No peers found for this torrent", 
+          message: "This content may not be available in the torrent network. Please try a different source.",
+          type: "no_peers"
+        });
+      } else {
+        return res.status(500).json({ error: "Internal server error" });
+      }
     }
   }
 });
