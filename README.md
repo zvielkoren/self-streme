@@ -291,10 +291,17 @@ Visit `http://localhost:7000/test-source-selection` for a comprehensive test int
 
 **P2P/Torrent Issues (No Peers Found, DHT Not Connecting)** 🔥 NEW
 - See [P2P-QUICK-FIX.md](./P2P-QUICK-FIX.md) for instant solutions
-- Run diagnostics: `./scripts/diagnose-p2p.sh`
+- Run diagnostics: `./scripts/diagnose-p2p.sh` or `./scripts/diagnose-torrent.sh`
 - Check DHT status: `curl http://localhost:7000/debug/torrent-status`
 - Full guide: [TROUBLESHOOTING_P2P.md](./docs/TROUBLESHOOTING_P2P.md)
 - Apply fixes: `./scripts/apply-p2p-fixes.sh`
+
+**Torrent Timeout with Zero Peers (Dead Torrents)** ✨ FIXED
+- **What it is**: Torrents that have no seeders/peers in the network
+- **New behavior**: Fails fast after 60 seconds instead of 8+ minutes
+- **Error message**: Clear explanation that the torrent may be dead or unpopular
+- **Action**: Try a different source or verify the torrent is still active
+- **Details**: See [TORRENT_FIX_VERIFICATION.md](./TORRENT_FIX_VERIFICATION.md)
 
 **Most Common P2P Fix:**
 ```bash
@@ -339,13 +346,14 @@ docker compose restart
 
 ### Getting Help
 
-1. **P2P Issues:** Run `./scripts/diagnose-p2p.sh` and see [P2P-QUICK-FIX.md](./P2P-QUICK-FIX.md)
-2. Check `/debug/url` endpoint to see detected configuration
-3. Check `/debug/torrent-status` for DHT and peer status
-4. Review deployment guides: [DEPLOYMENT.md](./docs/DEPLOYMENT.md)
-5. Check server logs for error messages
-6. Verify proxy headers if using reverse proxy
-7. Ensure all dependencies are properly installed
+1. **P2P Issues:** Run `./scripts/diagnose-p2p.sh` or `./scripts/diagnose-torrent.sh` and see [P2P-QUICK-FIX.md](./P2P-QUICK-FIX.md)
+2. **Zero-Peer Torrents:** See [TORRENT_FIX_VERIFICATION.md](./TORRENT_FIX_VERIFICATION.md) for details on fast-fail behavior
+3. Check `/debug/url` endpoint to see detected configuration
+4. Check `/debug/torrent-status` for DHT and peer status
+5. Review deployment guides: [DEPLOYMENT.md](./docs/DEPLOYMENT.md)
+6. Check server logs for error messages
+7. Verify proxy headers if using reverse proxy
+8. Ensure all dependencies are properly installed
 
 ## 🛠️ Development
 
