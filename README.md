@@ -289,7 +289,15 @@ Visit `http://localhost:7000/test-source-selection` for a comprehensive test int
 
 ### Common Issues
 
-**P2P/Torrent Issues (No Peers Found, DHT Not Connecting)** 🔥 NEW
+**Streaming Issues (Can't Stream from Devices/Localhost)** 🆕 NEW
+- See [STREAMING-TROUBLESHOOTING.md](./STREAMING-TROUBLESHOOTING.md) for complete streaming fixes
+- Check server is listening: `curl http://localhost:7000/health`
+- Test URL detection: `curl http://localhost:7000/debug/url`
+- For LAN access: Use `http://YOUR_IP:7000` (find IP with `hostname -I`)
+- Firewall: `sudo ufw allow 7000/tcp`
+- Quick fix: Set `BASE_URL=http://YOUR_IP:7000` in `.env`
+
+**P2P/Torrent Issues (No Peers Found, DHT Not Connecting)** 🔥
 - See [P2P-QUICK-FIX.md](./P2P-QUICK-FIX.md) for instant solutions
 - Run diagnostics: `./scripts/diagnose-p2p.sh` or `./scripts/diagnose-torrent.sh`
 - Check DHT status: `curl http://localhost:7000/debug/torrent-status`
@@ -319,8 +327,9 @@ docker compose restart
 
 **Connection Problems**
 - Ensure port 7000 is not blocked by firewall
-- Check if another service is using the port
+- Check if another service is using the port: `lsof -i :7000`
 - Verify Stremio can access your manifest URL
+- For LAN devices: Find server IP with `hostname -I` and use `http://YOUR_IP:7000`
 
 **Media Not Appearing**
 - Confirm files are in supported formats
@@ -346,8 +355,9 @@ docker compose restart
 
 ### Getting Help
 
-1. **P2P Issues:** Run `./scripts/diagnose-p2p.sh` or `./scripts/diagnose-torrent.sh` and see [P2P-QUICK-FIX.md](./P2P-QUICK-FIX.md)
-2. **Zero-Peer Torrents:** See [TORRENT_FIX_VERIFICATION.md](./TORRENT_FIX_VERIFICATION.md) for details on fast-fail behavior
+1. **Streaming Issues:** See [STREAMING-TROUBLESHOOTING.md](./STREAMING-TROUBLESHOOTING.md) for detailed device and network fixes
+2. **P2P Issues:** Run `./scripts/diagnose-p2p.sh` or `./scripts/diagnose-torrent.sh` and see [P2P-QUICK-FIX.md](./P2P-QUICK-FIX.md)
+3. **Zero-Peer Torrents:** See [TORRENT_FIX_VERIFICATION.md](./TORRENT_FIX_VERIFICATION.md) for details on fast-fail behavior
 3. Check `/debug/url` endpoint to see detected configuration
 4. Check `/debug/torrent-status` for DHT and peer status
 5. Review deployment guides: [DEPLOYMENT.md](./docs/DEPLOYMENT.md)

@@ -121,18 +121,21 @@ export function getBaseUrlFromRequest(req) {
   // Auto-detect host/domain
   const host = getActualHost(req);
 
-  // Handle localhost/internal IPs in production
+  // Detect different host types
   const isProduction = process.env.NODE_ENV === "production";
-  const isLocalHost =
+  const isLoopback = 
     host.includes("localhost") ||
     host.includes("127.0.0.1") ||
-    host.includes("0.0.0.0") ||
+    host.includes("0.0.0.0");
+  
+  const isPrivateIP =
     host.startsWith("10.") ||
     host.startsWith("172.") ||
     host.startsWith("192.168.");
 
-  if (isProduction && isLocalHost) {
-    // In production, if we somehow got a local host,
+  // In production with loopback addresses (not LAN), check for platform URLs
+  if (isProduction && isLoopback) {
+    // In production, if we got a loopback address,
     // check for Render/Heroku/Railway platform URLs
     if (process.env.RENDER_EXTERNAL_URL) {
       return {
@@ -159,12 +162,14 @@ export function getBaseUrlFromRequest(req) {
       };
     }
 
-    // Last resort fallback for production
+    // Last resort fallback for production with loopback
     console.warn(
-      "Production mode but detected local host. Please set BASE_URL environment variable.",
+      "Production mode but detected loopback address. Please set BASE_URL environment variable.",
     );
   }
 
+  // Allow private/LAN IPs in production (for local network streaming)
+  // This enables streaming to devices on the same network
   const baseUrl = `${protocol}://${host}`;
 
   return {
