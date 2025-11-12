@@ -363,6 +363,14 @@ class TorrentService {
           );
 
           cleanupTimeouts();
+          
+          // Mark as failed if this is the last retry to prevent immediate re-attempts
+          if (retryCount >= maxRetries) {
+            this.markTorrentAsFailed(
+              infoHash,
+              `timeout after ${maxRetries + 1} attempts`,
+            );
+          }
 
           if (torrent && typeof torrent.destroy === "function") {
             try {
@@ -1164,6 +1172,22 @@ class TorrentService {
       if (now - timestamp > logCleanupThreshold) {
         this.lastLogTimes.delete(key);
       }
+    }
+    
+    // Clean up failed torrents that have passed their cooldown period
+    // This happens automatically in checkFailedTorrent, but we do a full sweep here
+    let failedTorrentsCleanedCount = 0;
+    for (const [hash, failedInfo] of this.failedTorrents.entries()) {
+      if (now - failedInfo.timestamp >= this.failedTorrentCooldown) {
+        this.failedTorrents.delete(hash);
+        failedTorrentsCleanedCount++;
+      }
+    }
+    
+    if (failedTorrentsCleanedCount > 0) {
+      logger.debug(
+        `Cleaned up ${failedTorrentsCleanedCount} failed torrent entries from cooldown cache`,
+      );
     }
   }
 
