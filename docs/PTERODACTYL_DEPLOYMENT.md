@@ -31,6 +31,8 @@ This guide will help you deploy Self-Streme on a Pterodactyl panel server.
    - Click **Start** on your server console
    - Wait for the message: "Server running on port 7000"
    - Your addon will be available at: `http://YOUR_IP:PORT/manifest.json`
+   
+**Note:** The setup script will ask if you want to install Cloudflare Tunnel support during configuration. This provides automatic HTTPS and eliminates the need for port forwarding!
 
 ### Method 2: Manual Installation with Generic Node.js Egg
 
@@ -81,6 +83,7 @@ Configure these in the Pterodactyl **Startup** tab:
 | `SERVER_PORT` | Port to listen on | `7000` | Yes |
 | `BASE_URL` | Public URL for the server | Auto-detect | No |
 | `AUTO_UPDATE` | Auto-pull latest code on start | `0` | No |
+| `TUNNEL_TOKEN` | Cloudflare Tunnel token for HTTPS | - | No |
 | `CACHE_BACKEND` | Cache type (memory/sqlite/redis) | `memory` | No |
 | `CACHE_MAX_SIZE` | Max cached files | `1000` | No |
 | `CACHE_MAX_DISK_MB` | Max cache disk usage (MB) | `5000` | No |
@@ -312,9 +315,28 @@ server {
 Then set: `BASE_URL=http://your-domain.com`
 
 ### Cloudflare Tunnel
-1. Install cloudflared on the host machine
-2. Create a tunnel pointing to `localhost:7000`
-3. Set `BASE_URL` to your Cloudflare URL
+
+The setup script (`pterodactyl-setup.sh`) now includes built-in Cloudflare Tunnel support!
+
+**Automatic Installation:**
+When you run the setup script, it will ask if you want to install Cloudflare Tunnel support.
+If you choose yes, it will:
+1. Download and install cloudflared for your architecture
+2. Prompt you for your tunnel token
+3. Configure the .env file automatically
+
+**Manual Installation:**
+1. Get your tunnel token from: https://one.dash.cloudflare.com/
+2. Add to `.env` file: `TUNNEL_TOKEN=your_token_here`
+3. Restart your server
+
+**Benefits:**
+- Automatic HTTPS/SSL
+- No port forwarding needed  
+- DDoS protection
+- Access from anywhere
+
+For more details, see [docs/QUICK_START_CLOUDFLARE.md](QUICK_START_CLOUDFLARE.md)
 
 ## 📞 Support
 
@@ -347,6 +369,7 @@ BASE_URL=${BASE_URL}
 CACHE_BACKEND=${CACHE_BACKEND:-memory}
 CACHE_MAX_SIZE=${CACHE_MAX_SIZE:-1000}
 CACHE_MAX_DISK_MB=${CACHE_MAX_DISK_MB:-5000}
+TUNNEL_TOKEN=${TUNNEL_TOKEN}
 JACKETT_URL=${JACKETT_URL}
 JACKETT_API_KEY=${JACKETT_API_KEY}
 EOF
