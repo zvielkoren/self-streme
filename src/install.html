@@ -3,62 +3,554 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Self-Streme Addon</title>
+<title>Self-Streme - Your Personal Streaming Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
 <style>
-body {
+* {
     margin: 0;
     padding: 0;
-    font-family: 'Roboto', sans-serif;
-    background: linear-gradient(135deg, #1d1f2c, #3b3e5c);
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
     color: #fff;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    overflow-x: hidden;
     min-height: 100vh;
+}
+
+/* Animated background particles */
+.background {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    z-index: 0;
+    overflow: hidden;
+}
+
+.particle {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 50%;
+    animation: float 20s infinite;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0) translateX(0); opacity: 0; }
+    10% { opacity: 0.3; }
+    90% { opacity: 0.3; }
+    100% { transform: translateY(-100vh) translateX(50px); opacity: 0; }
+}
+
+/* Container */
+.container {
+    position: relative;
+    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+/* Header */
+.header {
     text-align: center;
+    padding: 3rem 0;
+    animation: fadeInDown 1s ease-out;
 }
+
 .logo {
-    width: 150px;
-    margin-bottom: 1rem;
-    animation: rotateBounce 5s infinite;
+    width: 120px;
+    height: 120px;
+    margin-bottom: 1.5rem;
+    filter: drop-shadow(0 10px 20px rgba(120, 115, 245, 0.4));
+    animation: pulse 3s infinite;
 }
-@keyframes rotateBounce {
-    0% { transform: rotate(0deg) scale(1); }
-    25% { transform: rotate(90deg) scale(1.05); }
-    50% { transform: rotate(180deg) scale(1); }
-    75% { transform: rotate(270deg) scale(1.05); }
-    100% { transform: rotate(360deg) scale(1); }
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
 }
-h1 { font-size: 2.5rem; margin-bottom: 1rem; }
-.status { font-size: 1.2rem; margin-bottom: 2rem; color: #c0c0ff; }
-.btn {
-    padding: 1rem 2.5rem;
+
+h1 {
+    font-size: 3.5rem;
+    font-weight: 900;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.2;
+}
+
+.tagline {
     font-size: 1.3rem;
-    font-weight: bold;
+    color: #b8b8d4;
+    font-weight: 300;
+    margin-bottom: 1rem;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 0.5rem 1.5rem;
+    border-radius: 50px;
+    font-size: 0.9rem;
+    color: #10b981;
+    margin-top: 1rem;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+    animation: blink 2s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+/* Main Actions */
+.main-actions {
+    text-align: center;
+    margin: 3rem 0;
+    animation: fadeIn 1s ease-out 0.3s both;
+}
+
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.25rem 3rem;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+    text-decoration: none;
+}
+
+.btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 40px rgba(102, 126, 234, 0.6);
+}
+
+.btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.95rem;
+    color: #b8b8d4;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    margin: 0.5rem;
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Manual Installation */
+.manual-install {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 2rem;
+    margin: 2rem 0;
+    animation: fadeIn 1s ease-out 0.6s both;
+}
+
+.manual-install h3 {
+    font-size: 1.1rem;
+    color: #b8b8d4;
+    margin-bottom: 1rem;
+    font-weight: 600;
+}
+
+.url-box {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.url-text {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    color: #a0a0c0;
+    word-break: break-all;
+}
+
+.copy-btn {
+    padding: 0.5rem 1rem;
+    background: rgba(102, 126, 234, 0.2);
+    border: 1px solid rgba(102, 126, 234, 0.4);
+    color: #667eea;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.copy-btn:hover {
+    background: rgba(102, 126, 234, 0.3);
+}
+
+/* Features Section */
+.features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin: 3rem 0;
+    animation: fadeIn 1s ease-out 0.9s both;
+}
+
+.feature-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 2rem;
+    transition: all 0.3s ease;
+}
+
+.feature-card:hover {
+    transform: translateY(-5px);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(102, 126, 234, 0.3);
+}
+
+.feature-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.feature-card h3 {
+    font-size: 1.2rem;
+    margin-bottom: 0.75rem;
+    color: #fff;
+}
+
+.feature-card p {
+    color: #b8b8d4;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+/* Support Section */
+.support-section {
+    background: linear-gradient(135deg, rgba(255, 110, 196, 0.1), rgba(120, 115, 245, 0.1));
+    border: 1px solid rgba(255, 110, 196, 0.2);
+    border-radius: 20px;
+    padding: 2.5rem;
+    margin: 3rem 0;
+    text-align: center;
+    animation: fadeIn 1s ease-out 1.2s both;
+}
+
+.support-section h2 {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, #ff6ec4 0%, #7873f5 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.support-section p {
+    color: #b8b8d4;
+    margin-bottom: 2rem;
+    font-size: 1.1rem;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.support-options {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.support-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 2rem;
+    font-size: 1rem;
+    font-weight: 600;
     color: #fff;
     background: linear-gradient(135deg, #ff6ec4, #7873f5);
     border: none;
     border-radius: 50px;
     cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    box-shadow: 0 5px 20px rgba(255, 110, 196, 0.3);
 }
-.btn:hover { transform: scale(1.05); }
-.footer { position: absolute; bottom: 20px; font-size: 0.9rem; color: #aaa; }
+
+.support-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(255, 110, 196, 0.5);
+}
+
+.support-info {
+    margin-top: 1.5rem;
+    font-size: 0.85rem;
+    color: #888;
+    font-style: italic;
+}
+
+/* Footer */
+.footer {
+    text-align: center;
+    padding: 2rem 0;
+    color: #666;
+    font-size: 0.9rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    margin-top: 4rem;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    h1 {
+        font-size: 2.5rem;
+    }
+    
+    .tagline {
+        font-size: 1.1rem;
+    }
+    
+    .features {
+        grid-template-columns: 1fr;
+    }
+    
+    .url-box {
+        flex-direction: column;
+    }
+    
+    .support-options {
+        flex-direction: column;
+        align-items: center;
+    }
+}
+
+/* Toast notification */
+.toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: rgba(16, 185, 129, 0.95);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    animation: slideIn 0.3s ease-out;
+    z-index: 1000;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(400px);
+    }
+    to {
+        transform: translateX(0);
+    }
+}
+
+.toast.hide {
+    animation: slideOut 0.3s ease-out forwards;
+}
+
+@keyframes slideOut {
+    to {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+}
 </style>
 </head>
 <body>
-<img src="logo.png" alt="Self-Streme Logo" class="logo">
-<h1>Self-Streme Addon</h1>
-<p class="status" id="addon-status">Status: Active</p>
-<button class="btn" onclick="installAddon()">Add to Stremio</button>
-<p style="margin-top: 2rem; color: #aaa;">Manual Installation:</p>
-<p style="color: #aaa;">Copy this URL and add it manually in Stremio:</p>
-<code id="manual-url" style="background: rgba(255,255,255,0.1); padding: 0.5rem 1rem; border-radius: 4px; margin-top: 0.5rem; display: inline-block;"></code>
-<div class="footer">&copy; 2025 Self-Streme</div>
+<!-- Animated background -->
+<div class="background" id="particles"></div>
+
+<div class="container">
+    <!-- Header -->
+    <div class="header">
+        <img src="logo.png" alt="Self-Streme Logo" class="logo">
+        <h1>Self-Streme</h1>
+        <p class="tagline">Your Personal Streaming Platform for Stremio</p>
+        <div class="status-badge">
+            <span class="status-dot"></span>
+            <span id="addon-status">Server Active</span>
+        </div>
+    </div>
+
+    <!-- Main Actions -->
+    <div class="main-actions">
+        <button class="btn-primary" onclick="installAddon()">
+            <span>🚀</span>
+            <span>Install to Stremio</span>
+        </button>
+    </div>
+
+    <!-- Manual Installation -->
+    <div class="manual-install">
+        <h3>📋 Manual Installation</h3>
+        <p style="color: #888; margin-bottom: 1rem; font-size: 0.9rem;">Copy this URL and add it manually in Stremio settings:</p>
+        <div class="url-box">
+            <code class="url-text" id="manual-url">Loading...</code>
+            <button class="copy-btn" onclick="copyUrl()">Copy</button>
+        </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div style="text-align: center; margin: 2rem 0;">
+        <a href="/health" class="btn-secondary" target="_blank">
+            <span>💚</span> Health Check
+        </a>
+        <a href="/status" class="btn-secondary" target="_blank">
+            <span>📊</span> Server Status
+        </a>
+        <a href="/test-source-selection" class="btn-secondary" target="_blank">
+            <span>🧪</span> Test Interface
+        </a>
+    </div>
+
+    <!-- Features -->
+    <div class="features">
+        <div class="feature-card">
+            <div class="feature-icon">🎬</div>
+            <h3>Multi-Source Streaming</h3>
+            <p>Stream from multiple sources with automatic quality detection and smart caching</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">⚡</div>
+            <h3>Lightning Fast</h3>
+            <p>Optimized streaming with intelligent cache management and instant playback</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🔒</div>
+            <h3>Self-Hosted</h3>
+            <p>Complete control over your streaming server with privacy-first architecture</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🌐</div>
+            <h3>Universal Access</h3>
+            <p>Works with Cloudflare, nginx, Docker, and all major reverse proxies</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">📱</div>
+            <h3>iOS Compatible</h3>
+            <p>Optimized streaming for iOS devices with enhanced compatibility</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🎯</div>
+            <h3>Torrent Support</h3>
+            <p>Direct torrent-to-stream with DHT support and smart peer discovery</p>
+        </div>
+    </div>
+
+    <!-- Support Section -->
+    <div class="support-section">
+        <h2>💖 Support Development</h2>
+        <p>Self-Streme is completely free and open for personal use. Support the developer to help maintain and improve the addon!</p>
+        <div class="support-options">
+            <a href="https://ko-fi.com" class="support-btn" target="_blank" rel="noopener">
+                <span>☕</span> Buy Me a Coffee
+            </a>
+            <a href="https://github.com/sponsors" class="support-btn" target="_blank" rel="noopener">
+                <span>💝</span> Become a Sponsor
+            </a>
+            <a href="https://paypal.com" class="support-btn" target="_blank" rel="noopener">
+                <span>💳</span> Donate via PayPal
+            </a>
+        </div>
+        <p class="support-info">
+            ✨ All features remain free - Support is completely optional and helps with development and maintenance
+        </p>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>&copy; 2025 Self-Streme - Made with ❤️ for the Stremio Community</p>
+        <p style="margin-top: 0.5rem; font-size: 0.8rem;">
+            <a href="https://github.com/zvielkoren/self-streme" target="_blank" style="color: #667eea; text-decoration: none;">View on GitHub</a>
+        </p>
+    </div>
+</div>
 
 <script>
+// Generate animated background particles
+function generateParticles() {
+    const container = document.getElementById('particles');
+    const particleCount = 30;
+    
+    for (let i = 0; i < particleCount; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        
+        const size = Math.random() * 100 + 50;
+        particle.style.width = size + 'px';
+        particle.style.height = size + 'px';
+        particle.style.left = Math.random() * 100 + '%';
+        particle.style.animationDelay = Math.random() * 20 + 's';
+        particle.style.animationDuration = (Math.random() * 10 + 15) + 's';
+        
+        container.appendChild(particle);
+    }
+}
+
 // Set the manual URL on page load using proxy-aware API
 document.addEventListener('DOMContentLoaded', async function() {
+    generateParticles();
+    
     try {
         // Fetch the current base URL from the server (proxy-aware)
         const response = await fetch('/api/base-url');
@@ -69,6 +561,10 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Store the URLs for the install function
         window.manifestUrl = data.manifestUrl;
         window.stremioUrl = data.stremioUrl;
+        window.baseUrl = data.baseUrl;
+        
+        // Update status
+        updateServerStatus();
     } catch (error) {
         console.error('Failed to fetch base URL:', error);
         // Fallback to client-side detection
@@ -77,10 +573,26 @@ document.addEventListener('DOMContentLoaded', async function() {
         document.getElementById('manual-url').textContent = `${protocol}://${host}/manifest.json`;
         window.manifestUrl = `${protocol}://${host}/manifest.json`;
         window.stremioUrl = `stremio://${host}/manifest.json`;
+        window.baseUrl = `${protocol}://${host}`;
     }
 });
 
+async function updateServerStatus() {
+    try {
+        const response = await fetch('/health');
+        const data = await response.json();
+        
+        if (data.status === 'ok') {
+            document.getElementById('addon-status').textContent = 'Server Active';
+        }
+    } catch (error) {
+        document.getElementById('addon-status').textContent = 'Server Status Unknown';
+    }
+}
+
 function installAddon() {
+    showToast('Opening Stremio...');
+    
     // Use the proxy-aware URLs if available, otherwise fallback to client-side detection
     if (window.stremioUrl && window.manifestUrl) {
         // Install URL using stremio protocol
@@ -104,6 +616,51 @@ function installAddon() {
         }, 1000);
     }
 }
+
+function copyUrl() {
+    const urlText = document.getElementById('manual-url').textContent;
+    
+    // Create temporary textarea to copy text
+    const textarea = document.createElement('textarea');
+    textarea.value = urlText;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    
+    try {
+        document.execCommand('copy');
+        showToast('✓ URL copied to clipboard!');
+    } catch (err) {
+        console.error('Failed to copy:', err);
+        showToast('Failed to copy URL');
+    }
+    
+    document.body.removeChild(textarea);
+}
+
+function showToast(message) {
+    // Remove existing toast if any
+    const existingToast = document.querySelector('.toast');
+    if (existingToast) {
+        existingToast.remove();
+    }
+    
+    // Create new toast
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        toast.classList.add('hide');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// Refresh status every 30 seconds
+setInterval(updateServerStatus, 30000);
 </script>
 </body>
 </html>
