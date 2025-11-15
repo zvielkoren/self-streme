@@ -601,7 +601,7 @@ CACHE_PERSISTENT=true
 If you find Self-Streme useful and would like to support its development, you can:
 
 - ⭐ **Star this repository** on GitHub
-- 💰 **Sponsor the developer** via [GitHub Sponsors](https://github.com/sponsors/zviel)
+- 💰 **Sponsor the developer** via [GitHub Sponsors](https://github.com/sponsors/zvielkoren)
 - 🐛 **Report bugs** and suggest features through GitHub Issues
 - 📢 **Share** Self-Streme with the community
 
@@ -622,3 +622,4 @@ This software is provided for personal use only. Redistribution, modification, o
 *Experience your media library like never before*
 
 </div>
+
