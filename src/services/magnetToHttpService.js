@@ -14,29 +14,45 @@ class MagnetToHttpService {
     // These services handle the P2P torrent download and provide HTTP access
     this.services = [
       {
-        name: "WebTorrent",
-        // WebTorrent.io provides instant streaming from magnet links
-        generateUrl: (infoHash) => `https://instant.io/#${infoHash}`,
-        type: "redirect", // This is a web UI redirect, not direct stream
-        priority: 3
+        name: "Webtor.io",
+        // Webtor.io provides HTTP streaming from magnet links via their API
+        generateUrl: (infoHash, magnet) => {
+          // Webtor.io API endpoint for streaming
+          // This provides actual video streaming without P2P on the client side
+          const encodedMagnet = encodeURIComponent(magnet);
+          return `https://webtor.io/api/stream?magnet=${encodedMagnet}`;
+        },
+        type: "stream",
+        priority: 1,
+        description: "HTTP streaming via Webtor.io API (no P2P required)"
       },
       {
-        name: "BTDigg",
-        // Some torrent sites provide streaming proxies
-        generateUrl: (infoHash, magnet) => {
-          // Generate a stream URL that can be used by video players
-          // This uses the torrent hash to create predictable URLs
+        name: "iTorrents",
+        // iTorrents provides torrent file downloads
+        generateUrl: (infoHash) => {
+          return `https://itorrents.org/torrent/${infoHash}.torrent`;
+        },
+        type: "torrent_file",
+        priority: 4,
+        description: "Download .torrent file directly"
+      },
+      {
+        name: "BTCache",
+        // BTCache provides torrent caching
+        generateUrl: (infoHash) => {
           return `https://btcache.me/torrent/${infoHash}`;
         },
         type: "proxy",
-        priority: 2
+        priority: 3,
+        description: "Torrent cache proxy"
       },
       {
-        name: "TorrentDrive",
-        // Alternative service
-        generateUrl: (infoHash) => `https://www.torrentdrive.com/stream/${infoHash}`,
-        type: "stream",
-        priority: 1
+        name: "Instant.io",
+        // WebTorrent.io provides instant streaming via web interface
+        generateUrl: (infoHash) => `https://instant.io/#${infoHash}`,
+        type: "redirect",
+        priority: 5,
+        description: "Web UI redirect for browser-based streaming"
       }
     ];
   }
