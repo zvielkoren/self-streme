@@ -316,25 +316,49 @@ Then set: `BASE_URL=http://your-domain.com`
 
 ### Cloudflare Tunnel
 
-The setup script (`pterodactyl-setup.sh`) now includes built-in Cloudflare Tunnel support!
+**🎉 NEW: Automatic cloudflared Installation!**
 
-**Automatic Installation:**
-When you run the setup script, it will ask if you want to install Cloudflare Tunnel support.
-If you choose yes, it will:
-1. Download and install cloudflared for your architecture
-2. Prompt you for your tunnel token
-3. Configure the .env file automatically
+The Pterodactyl egg now automatically installs cloudflared during the installation process!
 
-**Manual Installation:**
-1. Get your tunnel token from: https://one.dash.cloudflare.com/
-2. Add to `.env` file: `TUNNEL_TOKEN=your_token_here`
-3. Restart your server
+**How It Works:**
+1. Import the `pterodactyl-egg.json` file into your Pterodactyl panel
+2. Create a new server using the Self-Streme egg
+3. During installation, cloudflared is automatically downloaded and installed
+4. Set the `TUNNEL_TOKEN` environment variable in Pterodactyl
+5. Start your server - the tunnel will automatically connect!
+
+**Getting Your Tunnel Token:**
+1. Visit https://one.dash.cloudflare.com/
+2. Go to **Zero Trust** → **Access** → **Tunnels**
+3. Create a new tunnel (or use existing)
+4. Copy the tunnel token
+5. Paste it into the `TUNNEL_TOKEN` variable in Pterodactyl
+
+**Architecture Support:**
+- ✅ x86_64 (amd64)
+- ✅ ARM64 (aarch64)
+- ✅ ARMv7 (armhf)
+
+**What Happens on Startup:**
+1. The egg ensures cloudflared is in PATH
+2. Your Node.js app reads TUNNEL_TOKEN from .env
+3. The app spawns cloudflared with your token
+4. Cloudflare Tunnel connects and provides a public HTTPS URL
+5. The tunnel URL is logged to the console
 
 **Benefits:**
-- Automatic HTTPS/SSL
-- No port forwarding needed  
-- DDoS protection
-- Access from anywhere
+- ✅ Automatic HTTPS/SSL
+- ✅ No port forwarding needed  
+- ✅ DDoS protection from Cloudflare
+- ✅ Access from anywhere
+- ✅ Zero configuration needed
+
+**Manual Installation (if needed):**
+If you're not using the egg or need to install manually:
+1. The setup script (`pterodactyl-setup.sh`) includes cloudflared installation
+2. Or manually: download from https://github.com/cloudflare/cloudflared/releases
+3. Add to `.env` file: `TUNNEL_TOKEN=your_token_here`
+4. Restart your server
 
 For more details, see [docs/QUICK_START_CLOUDFLARE.md](QUICK_START_CLOUDFLARE.md)
 
