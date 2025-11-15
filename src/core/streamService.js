@@ -2,6 +2,7 @@ import logger from "../utils/logger.js";
 import searchService from "../providers/index.js";
 import torrentService from "./torrentService.js";
 import streamHandler from "../services/streamHandler.js";
+import subtitleService from "../services/subtitleService.js";
 import { config } from "../config/index.js";
 
 class StreamService {
@@ -293,6 +294,12 @@ class StreamService {
         notWebReady: !isIOS, // iOS gets web-ready streams, others don't
         bingeGroup: `self-streme-${stream.quality || "default"}`
       };
+    }
+
+    // Add subtitle support if available in result
+    if (result.subtitles && Array.isArray(result.subtitles) && result.subtitles.length > 0) {
+      stream.subtitles = subtitleService.formatForStremio(result.subtitles);
+      logger.debug(`Added ${stream.subtitles.length} subtitles to stream`);
     }
 
     return stream;

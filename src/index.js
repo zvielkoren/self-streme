@@ -11,6 +11,7 @@ import logger from "./utils/logger.js";
 import addon, { addonApp } from "./addon.js";
 import streamService from "./core/streamService.js";
 import torrentService from "./core/torrentService.js";
+import subtitleService from "./services/subtitleService.js";
 import manifest from "./manifest.js";
 import {
   getProxyAwareBaseUrl,
@@ -752,6 +753,34 @@ app.get("/stream/:type/:imdbId", async (req, res) => {
   } catch (error) {
     logger.error("Stream request error:", error);
     res.status(500).json({ error: "Internal server error", streams: [] });
+  }
+});
+
+// Subtitle endpoint - Get subtitles for content (includes Hebrew support)
+app.get("/subtitles/:type/:imdbId/:season?/:episode?", async (req, res) => {
+  try {
+    const { type, imdbId, season, episode } = req.params;
+    const { lang = 'heb' } = req.query; // Default to Hebrew
+    
+    logger.info(`Subtitle request: ${type}:${imdbId} S${season || "-"}E${episode || "-"} lang=${lang}`);
+    
+    const subtitles = await subtitleService.getStremioSubtitles(
+      imdbId,
+      type,
+      season ? Number(season) : undefined,
+      episode ? Number(episode) : undefined
+    );
+    
+    res.json({ 
+      subtitles,
+      count: subtitles.length,
+      imdbId,
+      type,
+      language: lang
+    });
+  } catch (error) {
+    logger.error("Subtitle request error:", error);
+    res.status(500).json({ error: "Failed to fetch subtitles", subtitles: [] });
   }
 });
 

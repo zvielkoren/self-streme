@@ -46,6 +46,7 @@ const config = {
   },
   torrent: {
     enabled: true,
+    cacheOnlyMode: process.env.CACHE_ONLY_MODE === 'true', // Disable P2P fallback when true
     downloadPath: "./temp", // Add download path
     apis: {
       rarbg: {
@@ -94,10 +95,14 @@ const config = {
       {
         type: "series",
         id: "local",
-        name: "Local Series",
+        name: "Local Series & Anime",
         extra: [
           {
             name: "search",
+            isRequired: false,
+          },
+          {
+            name: "genre",
             isRequired: false,
           },
         ],
@@ -114,7 +119,7 @@ const config = {
         ],
       },
     ],
-    resources: ["catalog", "meta", "stream"],
+    resources: ["catalog", "meta", "stream", "subtitles"],
     types: ["movie", "series", "other"],
     idPrefixes: ["", "tt"], // Accept both our IDs and IMDB IDs
     background: "https://www.stremio.com/website/stremio-logo-small.png",

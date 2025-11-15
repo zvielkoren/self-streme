@@ -656,6 +656,22 @@ class TorrentService {
         );
       }
 
+      // Check if cache-only mode is enabled
+      if (config.torrent.cacheOnlyMode) {
+        logger.info(`Cache-only mode enabled: refusing P2P for ${infoHash}`);
+        if (!res.headersSent) {
+          return res
+            .status(404)
+            .json({ 
+              error: "Content not cached",
+              message: "This content is not available in cache. P2P streaming is disabled in cache-only mode.",
+              suggestion: "Enable P2P mode by setting CACHE_ONLY_MODE=false, or pre-download this content to cache.",
+              mode: "cache-only"
+            });
+        }
+        return;
+      }
+
       // STEP 2: Try P2P streaming (original behavior)
       // Convert infoHash to magnet URI - add trackers for better connectivity
       const trackers = config.torrent.trackers
