@@ -313,18 +313,24 @@
             </div>
 
             <div class="result-item">
-                <div class="result-label">Stream URL:</div>
-                <div class="result-value" id="streamUrl"></div>
-                <button class="copy-btn" onclick="copyToClipboard('streamUrl')">📋 Copy</button>
+                <div class="result-label">Recommended Stream URL:</div>
+                <div class="result-value" id="recommendedUrl"></div>
+                <button class="copy-btn" onclick="copyToClipboard('recommendedUrl')">📋 Copy</button>
             </div>
 
             <div class="result-item">
-                <div class="result-label">Usage:</div>
-                <div class="result-value" id="usage"></div>
+                <div class="result-label">All Available Stream URLs:</div>
+                <div class="result-value" id="allUrls"></div>
+            </div>
+
+            <div class="result-item">
+                <div class="result-label">Enhanced Magnet (with trackers):</div>
+                <div class="result-value" id="enhancedMagnet" style="word-break: break-all; font-size: 11px;"></div>
+                <button class="copy-btn" onclick="copyToClipboard('enhancedMagnet')">📋 Copy</button>
             </div>
 
             <button class="btn-convert" onclick="testStream()" style="margin-top: 15px;">
-                ▶️ Test Stream
+                ▶️ Test Recommended Stream
             </button>
         </div>
 
@@ -390,8 +396,46 @@
 
                 if (data.success) {
                     document.getElementById('infoHash').textContent = data.infoHash;
-                    document.getElementById('streamUrl').textContent = data.streamUrl;
-                    document.getElementById('usage').textContent = data.usage.direct;
+                    document.getElementById('recommendedUrl').textContent = data.recommended;
+                    document.getElementById('enhancedMagnet').textContent = data.enhancedMagnet;
+                    
+                    // Display all available URLs
+                    let allUrlsHtml = '<div style="margin-top: 10px;">';
+                    
+                    // External services (work without P2P)
+                    if (data.streamUrls.external && data.streamUrls.external.length > 0) {
+                        allUrlsHtml += '<strong>External Services (No P2P Required):</strong><br>';
+                        data.streamUrls.external.forEach(service => {
+                            allUrlsHtml += `<div style="margin: 5px 0; padding: 8px; background: #f0f0f0; border-radius: 5px;">
+                                <strong>${service.name}</strong> (${service.type})<br>
+                                <a href="${service.url}" target="_blank" style="font-size: 11px; color: #667eea;">${service.url}</a>
+                            </div>`;
+                        });
+                    }
+                    
+                    // Local proxy
+                    if (data.streamUrls.local) {
+                        allUrlsHtml += '<br><strong>Local Proxy (Requires P2P):</strong><br>';
+                        allUrlsHtml += `<div style="margin: 5px 0; padding: 8px; background: #fff3cd; border-radius: 5px;">
+                            <strong>${data.streamUrls.local.name}</strong><br>
+                            <span style="font-size: 11px;">${data.streamUrls.local.note}</span><br>
+                            <a href="${data.streamUrls.local.url}" target="_blank" style="font-size: 11px; color: #667eea;">${data.streamUrls.local.url}</a>
+                        </div>`;
+                    }
+                    
+                    // Torrent cache
+                    if (data.streamUrls.cache) {
+                        allUrlsHtml += '<br><strong>Torrent Cache:</strong><br>';
+                        allUrlsHtml += `<div style="margin: 5px 0; padding: 8px; background: #d4edda; border-radius: 5px;">
+                            <strong>${data.streamUrls.cache.name}</strong><br>
+                            <span style="font-size: 11px;">${data.streamUrls.cache.note}</span><br>
+                            <a href="${data.streamUrls.cache.url}" target="_blank" style="font-size: 11px; color: #667eea;">${data.streamUrls.cache.url}</a>
+                        </div>`;
+                    }
+                    
+                    allUrlsHtml += '</div>';
+                    document.getElementById('allUrls').innerHTML = allUrlsHtml;
+                    
                     document.getElementById('result').classList.add('show');
                 } else {
                     showError(data.message || 'Conversion failed');

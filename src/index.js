@@ -19,6 +19,7 @@ import {
   getClientIp,
 } from "./utils/urlHelper.js";
 import ScalableCacheManager from "./services/scalableCacheManager.js";
+import magnetToHttpService from "./services/magnetToHttpService.js";
 
 // File paths
 const __filename = fileURLToPath(import.meta.url);
@@ -425,7 +426,8 @@ app.get("/stream/proxy/:infoHash", async (req, res) => {
 });
 
 // Convert magnet link to stream URL endpoint
-// This endpoint allows users to provide a magnet link and get a streamable URL
+// This endpoint allows users to provide a magnet link and get streamable URLs
+// Uses external services that work on ANY server without P2P requirements
 // Supports both GET (magnet in query param) and POST (magnet in body)
 app.get("/stream/magnet", express.json(), async (req, res) => {
   try {
@@ -461,32 +463,55 @@ app.get("/stream/magnet", express.json(), async (req, res) => {
 
     logger.info(`Magnet to stream conversion requested for infoHash: ${infoHash}`);
 
-    // Get proxy-aware base URL for the stream
+    // Enhance magnet link with additional trackers for better connectivity
+    const enhancedMagnet = magnetToHttpService.enhanceMagnetLink(magnetLink, infoHash);
+
+    // Generate stream URLs using external services (works without P2P)
+    const streamResult = await magnetToHttpService.generateStreamUrls(enhancedMagnet, infoHash);
+
+    // Also provide local proxy option as fallback
     const baseUrl = getProxyAwareBaseUrl(req);
-    const streamUrl = `${baseUrl}/stream/proxy/${infoHash}`;
+    const localStreamUrl = `${baseUrl}/stream/proxy/${infoHash}`;
 
-    // Cache the stream info for better handling
-    streamService.handler.cacheStream(
-      infoHash,
-      "unknown", // type unknown for direct magnet links
-      "Direct Magnet Stream",
-      "unknown"
-    );
+    // Try to find torrent cache URL
+    const cacheUrl = await magnetToHttpService.findTorrentCacheUrl(infoHash);
 
-    // Return the streamable URL
+    // Return multiple streaming options
     res.json({
       success: true,
       magnet: magnetLink,
+      enhancedMagnet: enhancedMagnet,
       infoHash: infoHash,
-      streamUrl: streamUrl,
-      message: "Use the streamUrl to access the content via HTTP streaming",
+      streamUrls: {
+        // External services (work on any server, no P2P required)
+        external: streamResult.streamUrls,
+        // Local proxy (requires P2P connectivity)
+        local: {
+          name: "Self-Streme Local Proxy",
+          url: localStreamUrl,
+          type: "local_proxy",
+          priority: 10,
+          note: "Requires P2P connectivity and peers"
+        },
+        // Torrent cache (direct torrent file download)
+        cache: cacheUrl ? {
+          name: "Torrent Cache",
+          url: cacheUrl,
+          type: "torrent_file",
+          priority: 5,
+          note: "Download .torrent file directly"
+        } : null
+      },
+      recommended: streamResult.primaryUrl || localStreamUrl,
+      message: "Multiple streaming options available. External services work on any server without P2P.",
       usage: {
-        direct: `Access directly: ${streamUrl}`,
-        stremio: `Use in Stremio or any video player that supports HTTP streams`
+        external: "Use external URLs - work on any server, no P2P required",
+        local: "Use local proxy - requires P2P connectivity",
+        stremio: "Copy any URL to use in Stremio or video players"
       }
     });
 
-    logger.info(`Successfully converted magnet to stream URL: ${streamUrl}`);
+    logger.info(`Successfully converted magnet to stream URLs. Primary: ${streamResult.primaryUrl || localStreamUrl}`);
   } catch (error) {
     logger.error("Magnet to stream conversion error:", error);
     res.status(500).json({
@@ -531,32 +556,55 @@ app.post("/stream/magnet", express.json(), async (req, res) => {
 
     logger.info(`Magnet to stream conversion requested (POST) for infoHash: ${infoHash}`);
 
-    // Get proxy-aware base URL for the stream
+    // Enhance magnet link with additional trackers for better connectivity
+    const enhancedMagnet = magnetToHttpService.enhanceMagnetLink(magnetLink, infoHash);
+
+    // Generate stream URLs using external services (works without P2P)
+    const streamResult = await magnetToHttpService.generateStreamUrls(enhancedMagnet, infoHash);
+
+    // Also provide local proxy option as fallback
     const baseUrl = getProxyAwareBaseUrl(req);
-    const streamUrl = `${baseUrl}/stream/proxy/${infoHash}`;
+    const localStreamUrl = `${baseUrl}/stream/proxy/${infoHash}`;
 
-    // Cache the stream info for better handling
-    streamService.handler.cacheStream(
-      infoHash,
-      "unknown", // type unknown for direct magnet links
-      "Direct Magnet Stream",
-      "unknown"
-    );
+    // Try to find torrent cache URL
+    const cacheUrl = await magnetToHttpService.findTorrentCacheUrl(infoHash);
 
-    // Return the streamable URL
+    // Return multiple streaming options
     res.json({
       success: true,
       magnet: magnetLink,
+      enhancedMagnet: enhancedMagnet,
       infoHash: infoHash,
-      streamUrl: streamUrl,
-      message: "Use the streamUrl to access the content via HTTP streaming",
+      streamUrls: {
+        // External services (work on any server, no P2P required)
+        external: streamResult.streamUrls,
+        // Local proxy (requires P2P connectivity)
+        local: {
+          name: "Self-Streme Local Proxy",
+          url: localStreamUrl,
+          type: "local_proxy",
+          priority: 10,
+          note: "Requires P2P connectivity and peers"
+        },
+        // Torrent cache (direct torrent file download)
+        cache: cacheUrl ? {
+          name: "Torrent Cache",
+          url: cacheUrl,
+          type: "torrent_file",
+          priority: 5,
+          note: "Download .torrent file directly"
+        } : null
+      },
+      recommended: streamResult.primaryUrl || localStreamUrl,
+      message: "Multiple streaming options available. External services work on any server without P2P.",
       usage: {
-        direct: `Access directly: ${streamUrl}`,
-        stremio: `Use in Stremio or any video player that supports HTTP streams`
+        external: "Use external URLs - work on any server, no P2P required",
+        local: "Use local proxy - requires P2P connectivity",
+        stremio: "Copy any URL to use in Stremio or video players"
       }
     });
 
-    logger.info(`Successfully converted magnet to stream URL (POST): ${streamUrl}`);
+    logger.info(`Successfully converted magnet to stream URLs (POST). Primary: ${streamResult.primaryUrl || localStreamUrl}`);
   } catch (error) {
     logger.error("Magnet to stream conversion error (POST):", error);
     res.status(500).json({
