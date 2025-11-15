@@ -62,14 +62,18 @@ Self-Streme is a sophisticated Stremio addon that seamlessly bridges your local 
 ## ✨ Features
 
 ### 🎥 **Media Streaming**
-- **Local Library Support** - Stream movies, TV series, and other video content
+- **Local Library Support** - Stream movies, TV series, anime, and other video content
 - **Source Selection** - Choose from multiple streaming sources with quality options
 - **Multiple Quality Options** - Automatic quality detection (1080p, 720p, 480p)
 - **Format Compatibility** - Support for MP4, MKV, AVI, WebM, MOV, FLV
 - **Subtitle Integration** - SRT, VTT, ASS, SSA subtitle support
+- **Hebrew Subtitle Support** 🆕 - Integrated Ktuvit and Subscene providers - [Learn More](docs/HEBREW-SUBTITLES.md)
+- **Anime Series Support** 🆕 - Full support for anime series with subtitles - [Learn More](docs/ANIME-SUPPORT.md)
 - **Range Request Support** - Efficient video seeking and partial content delivery
 
 ### 🚀 **Advanced Streaming Capabilities**
+- **Direct HTTP Streaming** 🔥 **NEW** - Series always work without P2P barriers - [Learn More](docs/DIRECT-STREAMING.md)
+- **Cache-Only Mode** 🆕 - Stream only from cache, disable P2P entirely - [Learn More](docs/CACHE-ONLY-MODE.md)
 - **Non-P2P Streaming** 🆕 - Stream from cache without P2P connectivity - [Learn More](docs/NO-P2P-STREAMING.md)
 - **Intelligent Cache-First Streaming** 🆕 - Cached files stream instantly, P2P used as fallback only
 - **Offline Streaming Support** 🆕 - Pre-populate cache for completely offline operation
@@ -192,6 +196,10 @@ OMDB_API_KEY=your_omdb_api_key      # OMDB API key for metadata
 # Torrent Configuration
 TORRENT_TIMEOUT=60000            # Torrent connection timeout in ms (default: 60s)
 TORRENT_MAX_RETRIES=3            # Maximum retry attempts for failed torrents
+
+# Streaming Mode Configuration (NEW)
+CACHE_ONLY_MODE=false            # Only stream cached content, disable P2P fallback
+DIRECT_STREAM_ONLY=false         # Force direct HTTP streaming (series get this automatically)
 ```
 
 ### Scaling Configuration
@@ -547,6 +555,12 @@ CACHE_PERSISTENT=true
 - `GET /stream/{type}/{id}.json` - iOS-optimized source listing
 - `GET /play/{type}/{id}/{fileIdx}` - Play specific source by index
 - `GET /play/{type}/{id}/{fileIdx}/{season}/{episode}` - Series episodes
+- `GET /stream/proxy/{infoHash}` - Direct HTTP streaming via proxy (cache-first)
+
+#### Subtitle Endpoints (NEW)
+- `GET /subtitles/{type}/{id}/{season?}/{episode?}` - Get Hebrew & English subtitles
+  - Query param: `lang=heb` (default) or `lang=eng`
+  - Returns: Ktuvit and Subscene subtitle sources
 
 #### Cache Management
 - `GET /api/cache-config` - Cache configuration and status
