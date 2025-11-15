@@ -596,6 +596,17 @@ CACHE_PERSISTENT=true
 - **Small Production**: SQLite backend, 5GB cache limit
 - **Large Production**: Redis backend, 50GB+ cache limit with multiple instances
 
+## 💖 Support Development
+
+If you find Self-Streme useful and would like to support its development, you can:
+
+- ⭐ **Star this repository** on GitHub
+- 💰 **Sponsor the developer** via [GitHub Sponsors](https://github.com/sponsors/zviel)
+- 🐛 **Report bugs** and suggest features through GitHub Issues
+- 📢 **Share** Self-Streme with the community
+
+Your support helps maintain and improve Self-Streme for everyone!
+
 ## 📄 License
 
 **Private License** - All rights reserved
