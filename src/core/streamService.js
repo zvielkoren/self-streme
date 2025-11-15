@@ -97,12 +97,18 @@ class StreamService {
       }
 
       // מיפוי ותיקון metadata מתוך מקור ה־streams
-      const streams = streamsData
+      let streams = streamsData
         .filter(result => result && (result.title || result.name || result.magnet || result.url || result.ytId || result.infoHash))
         .map(result => this.convertToStremioStream(result, isIOS, baseUrl))
         .filter(stream => stream !== null && stream && (stream.infoHash || stream.url || stream.ytId)); // Filter out invalid streams and nulls
 
       logger.info(`Processed ${streams.length} valid streams for ${cacheKey}`);
+
+      // For series content or when directStreamOnly is enabled, add HTTP streaming options
+      if ((type === 'series' || config.torrent.directStreamOnly) && streams.length > 0) {
+        logger.info(`Enhancing streams with direct HTTP options for ${type}:${cleanImdbId}`);
+        streams = await this.addDirectStreamOptions(streams, type, cleanImdbId, baseUrl);
+      }
 
       // If no valid streams found after filtering, provide a helpful placeholder
       if (streams.length === 0) {
@@ -345,6 +351,73 @@ class StreamService {
     const ua = userAgent.toLowerCase();
     return ua.includes('iphone') || ua.includes('ipad') || ua.includes('ipod') || 
            ua.includes('ios') || (ua.includes('mobile') && ua.includes('safari') && !ua.includes('android'));
+  }
+
+  /**
+   * Add direct HTTP streaming options to streams
+   * This ensures series content can always be watched via HTTP without P2P
+   * @param {Array} streams - Existing streams
+   * @param {string} type - Content type
+   * @param {string} imdbId - IMDB ID
+   * @param {string} baseUrl - Base URL for streaming
+   * @returns {Promise<Array>} Enhanced streams with HTTP options
+   */
+  async addDirectStreamOptions(streams, type, imdbId, baseUrl) {
+    try {
+      const enhancedStreams = [...streams];
+      
+      // For each stream with infoHash, add direct HTTP streaming option
+      for (const stream of streams) {
+        if (stream.infoHash) {
+          // Create a direct HTTP stream URL using proxy
+          const streamBaseUrl = baseUrl || config.server.baseUrl || `http://127.0.0.1:${config.server.port}`;
+          const directHttpStream = {
+            name: `${stream.name || stream.title} [Direct HTTP]`,
+            title: `${stream.title || stream.name} - Direct Stream (No P2P)`,
+            url: `${streamBaseUrl}/stream/proxy/${stream.infoHash}`,
+            quality: stream.quality,
+            size: stream.size,
+            seeders: stream.seeders,
+            source: `${stream.source || 'unknown'}-direct`,
+            behaviorHints: {
+              notWebReady: false, // Always web-ready via HTTP
+              bingeGroup: `self-streme-direct-${stream.quality || "default"}`
+            }
+          };
+          
+          // Add direct stream as a separate option
+          enhancedStreams.push(directHttpStream);
+          
+          logger.debug(`Added direct HTTP option for ${stream.title || stream.name}`);
+        }
+      }
+      
+      // Sort streams to prioritize direct HTTP streams for series
+      if (type === 'series') {
+        enhancedStreams.sort((a, b) => {
+          // Prioritize streams with direct URLs (no P2P)
+          const aIsDirect = a.url && !a.infoHash;
+          const bIsDirect = b.url && !b.infoHash;
+          
+          if (aIsDirect && !bIsDirect) return -1;
+          if (!aIsDirect && bIsDirect) return 1;
+          
+          // Then by quality
+          const qualityOrder = { '2160p': 0, '1080p': 1, '720p': 2, '480p': 3 };
+          const aQuality = qualityOrder[a.quality] ?? 999;
+          const bQuality = qualityOrder[b.quality] ?? 999;
+          
+          return aQuality - bQuality;
+        });
+      }
+      
+      logger.info(`Enhanced ${streams.length} streams to ${enhancedStreams.length} total streams with direct HTTP options`);
+      return enhancedStreams;
+      
+    } catch (error) {
+      logger.error('Error adding direct stream options:', error);
+      return streams; // Return original streams on error
+    }
   }
 
   /**

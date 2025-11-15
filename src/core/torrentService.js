@@ -656,17 +656,22 @@ class TorrentService {
         );
       }
 
-      // Check if cache-only mode is enabled
-      if (config.torrent.cacheOnlyMode) {
-        logger.info(`Cache-only mode enabled: refusing P2P for ${infoHash}`);
+      // Check if cache-only mode or direct-stream-only mode is enabled
+      if (config.torrent.cacheOnlyMode || config.torrent.directStreamOnly) {
+        const mode = config.torrent.directStreamOnly ? 'direct-stream-only' : 'cache-only';
+        logger.info(`${mode} mode enabled: refusing P2P for ${infoHash}`);
         if (!res.headersSent) {
           return res
             .status(404)
             .json({ 
               error: "Content not cached",
-              message: "This content is not available in cache. P2P streaming is disabled in cache-only mode.",
-              suggestion: "Enable P2P mode by setting CACHE_ONLY_MODE=false, or pre-download this content to cache.",
-              mode: "cache-only"
+              message: config.torrent.directStreamOnly 
+                ? "This content is not available for direct streaming. Try using the stream from a search result instead."
+                : "This content is not available in cache. P2P streaming is disabled in cache-only mode.",
+              suggestion: config.torrent.directStreamOnly
+                ? "Direct stream mode is enabled. Content will stream via HTTP when available from search results."
+                : "Enable P2P mode by setting CACHE_ONLY_MODE=false, or pre-download this content to cache.",
+              mode: mode
             });
         }
         return;

@@ -47,6 +47,7 @@ const config = {
   torrent: {
     enabled: true,
     cacheOnlyMode: process.env.CACHE_ONLY_MODE === 'true', // Disable P2P fallback when true
+    directStreamOnly: process.env.DIRECT_STREAM_ONLY === 'true', // Force direct HTTP streaming, avoid P2P entirely
     downloadPath: "./temp", // Add download path
     apis: {
       rarbg: {
