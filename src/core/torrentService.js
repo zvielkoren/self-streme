@@ -914,32 +914,45 @@ class TorrentService {
 
   /**
    * Try to find a fallback file stream for direct access
+   * Looks for files matching the infoHash in the download directory
    * @param {string} infoHash - Torrent info hash
    * @returns {Promise<object|null>} File stream info or null
    */
   async tryFallbackFileStream(infoHash) {
     try {
-      // Look for any files in download directory that might match this hash
+      // Look for files in download directory that match this hash
       const downloadPath = config.torrent.downloadPath;
       if (!fs.existsSync(downloadPath)) {
+        logger.debug(`Download path does not exist: ${downloadPath}`);
         return null;
       }
 
       // Check for any subdirectories or files that contain the hash
       const items = fs.readdirSync(downloadPath);
+      const normalizedHash = infoHash.toLowerCase();
+      
+      // First, look for exact matches (files/dirs containing the infoHash)
       for (const item of items) {
         const itemPath = path.join(downloadPath, item);
+        const itemLower = item.toLowerCase();
+        
+        // Check if item name contains the infoHash
+        if (!itemLower.includes(normalizedHash)) {
+          continue; // Skip items that don't match this hash
+        }
+
         const stats = fs.statSync(itemPath);
 
         if (stats.isDirectory()) {
-          // Check if directory name contains hash or look for video files inside
+          // Check if directory name contains hash and look for video files inside
+          logger.debug(`Found directory matching hash: ${item}`);
           const videoFiles = this.findVideoFilesInDirectory(itemPath);
           if (videoFiles.length > 0) {
             const firstVideo = videoFiles[0];
             const videoStats = fs.statSync(firstVideo);
             if (videoStats.size > 1024 * 1024) {
               // At least 1MB
-              logger.info(`Found fallback video file: ${firstVideo}`);
+              logger.info(`Found cached video file for ${infoHash}: ${firstVideo}`);
               return {
                 path: firstVideo,
                 size: videoStats.size,
@@ -959,7 +972,7 @@ class TorrentService {
             ".flv",
           ];
           if (videoExtensions.includes(ext) && stats.size > 1024 * 1024) {
-            logger.info(`Found fallback video file: ${itemPath}`);
+            logger.info(`Found cached video file for ${infoHash}: ${itemPath}`);
             return {
               path: itemPath,
               size: stats.size,
@@ -968,6 +981,8 @@ class TorrentService {
         }
       }
 
+      // No exact match found
+      logger.debug(`No cached file found for infoHash: ${infoHash}`);
       return null;
     } catch (error) {
       logger.debug(`Error in fallback file stream search: ${error.message}`);
