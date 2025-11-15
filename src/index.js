@@ -19,6 +19,7 @@ import {
   getClientIp,
 } from "./utils/urlHelper.js";
 import ScalableCacheManager from "./services/scalableCacheManager.js";
+import magnetToHttpService from "./services/magnetToHttpService.js";
 
 // File paths
 const __filename = fileURLToPath(import.meta.url);
@@ -103,6 +104,11 @@ app.get("/test-ios-fix", (req, res) => {
 // Serve source selection test page
 app.get("/test-source-selection", (req, res) => {
   res.sendFile(path.join(__dirname, "test-source-selection.html"));
+});
+
+// Serve magnet converter test page
+app.get("/test-magnet-converter", (req, res) => {
+  res.sendFile(path.join(__dirname, "test-magnet-converter.html"));
 });
 
 // Test endpoint for source selection with direct URL
@@ -416,6 +422,195 @@ app.get("/stream/proxy/:infoHash", async (req, res) => {
         return res.status(500).json({ error: "Internal server error" });
       }
     }
+  }
+});
+
+// Convert magnet link to stream URL endpoint
+// This endpoint allows users to provide a magnet link and get streamable URLs
+// Uses external services that work on ANY server without P2P requirements
+// Supports both GET (magnet in query param) and POST (magnet in body)
+app.get("/stream/magnet", express.json(), async (req, res) => {
+  try {
+    const magnetLink = req.query.magnet || req.query.url;
+    
+    if (!magnetLink) {
+      return res.status(400).json({
+        error: "Missing magnet link",
+        message: "Please provide a magnet link using the 'magnet' or 'url' query parameter",
+        example: "/stream/magnet?magnet=magnet:?xt=urn:btih:..."
+      });
+    }
+
+    // Validate it's a magnet link
+    if (!magnetLink.startsWith("magnet:")) {
+      return res.status(400).json({
+        error: "Invalid magnet link",
+        message: "The provided link is not a valid magnet URI. It must start with 'magnet:'",
+        provided: magnetLink.substring(0, 50)
+      });
+    }
+
+    // Extract infoHash from magnet link
+    const infoHash = streamService.extractInfoHash(magnetLink);
+    
+    if (!infoHash) {
+      return res.status(400).json({
+        error: "Invalid magnet link",
+        message: "Could not extract infoHash from the provided magnet link",
+        provided: magnetLink.substring(0, 100)
+      });
+    }
+
+    logger.info(`Magnet to stream conversion requested for infoHash: ${infoHash}`);
+
+    // Enhance magnet link with additional trackers for better connectivity
+    const enhancedMagnet = magnetToHttpService.enhanceMagnetLink(magnetLink, infoHash);
+
+    // Generate stream URLs using external services (works without P2P)
+    const streamResult = await magnetToHttpService.generateStreamUrls(enhancedMagnet, infoHash);
+
+    // Also provide local proxy option as fallback
+    const baseUrl = getProxyAwareBaseUrl(req);
+    const localStreamUrl = `${baseUrl}/stream/proxy/${infoHash}`;
+
+    // Try to find torrent cache URL
+    const cacheUrl = await magnetToHttpService.findTorrentCacheUrl(infoHash);
+
+    // Return multiple streaming options
+    res.json({
+      success: true,
+      magnet: magnetLink,
+      enhancedMagnet: enhancedMagnet,
+      infoHash: infoHash,
+      streamUrls: {
+        // External services (work on any server, no P2P required)
+        external: streamResult.streamUrls,
+        // Local proxy (requires P2P connectivity)
+        local: {
+          name: "Self-Streme Local Proxy",
+          url: localStreamUrl,
+          type: "local_proxy",
+          priority: 10,
+          note: "Requires P2P connectivity and peers"
+        },
+        // Torrent cache (direct torrent file download)
+        cache: cacheUrl ? {
+          name: "Torrent Cache",
+          url: cacheUrl,
+          type: "torrent_file",
+          priority: 5,
+          note: "Download .torrent file directly"
+        } : null
+      },
+      recommended: streamResult.primaryUrl || localStreamUrl,
+      message: "Multiple streaming options available. External services work on any server without P2P.",
+      usage: {
+        external: "Use external URLs - work on any server, no P2P required",
+        local: "Use local proxy - requires P2P connectivity",
+        stremio: "Copy any URL to use in Stremio or video players"
+      }
+    });
+
+    logger.info(`Successfully converted magnet to stream URLs. Primary: ${streamResult.primaryUrl || localStreamUrl}`);
+  } catch (error) {
+    logger.error("Magnet to stream conversion error:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message
+    });
+  }
+});
+
+// POST endpoint for magnet link conversion (accepts JSON body)
+app.post("/stream/magnet", express.json(), async (req, res) => {
+  try {
+    const magnetLink = req.body.magnet || req.body.url;
+    
+    if (!magnetLink) {
+      return res.status(400).json({
+        error: "Missing magnet link",
+        message: "Please provide a magnet link in the request body using 'magnet' or 'url' field",
+        example: { magnet: "magnet:?xt=urn:btih:..." }
+      });
+    }
+
+    // Validate it's a magnet link
+    if (!magnetLink.startsWith("magnet:")) {
+      return res.status(400).json({
+        error: "Invalid magnet link",
+        message: "The provided link is not a valid magnet URI. It must start with 'magnet:'",
+        provided: magnetLink.substring(0, 50)
+      });
+    }
+
+    // Extract infoHash from magnet link
+    const infoHash = streamService.extractInfoHash(magnetLink);
+    
+    if (!infoHash) {
+      return res.status(400).json({
+        error: "Invalid magnet link",
+        message: "Could not extract infoHash from the provided magnet link",
+        provided: magnetLink.substring(0, 100)
+      });
+    }
+
+    logger.info(`Magnet to stream conversion requested (POST) for infoHash: ${infoHash}`);
+
+    // Enhance magnet link with additional trackers for better connectivity
+    const enhancedMagnet = magnetToHttpService.enhanceMagnetLink(magnetLink, infoHash);
+
+    // Generate stream URLs using external services (works without P2P)
+    const streamResult = await magnetToHttpService.generateStreamUrls(enhancedMagnet, infoHash);
+
+    // Also provide local proxy option as fallback
+    const baseUrl = getProxyAwareBaseUrl(req);
+    const localStreamUrl = `${baseUrl}/stream/proxy/${infoHash}`;
+
+    // Try to find torrent cache URL
+    const cacheUrl = await magnetToHttpService.findTorrentCacheUrl(infoHash);
+
+    // Return multiple streaming options
+    res.json({
+      success: true,
+      magnet: magnetLink,
+      enhancedMagnet: enhancedMagnet,
+      infoHash: infoHash,
+      streamUrls: {
+        // External services (work on any server, no P2P required)
+        external: streamResult.streamUrls,
+        // Local proxy (requires P2P connectivity)
+        local: {
+          name: "Self-Streme Local Proxy",
+          url: localStreamUrl,
+          type: "local_proxy",
+          priority: 10,
+          note: "Requires P2P connectivity and peers"
+        },
+        // Torrent cache (direct torrent file download)
+        cache: cacheUrl ? {
+          name: "Torrent Cache",
+          url: cacheUrl,
+          type: "torrent_file",
+          priority: 5,
+          note: "Download .torrent file directly"
+        } : null
+      },
+      recommended: streamResult.primaryUrl || localStreamUrl,
+      message: "Multiple streaming options available. External services work on any server without P2P.",
+      usage: {
+        external: "Use external URLs - work on any server, no P2P required",
+        local: "Use local proxy - requires P2P connectivity",
+        stremio: "Copy any URL to use in Stremio or video players"
+      }
+    });
+
+    logger.info(`Successfully converted magnet to stream URLs (POST). Primary: ${streamResult.primaryUrl || localStreamUrl}`);
+  } catch (error) {
+    logger.error("Magnet to stream conversion error (POST):", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message
+    });
   }
 });
 

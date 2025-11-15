@@ -1,0 +1,138 @@
+{
+  "_comment": "Self-Streme Pterodactyl Egg Configuration",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2025-11-15T11:50:00+00:00",
+  "name": "Self-Streme",
+  "author": "zvielkoren@github.com",
+  "description": "A powerful self-hosted streaming server with Stremio integration. Stream your media library and torrent content with automatic quality detection and cross-device support.",
+  "features": [
+    "stremio_addon",
+    "torrent_streaming",
+    "media_server"
+  ],
+  "docker_images": {
+    "Node 18": "ghcr.io/parkervcp/yolks:nodejs_18",
+    "Node 20": "ghcr.io/parkervcp/yolks:nodejs_20",
+    "Node 21": "ghcr.io/parkervcp/yolks:nodejs_21"
+  },
+  "file_denylist": [],
+  "startup": "if [[ -d .git ]] && [[ {{AUTO_UPDATE}} == \"1\" ]]; then git pull; fi; if [[ ! -f .env ]]; then echo \"PORT={{SERVER_PORT}}\" > .env; echo \"BASE_URL={{BASE_URL}}\" >> .env; fi; npm install --production && npm start",
+  "config": {
+    "files": "{\r\n    \".env\": {\r\n        \"parser\": \"file\",\r\n        \"find\": {\r\n            \"PORT\": \"PORT={{server.build.default.port}}\",\r\n            \"BASE_URL\": \"BASE_URL={{server.build.env.BASE_URL}}\"\r\n        }\r\n    }\r\n}",
+    "startup": "{\r\n    \"done\": \"Server running on port\"\r\n}",
+    "logs": "{}",
+    "stop": "^C"
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/bin/bash\n# Self-Streme Installation Script for Pterodactyl\nset -e\n\ncd /mnt/server\n\necho \"===================================\"\necho \"Self-Streme Installation\"\necho \"===================================\"\n\n# Update packages\napt update\napt install -y git curl\n\n# Clone repository if not exists\nif [ -z \"${GITHUB_REPO}\" ]; then\n    GITHUB_REPO=\"https://github.com/zvielkoren/self-streme.git\"\nfi\n\nif [ -z \"${BRANCH}\" ]; then\n    BRANCH=\"main\"\nfi\n\nif [ -d .git ]; then\n    echo \"Repository already exists, updating...\"\n    git fetch origin\n    git reset --hard origin/${BRANCH}\nelse\n    echo \"Cloning repository...\"\n    git clone --single-branch --branch ${BRANCH} ${GITHUB_REPO} .\nfi\n\n# Install Node.js dependencies\necho \"Installing dependencies...\"\nnpm install --production\n\n# Create necessary directories\nmkdir -p media temp\n\n# Create .env file\necho \"Creating .env file...\"\ncat > .env << EOF\nPORT=\\${SERVER_PORT}\nBASE_URL=\\${BASE_URL}\nMEDIA_PATH=./media\nCACHE_BACKEND=memory\nCACHE_MAX_SIZE=1000\nCACHE_MAX_DISK_MB=5000\nTORRENT_TIMEOUT=60000\nTORRENT_MAX_RETRIES=3\nEOF\n\necho \"===================================\"\necho \"Installation Complete!\"\necho \"===================================\"\necho \"Configure your BASE_URL in the environment variables\"\necho \"Default port: 7000\"\necho \"Access your addon at: http://YOUR_IP:PORT/manifest.json\"",
+      "container": "node:18-bullseye-slim",
+      "entrypoint": "bash"
+    }
+  },
+  "variables": [
+    {
+      "name": "Server Port",
+      "description": "The port that Self-Streme will listen on",
+      "env_variable": "SERVER_PORT",
+      "default_value": "7000",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric|between:1024,65535",
+      "field_type": "text"
+    },
+    {
+      "name": "Base URL",
+      "description": "The base URL for accessing Self-Streme (e.g., https://your-domain.com or http://YOUR_IP:7000). Leave empty for auto-detection.",
+      "env_variable": "BASE_URL",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Auto Update",
+      "description": "Automatically pull latest changes from GitHub on startup",
+      "env_variable": "AUTO_UPDATE",
+      "default_value": "0",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|boolean",
+      "field_type": "text"
+    },
+    {
+      "name": "GitHub Repository",
+      "description": "GitHub repository URL to clone",
+      "env_variable": "GITHUB_REPO",
+      "default_value": "https://github.com/zvielkoren/self-streme.git",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Branch",
+      "description": "Git branch to use",
+      "env_variable": "BRANCH",
+      "default_value": "main",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Cache Backend",
+      "description": "Cache backend type: memory, sqlite, or redis",
+      "env_variable": "CACHE_BACKEND",
+      "default_value": "memory",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|in:memory,sqlite,redis",
+      "field_type": "text"
+    },
+    {
+      "name": "Cache Max Size",
+      "description": "Maximum number of cached files",
+      "env_variable": "CACHE_MAX_SIZE",
+      "default_value": "1000",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric|min:1",
+      "field_type": "text"
+    },
+    {
+      "name": "Cache Max Disk MB",
+      "description": "Maximum disk usage for cache in MB",
+      "env_variable": "CACHE_MAX_DISK_MB",
+      "default_value": "5000",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric|min:100",
+      "field_type": "text"
+    },
+    {
+      "name": "Jackett URL",
+      "description": "Jackett server URL (optional)",
+      "env_variable": "JACKETT_URL",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Jackett API Key",
+      "description": "Jackett API key (optional)",
+      "env_variable": "JACKETT_API_KEY",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    }
+  ]
+}

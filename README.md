@@ -34,6 +34,16 @@ docker-compose restart
 
 📚 **Complete Docker Documentation:** [docs/DOCKER.md](docs/DOCKER.md)
 
+### Pterodactyl Panel Deployment
+```bash
+# Quick setup on Pterodactyl
+bash <(curl -s https://raw.githubusercontent.com/zvielkoren/self-streme/main/pterodactyl-setup.sh)
+
+# Or import the egg: pterodactyl-egg.json
+```
+
+📦 **Pterodactyl Guide:** [docs/PTERODACTYL_DEPLOYMENT.md](docs/PTERODACTYL_DEPLOYMENT.md)
+
 ### Traditional Setup
 ```bash
 npm install
@@ -57,6 +67,9 @@ Self-Streme is a sophisticated Stremio addon that seamlessly bridges your local 
 - **Range Request Support** - Efficient video seeking and partial content delivery
 
 ### 🚀 **Advanced Streaming Capabilities**
+- **Magnet Link Converter** 🆕 - Convert torrent magnet links to HTTP streams that work on ANY server
+- **External Service Integration** 🆕 - Uses multiple proxy services, no P2P connectivity required
+- **Universal Compatibility** 🆕 - Works behind firewalls, NAT, in containers, and on restricted networks
 - **Hash-Based Caching** - Intelligent file caching with automatic cleanup
 - **Enhanced Torrent Streaming** - Direct torrent-to-stream with 60s timeout, progressive backoff, and DHT support
 - **Reliable Connectivity** - 12 high-quality trackers, NAT traversal, and local service discovery
@@ -211,6 +224,63 @@ self-streme/
 ```
 
 ## 🎯 Usage Guide
+
+### Magnet Link to Stream Converter 🆕
+
+Convert any torrent magnet link to a streamable HTTP URL - works on ANY server without P2P requirements!
+
+#### Web Interface
+Visit `http://localhost:7000/test-magnet-converter` for an interactive converter with:
+- Paste any magnet link
+- Get multiple streaming options (external services + local proxy)
+- Enhanced magnet with additional trackers
+- One-click copy and test streaming
+
+#### API Usage
+
+**GET Request:**
+```bash
+curl "http://localhost:7000/stream/magnet?magnet=magnet:?xt=urn:btih:HASH"
+```
+
+**POST Request:**
+```bash
+curl -X POST http://localhost:7000/stream/magnet \
+  -H "Content-Type: application/json" \
+  -d '{"magnet":"magnet:?xt=urn:btih:HASH"}'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "infoHash": "dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c",
+  "streamUrls": {
+    "external": [
+      {
+        "name": "TorrentDrive",
+        "url": "https://www.torrentdrive.com/stream/...",
+        "type": "stream"
+      }
+    ],
+    "local": {
+      "url": "http://localhost:7000/stream/proxy/...",
+      "note": "Requires P2P connectivity"
+    }
+  },
+  "recommended": "https://www.torrentdrive.com/stream/...",
+  "enhancedMagnet": "magnet:?xt=urn:btih:...&tr=...",
+  "message": "Multiple streaming options available"
+}
+```
+
+**Why This Is Better:**
+- ✅ Works on ANY server (Docker, VPS, Pterodactyl, shared hosting)
+- ✅ No firewall configuration needed
+- ✅ No P2P connectivity required for external services
+- ✅ Multiple fallback options
+- ✅ Enhanced magnet links with 12+ trackers
+- ✅ Instant conversion - no waiting for peers
 
 ### Source Selection Streaming
 
