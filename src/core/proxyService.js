@@ -22,9 +22,15 @@ class ProxyService {
             await this.updateProxyList();
 
             // Start periodic proxy testing every 30 minutes
-            setInterval(() => this.testProxies(), 1800000);
+            setInterval(() => {
+                this.testProxies().catch(err => {
+                    logger.error('Proxy testing error:', err.message);
+                });
+            }, 1800000);
         } catch (error) {
-            logger.error('Proxy service initialization error:', error);
+            logger.error('Proxy service initialization error:', error.message);
+            // Continue without proxies - the service will work without them
+            logger.info('Proxy service will work without proxies (direct connections)');
         }
     }
 
@@ -112,13 +118,20 @@ class ProxyService {
         const proxy = this.getProxy();
         if (!proxy) return axios.create();
 
-        return axios.create({
-            proxy: {
-                host: proxy.split('://')[1].split(':')[0],
-                port: parseInt(proxy.split(':')[2]),
-                protocol: proxy.split(':')[0]
-            }
-        });
+        try {
+            // Parse proxy URL safely
+            const proxyUrl = new URL(proxy);
+            return axios.create({
+                proxy: {
+                    host: proxyUrl.hostname,
+                    port: parseInt(proxyUrl.port) || 80,
+                    protocol: proxyUrl.protocol.replace(':', '')
+                }
+            });
+        } catch (error) {
+            logger.error('Failed to parse proxy URL:', error.message);
+            return axios.create();
+        }
     }
 
     /**

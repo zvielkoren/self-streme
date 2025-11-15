@@ -1,4 +1,5 @@
 import logger from "../../utils/logger.js";
+import { publicTrackers } from "../../config/trackers.js";
 
 /**
  * Mock provider for testing when external services are not available
@@ -58,7 +59,13 @@ class MockProvider {
 
     generateMockMagnet(title, year, quality, infoHash) {
         // Use the same hash that's in the infoHash property to ensure consistency
-        return `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(title + ' ' + year + ' ' + quality)}&tr=udp%3A%2F%2Ftracker.example.com%3A1337`;
+        // Add real working trackers from the tracker configuration
+        const trackerParams = publicTrackers
+            .slice(0, 10) // Use top 10 trackers for better performance
+            .map(tracker => `&tr=${encodeURIComponent(tracker)}`)
+            .join('');
+        
+        return `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(title + ' ' + year + ' ' + quality)}${trackerParams}`;
     }
 
     generateMockInfoHash(input, quality = '') {
