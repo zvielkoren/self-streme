@@ -70,6 +70,9 @@ Self-Streme is a sophisticated Stremio addon that seamlessly bridges your local 
 - **Range Request Support** - Efficient video seeking and partial content delivery
 
 ### 🚀 **Advanced Streaming Capabilities**
+- **Non-P2P Streaming** 🆕 - Stream from cache without P2P connectivity - [Learn More](docs/NO-P2P-STREAMING.md)
+- **Intelligent Cache-First Streaming** 🆕 - Cached files stream instantly, P2P used as fallback only
+- **Offline Streaming Support** 🆕 - Pre-populate cache for completely offline operation
 - **Magnet Link Converter** 🆕 - Convert torrent magnet links to HTTP streams that work on ANY server
 - **External Service Integration** 🆕 - Uses multiple proxy services, no P2P connectivity required
 - **Universal Compatibility** 🆕 - Works behind firewalls, NAT, in containers, and on restricted networks
@@ -232,6 +235,58 @@ self-streme/
 ```
 
 ## 🎯 Usage Guide
+
+### Non-P2P Streaming 🆕
+
+Stream content without P2P connectivity by leveraging cached files. Perfect for offline streaming and pre-populated content libraries!
+
+#### How It Works
+
+The `/stream/proxy/:infoHash` endpoint now intelligently checks for cached files **before** attempting P2P:
+
+1. **Cache Check** (instant, no P2P) → If file exists, stream immediately
+2. **P2P Fallback** (slower) → If no cache, download via P2P and cache for future
+
+#### Quick Start
+
+**Option 1: Pre-populate Cache**
+```bash
+# Place video file in cache directory with infoHash in filename
+cp video.mp4 ./temp/abcd1234567890abcd1234567890abcd12345678-movie.mp4
+
+# Stream without P2P
+curl http://localhost:7000/stream/proxy/abcd1234567890abcd1234567890abcd12345678
+# ✅ Instant playback, no peer search needed!
+```
+
+**Option 2: Build Cache Naturally**
+```bash
+# First request: Downloads via P2P and caches
+curl http://localhost:7000/stream/proxy/xyz9876...
+# ⏳ 10-120s download time
+
+# Subsequent requests: Streams from cache
+curl http://localhost:7000/stream/proxy/xyz9876...
+# ✅ Instant playback, no P2P needed!
+```
+
+#### File Requirements
+
+Files in `./temp/` directory must:
+- Contain the infoHash in filename (case-insensitive)
+- Be at least 1 MB in size
+- Have valid video extension (`.mp4`, `.mkv`, `.avi`, `.mov`, `.m4v`, `.webm`, `.flv`)
+
+#### Benefits
+
+- ✅ **Works Without P2P** - No peers required for cached content
+- ✅ **Instant Playback** - Cache responses in <100ms
+- ✅ **Offline Capable** - Pre-populate for offline streaming
+- ✅ **Bandwidth Savings** - Download once, stream forever
+- ✅ **Reliable** - Content persists after torrent dies
+
+📚 **Complete Guide**: [docs/NO-P2P-STREAMING.md](docs/NO-P2P-STREAMING.md)  
+📊 **Flow Diagrams**: [docs/STREAMING-FLOW.md](docs/STREAMING-FLOW.md)
 
 ### Magnet Link to Stream Converter 🆕
 
