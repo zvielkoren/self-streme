@@ -134,6 +134,13 @@ install_cloudflared() {
         return 1
     fi
     
+    # Verify download was successful
+    if [ ! -s cloudflared ]; then
+        echo -e "${RED}✗ Failed to download cloudflared${NC}"
+        rm -f cloudflared
+        return 1
+    fi
+    
     # Make it executable and move to local bin
     chmod +x cloudflared
     
@@ -242,7 +249,7 @@ if [ "$CREATE_ENV" = true ]; then
     
     # Get port from environment or ask
     if [ -z "$SERVER_PORT" ]; then
-        read -p "Enter server port [7000]: " PORT_INPUT
+        read -r -p "Enter server port [7000]: " PORT_INPUT
         SERVER_PORT=${PORT_INPUT:-7000}
     fi
     
@@ -251,7 +258,7 @@ if [ "$CREATE_ENV" = true ]; then
         echo ""
         echo "Enter your server's public URL (e.g., http://your-ip:7000)"
         echo "Leave empty for auto-detection:"
-        read -p "Base URL: " BASE_URL
+        read -r -p "Base URL: " BASE_URL
     fi
     
     # Ask for Cloudflare Tunnel token if cloudflared is installed
@@ -262,7 +269,7 @@ if [ "$CREATE_ENV" = true ]; then
         echo "If you have a Cloudflare Tunnel token, enter it now."
         echo "Get your token from: https://one.dash.cloudflare.com/"
         echo "Leave empty to skip (you can add it later to .env file)"
-        read -p "Tunnel Token: " TUNNEL_TOKEN
+        read -r -p "Tunnel Token: " TUNNEL_TOKEN
     fi
     
     # Create .env file
