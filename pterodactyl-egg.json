@@ -19,16 +19,16 @@
     "Node 21": "ghcr.io/parkervcp/yolks:nodejs_21"
   },
   "file_denylist": [],
-  "startup": "if [[ -d .git ]] && [[ {{AUTO_UPDATE}} == \"1\" ]]; then git pull; fi; if [[ ! -f .env ]]; then echo \"PORT={{SERVER_PORT}}\" > .env; echo \"BASE_URL={{BASE_URL}}\" >> .env; fi; npm install --production && npm start",
+  "startup": "if [[ -d .git ]] && [[ {{AUTO_UPDATE}} == \"1\" ]]; then git pull; fi; if [[ ! -f .env ]]; then echo \"PORT={{SERVER_PORT}}\" > .env; echo \"BASE_URL={{BASE_URL}}\" >> .env; echo \"TUNNEL_TOKEN={{TUNNEL_TOKEN}}\" >> .env; fi; npm install --production && npm start",
   "config": {
-    "files": "{\r\n    \".env\": {\r\n        \"parser\": \"file\",\r\n        \"find\": {\r\n            \"PORT\": \"PORT={{server.build.default.port}}\",\r\n            \"BASE_URL\": \"BASE_URL={{server.build.env.BASE_URL}}\"\r\n        }\r\n    }\r\n}",
+    "files": "{\r\n    \".env\": {\r\n        \"parser\": \"file\",\r\n        \"find\": {\r\n            \"PORT\": \"PORT={{server.build.default.port}}\",\r\n            \"BASE_URL\": \"BASE_URL={{server.build.env.BASE_URL}}\",\r\n            \"TUNNEL_TOKEN\": \"TUNNEL_TOKEN={{server.build.env.TUNNEL_TOKEN}}\"\r\n        }\r\n    }\r\n}",
     "startup": "{\r\n    \"done\": \"Server running on port\"\r\n}",
     "logs": "{}",
     "stop": "^C"
   },
   "scripts": {
     "installation": {
-      "script": "#!/bin/bash\n# Self-Streme Installation Script for Pterodactyl\nset -e\n\ncd /mnt/server\n\necho \"===================================\"\necho \"Self-Streme Installation\"\necho \"===================================\"\n\n# Update packages\napt update\napt install -y git curl\n\n# Clone repository if not exists\nif [ -z \"${GITHUB_REPO}\" ]; then\n    GITHUB_REPO=\"https://github.com/zvielkoren/self-streme.git\"\nfi\n\nif [ -z \"${BRANCH}\" ]; then\n    BRANCH=\"main\"\nfi\n\nif [ -d .git ]; then\n    echo \"Repository already exists, updating...\"\n    git fetch origin\n    git reset --hard origin/${BRANCH}\nelse\n    echo \"Cloning repository...\"\n    git clone --single-branch --branch ${BRANCH} ${GITHUB_REPO} .\nfi\n\n# Install Node.js dependencies\necho \"Installing dependencies...\"\nnpm install --production\n\n# Create necessary directories\nmkdir -p media temp\n\n# Create .env file\necho \"Creating .env file...\"\ncat > .env << EOF\nPORT=\\${SERVER_PORT}\nBASE_URL=\\${BASE_URL}\nMEDIA_PATH=./media\nCACHE_BACKEND=memory\nCACHE_MAX_SIZE=1000\nCACHE_MAX_DISK_MB=5000\nTORRENT_TIMEOUT=60000\nTORRENT_MAX_RETRIES=3\nEOF\n\necho \"===================================\"\necho \"Installation Complete!\"\necho \"===================================\"\necho \"Configure your BASE_URL in the environment variables\"\necho \"Default port: 7000\"\necho \"Access your addon at: http://YOUR_IP:PORT/manifest.json\"",
+      "script": "#!/bin/bash\n# Self-Streme Installation Script for Pterodactyl\nset -e\n\ncd /mnt/server\n\necho \"===================================\"\necho \"Self-Streme Installation\"\necho \"===================================\"\n\n# Update packages\napt update\napt install -y git curl\n\n# Clone repository if not exists\nif [ -z \"${GITHUB_REPO}\" ]; then\n    GITHUB_REPO=\"https://github.com/zvielkoren/self-streme.git\"\nfi\n\nif [ -z \"${BRANCH}\" ]; then\n    BRANCH=\"main\"\nfi\n\nif [ -d .git ]; then\n    echo \"Repository already exists, updating...\"\n    git fetch origin\n    git reset --hard origin/${BRANCH}\nelse\n    echo \"Cloning repository...\"\n    git clone --single-branch --branch ${BRANCH} ${GITHUB_REPO} .\nfi\n\n# Install Node.js dependencies\necho \"Installing dependencies...\"\nnpm install --production\n\n# Create necessary directories\nmkdir -p media temp\n\n# Create .env file\necho \"Creating .env file...\"\ncat > .env << EOF\nPORT=\\${SERVER_PORT}\nBASE_URL=\\${BASE_URL}\nTUNNEL_TOKEN=\\${TUNNEL_TOKEN}\nMEDIA_PATH=./media\nCACHE_BACKEND=memory\nCACHE_MAX_SIZE=1000\nCACHE_MAX_DISK_MB=5000\nTORRENT_TIMEOUT=60000\nTORRENT_MAX_RETRIES=3\nEOF\n\necho \"===================================\"\necho \"Installation Complete!\"\necho \"===================================\"\necho \"Configure your BASE_URL in the environment variables\"\necho \"Default port: 7000\"\necho \"Access your addon at: http://YOUR_IP:PORT/manifest.json\"\nif [ -n \"\\${TUNNEL_TOKEN}\" ]; then\n    echo \"Cloudflare Tunnel will be enabled on startup\"\nfi",
       "container": "node:18-bullseye-slim",
       "entrypoint": "bash"
     }
@@ -128,6 +128,16 @@
       "name": "Jackett API Key",
       "description": "Jackett API key (optional)",
       "env_variable": "JACKETT_API_KEY",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Cloudflare Tunnel Token",
+      "description": "Cloudflare Tunnel token for exposing the server through Cloudflare. Get your token from: https://one.dash.cloudflare.com/ → Zero Trust → Access → Tunnels (optional)",
+      "env_variable": "TUNNEL_TOKEN",
       "default_value": "",
       "user_viewable": true,
       "user_editable": true,
