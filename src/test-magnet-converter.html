@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magnet Link to Stream URL Converter - Self-Streme</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-convert {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-convert:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-clear {
+            background: #f5f5f5;
+            color: #666;
+        }
+
+        .btn-clear:hover {
+            background: #e0e0e0;
+        }
+
+        .result {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .result.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .result-item {
+            background: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            word-break: break-all;
+        }
+
+        .result-label {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .result-value {
+            color: #333;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .copy-btn {
+            background: #667eea;
+            color: white;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 5px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: background 0.3s;
+        }
+
+        .copy-btn:hover {
+            background: #764ba2;
+        }
+
+        .error {
+            background: #fee;
+            border: 2px solid #fcc;
+            border-radius: 10px;
+            padding: 15px;
+            color: #c33;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #1565c0;
+        }
+
+        .example-links {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 10px;
+        }
+
+        .example-links h4 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .example-link {
+            display: block;
+            color: #667eea;
+            text-decoration: none;
+            padding: 5px 0;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .example-link:hover {
+            text-decoration: underline;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .success-icon {
+            color: #4caf50;
+            font-size: 24px;
+            margin-right: 10px;
+        }
+
+        .video-player {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .video-player.show {
+            display: block;
+        }
+
+        video {
+            width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 Magnet Link to Stream URL Converter</h1>
+        <p class="subtitle">Convert torrent magnet links to streamable HTTP URLs</p>
+
+        <div class="input-group">
+            <label for="magnetInput">Magnet Link:</label>
+            <textarea 
+                id="magnetInput" 
+                placeholder="magnet:?xt=urn:btih:..."
+                rows="3"
+            ></textarea>
+        </div>
+
+        <div class="button-group">
+            <button class="btn-convert" onclick="convertMagnet()">
+                🔄 Convert to Stream URL
+            </button>
+            <button class="btn-clear" onclick="clearAll()">
+                🗑️ Clear
+            </button>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Converting magnet link...</p>
+        </div>
+
+        <div class="error" id="error"></div>
+
+        <div class="result" id="result">
+            <h3><span class="success-icon">✓</span>Conversion Successful!</h3>
+            
+            <div class="result-item">
+                <div class="result-label">InfoHash:</div>
+                <div class="result-value" id="infoHash"></div>
+            </div>
+
+            <div class="result-item">
+                <div class="result-label">Stream URL:</div>
+                <div class="result-value" id="streamUrl"></div>
+                <button class="copy-btn" onclick="copyToClipboard('streamUrl')">📋 Copy</button>
+            </div>
+
+            <div class="result-item">
+                <div class="result-label">Usage:</div>
+                <div class="result-value" id="usage"></div>
+            </div>
+
+            <button class="btn-convert" onclick="testStream()" style="margin-top: 15px;">
+                ▶️ Test Stream
+            </button>
+        </div>
+
+        <div class="video-player" id="videoPlayer">
+            <h3>Stream Preview:</h3>
+            <video id="video" controls></video>
+        </div>
+
+        <div class="info-box">
+            <strong>How it works:</strong><br>
+            1. Paste a magnet link above<br>
+            2. Click "Convert to Stream URL"<br>
+            3. Use the generated HTTP URL in any video player or Stremio<br>
+            4. The server will download and stream the torrent content on-demand
+        </div>
+
+        <div class="example-links">
+            <h4>Example Magnet Links (for testing):</h4>
+            <a class="example-link" onclick="useSampleMagnet(0)">
+                Sample 1: Big Buck Bunny (Open Source Film)
+            </a>
+            <a class="example-link" onclick="useSampleMagnet(1)">
+                Sample 2: Sintel (Open Source Film)
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Sample magnet links for testing (open source content)
+        const sampleMagnets = [
+            'magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&dn=Big+Buck+Bunny&tr=udp%3A%2F%2Fexplodie.org%3A6969&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969&tr=udp%3A%2F%2Ftracker.empire-js.us%3A1337&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337&tr=wss%3A%2F%2Ftracker.btorrent.xyz&tr=wss%3A%2F%2Ftracker.fastcast.nz&tr=wss%3A%2F%2Ftracker.openwebtorrent.com',
+            'magnet:?xt=urn:btih:08ada5a7a6183aae1e09d831df6748d566095a10&dn=Sintel&tr=udp%3A%2F%2Fexplodie.org%3A6969&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969&tr=udp%3A%2F%2Ftracker.empire-js.us%3A1337&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337&tr=wss%3A%2F%2Ftracker.btorrent.xyz&tr=wss%3A%2F%2Ftracker.fastcast.nz&tr=wss%3A%2F%2Ftracker.openwebtorrent.com'
+        ];
+
+        function useSampleMagnet(index) {
+            document.getElementById('magnetInput').value = sampleMagnets[index];
+        }
+
+        async function convertMagnet() {
+            const magnetInput = document.getElementById('magnetInput').value.trim();
+            
+            if (!magnetInput) {
+                showError('Please enter a magnet link');
+                return;
+            }
+
+            if (!magnetInput.startsWith('magnet:')) {
+                showError('Invalid magnet link. It must start with "magnet:"');
+                return;
+            }
+
+            // Clear previous results
+            document.getElementById('result').classList.remove('show');
+            document.getElementById('error').classList.remove('show');
+            document.getElementById('videoPlayer').classList.remove('show');
+            document.getElementById('loading').classList.add('show');
+
+            try {
+                const response = await fetch('/stream/magnet?magnet=' + encodeURIComponent(magnetInput));
+                const data = await response.json();
+
+                document.getElementById('loading').classList.remove('show');
+
+                if (data.success) {
+                    document.getElementById('infoHash').textContent = data.infoHash;
+                    document.getElementById('streamUrl').textContent = data.streamUrl;
+                    document.getElementById('usage').textContent = data.usage.direct;
+                    document.getElementById('result').classList.add('show');
+                } else {
+                    showError(data.message || 'Conversion failed');
+                }
+            } catch (error) {
+                document.getElementById('loading').classList.remove('show');
+                showError('Error: ' + error.message);
+            }
+        }
+
+        function showError(message) {
+            const errorEl = document.getElementById('error');
+            errorEl.textContent = message;
+            errorEl.classList.add('show');
+        }
+
+        function clearAll() {
+            document.getElementById('magnetInput').value = '';
+            document.getElementById('result').classList.remove('show');
+            document.getElementById('error').classList.remove('show');
+            document.getElementById('videoPlayer').classList.remove('show');
+        }
+
+        function copyToClipboard(elementId) {
+            const text = document.getElementById(elementId).textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Copied to clipboard!');
+            }).catch(err => {
+                alert('Failed to copy: ' + err);
+            });
+        }
+
+        function testStream() {
+            const streamUrl = document.getElementById('streamUrl').textContent;
+            const video = document.getElementById('video');
+            video.src = streamUrl;
+            document.getElementById('videoPlayer').classList.add('show');
+            video.play();
+        }
+
+        // Allow Enter key to convert
+        document.getElementById('magnetInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                convertMagnet();
+            }
+        });
+    </script>
+</body>
+</html>

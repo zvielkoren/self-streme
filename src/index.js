@@ -105,6 +105,11 @@ app.get("/test-source-selection", (req, res) => {
   res.sendFile(path.join(__dirname, "test-source-selection.html"));
 });
 
+// Serve magnet converter test page
+app.get("/test-magnet-converter", (req, res) => {
+  res.sendFile(path.join(__dirname, "test-magnet-converter.html"));
+});
+
 // Test endpoint for source selection with direct URL
 app.get("/test-stream/:fileIdx", (req, res) => {
   const { fileIdx } = req.params;
@@ -416,6 +421,148 @@ app.get("/stream/proxy/:infoHash", async (req, res) => {
         return res.status(500).json({ error: "Internal server error" });
       }
     }
+  }
+});
+
+// Convert magnet link to stream URL endpoint
+// This endpoint allows users to provide a magnet link and get a streamable URL
+// Supports both GET (magnet in query param) and POST (magnet in body)
+app.get("/stream/magnet", express.json(), async (req, res) => {
+  try {
+    const magnetLink = req.query.magnet || req.query.url;
+    
+    if (!magnetLink) {
+      return res.status(400).json({
+        error: "Missing magnet link",
+        message: "Please provide a magnet link using the 'magnet' or 'url' query parameter",
+        example: "/stream/magnet?magnet=magnet:?xt=urn:btih:..."
+      });
+    }
+
+    // Validate it's a magnet link
+    if (!magnetLink.startsWith("magnet:")) {
+      return res.status(400).json({
+        error: "Invalid magnet link",
+        message: "The provided link is not a valid magnet URI. It must start with 'magnet:'",
+        provided: magnetLink.substring(0, 50)
+      });
+    }
+
+    // Extract infoHash from magnet link
+    const infoHash = streamService.extractInfoHash(magnetLink);
+    
+    if (!infoHash) {
+      return res.status(400).json({
+        error: "Invalid magnet link",
+        message: "Could not extract infoHash from the provided magnet link",
+        provided: magnetLink.substring(0, 100)
+      });
+    }
+
+    logger.info(`Magnet to stream conversion requested for infoHash: ${infoHash}`);
+
+    // Get proxy-aware base URL for the stream
+    const baseUrl = getProxyAwareBaseUrl(req);
+    const streamUrl = `${baseUrl}/stream/proxy/${infoHash}`;
+
+    // Cache the stream info for better handling
+    streamService.handler.cacheStream(
+      infoHash,
+      "unknown", // type unknown for direct magnet links
+      "Direct Magnet Stream",
+      "unknown"
+    );
+
+    // Return the streamable URL
+    res.json({
+      success: true,
+      magnet: magnetLink,
+      infoHash: infoHash,
+      streamUrl: streamUrl,
+      message: "Use the streamUrl to access the content via HTTP streaming",
+      usage: {
+        direct: `Access directly: ${streamUrl}`,
+        stremio: `Use in Stremio or any video player that supports HTTP streams`
+      }
+    });
+
+    logger.info(`Successfully converted magnet to stream URL: ${streamUrl}`);
+  } catch (error) {
+    logger.error("Magnet to stream conversion error:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message
+    });
+  }
+});
+
+// POST endpoint for magnet link conversion (accepts JSON body)
+app.post("/stream/magnet", express.json(), async (req, res) => {
+  try {
+    const magnetLink = req.body.magnet || req.body.url;
+    
+    if (!magnetLink) {
+      return res.status(400).json({
+        error: "Missing magnet link",
+        message: "Please provide a magnet link in the request body using 'magnet' or 'url' field",
+        example: { magnet: "magnet:?xt=urn:btih:..." }
+      });
+    }
+
+    // Validate it's a magnet link
+    if (!magnetLink.startsWith("magnet:")) {
+      return res.status(400).json({
+        error: "Invalid magnet link",
+        message: "The provided link is not a valid magnet URI. It must start with 'magnet:'",
+        provided: magnetLink.substring(0, 50)
+      });
+    }
+
+    // Extract infoHash from magnet link
+    const infoHash = streamService.extractInfoHash(magnetLink);
+    
+    if (!infoHash) {
+      return res.status(400).json({
+        error: "Invalid magnet link",
+        message: "Could not extract infoHash from the provided magnet link",
+        provided: magnetLink.substring(0, 100)
+      });
+    }
+
+    logger.info(`Magnet to stream conversion requested (POST) for infoHash: ${infoHash}`);
+
+    // Get proxy-aware base URL for the stream
+    const baseUrl = getProxyAwareBaseUrl(req);
+    const streamUrl = `${baseUrl}/stream/proxy/${infoHash}`;
+
+    // Cache the stream info for better handling
+    streamService.handler.cacheStream(
+      infoHash,
+      "unknown", // type unknown for direct magnet links
+      "Direct Magnet Stream",
+      "unknown"
+    );
+
+    // Return the streamable URL
+    res.json({
+      success: true,
+      magnet: magnetLink,
+      infoHash: infoHash,
+      streamUrl: streamUrl,
+      message: "Use the streamUrl to access the content via HTTP streaming",
+      usage: {
+        direct: `Access directly: ${streamUrl}`,
+        stremio: `Use in Stremio or any video player that supports HTTP streams`
+      }
+    });
+
+    logger.info(`Successfully converted magnet to stream URL (POST): ${streamUrl}`);
+  } catch (error) {
+    logger.error("Magnet to stream conversion error (POST):", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message
+    });
   }
 });
 
