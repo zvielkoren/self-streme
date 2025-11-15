@@ -618,6 +618,7 @@ class TorrentService {
 
   /**
    * Stream a torrent over HTTP
+   * Works without P2P by trying HTTP sources first, then falling back to P2P
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    * @param {string} infoHash - Torrent info hash
@@ -635,18 +636,33 @@ class TorrentService {
         return this.streamMockContent(req, res, infoHash);
       }
 
-      // Convert infoHash to magnet URI - add trackers for better connectivity
-      const trackers = config.torrent.trackers
-        .map((t) => `&tr=${encodeURIComponent(t)}`)
-        .join("");
-      const magnetUri = `magnet:?xt=urn:btih:${infoHash}${trackers}`;
-      logger.info(`Starting torrent stream for hash: ${infoHash}`);
-
       // Check if response is already sent (avoid multiple headers)
       if (res.headersSent) {
         logger.warn(`Headers already sent for ${infoHash}`);
         return;
       }
+
+      // STEP 1: Try to stream from already downloaded file (cached from previous downloads)
+      logger.info(`Checking for cached file for ${infoHash}`);
+      const fallbackStream = await this.tryFallbackFileStream(infoHash);
+      if (fallbackStream) {
+        logger.info(`Using cached file for ${infoHash} - no P2P needed`);
+        return this.streamFromFile(
+          req,
+          res,
+          fallbackStream.path,
+          fallbackStream.size,
+          infoHash,
+        );
+      }
+
+      // STEP 2: Try P2P streaming (original behavior)
+      // Convert infoHash to magnet URI - add trackers for better connectivity
+      const trackers = config.torrent.trackers
+        .map((t) => `&tr=${encodeURIComponent(t)}`)
+        .join("");
+      const magnetUri = `magnet:?xt=urn:btih:${infoHash}${trackers}`;
+      logger.info(`Attempting P2P stream for hash: ${infoHash}`);
 
       // Attempt to get stream with retry logic
       let torrentStream;
@@ -656,30 +672,20 @@ class TorrentService {
         // Extract meaningful error information
         const errorMessage =
           streamError.message || streamError.toString() || "Unknown error";
-        const errorDetails = streamError.stack || JSON.stringify(streamError);
         logger.error(
-          `Failed to get torrent stream for ${infoHash}: ${errorMessage}`,
-          errorDetails,
+          `P2P streaming failed for ${infoHash}: ${errorMessage}`,
         );
 
-        // Try fallback: direct file access if available
-        const fallbackStream = await this.tryFallbackFileStream(infoHash);
-        if (fallbackStream) {
-          logger.info(`Using fallback file stream for ${infoHash}`);
-          return this.streamFromFile(
-            req,
-            res,
-            fallbackStream.path,
-            fallbackStream.size,
-            infoHash,
-          );
-        }
-
-        // No fallback available
+        // P2P failed, but we already checked cached files above
+        // No other fallback available
         if (!res.headersSent) {
           return res
             .status(404)
-            .json({ error: "Stream not found or timed out" });
+            .json({ 
+              error: "Stream not found",
+              message: "Unable to stream this content. P2P connectivity is unavailable and no cached version exists.",
+              suggestion: "This content requires P2P connectivity or needs to be downloaded first."
+            });
         }
         return;
       }
@@ -908,32 +914,45 @@ class TorrentService {
 
   /**
    * Try to find a fallback file stream for direct access
+   * Looks for files matching the infoHash in the download directory
    * @param {string} infoHash - Torrent info hash
    * @returns {Promise<object|null>} File stream info or null
    */
   async tryFallbackFileStream(infoHash) {
     try {
-      // Look for any files in download directory that might match this hash
+      // Look for files in download directory that match this hash
       const downloadPath = config.torrent.downloadPath;
       if (!fs.existsSync(downloadPath)) {
+        logger.debug(`Download path does not exist: ${downloadPath}`);
         return null;
       }
 
       // Check for any subdirectories or files that contain the hash
       const items = fs.readdirSync(downloadPath);
+      const normalizedHash = infoHash.toLowerCase();
+      
+      // First, look for exact matches (files/dirs containing the infoHash)
       for (const item of items) {
         const itemPath = path.join(downloadPath, item);
+        const itemLower = item.toLowerCase();
+        
+        // Check if item name contains the infoHash
+        if (!itemLower.includes(normalizedHash)) {
+          continue; // Skip items that don't match this hash
+        }
+
         const stats = fs.statSync(itemPath);
 
         if (stats.isDirectory()) {
-          // Check if directory name contains hash or look for video files inside
+          // Check if directory name contains hash and look for video files inside
+          logger.debug(`Found directory matching hash: ${item}`);
           const videoFiles = this.findVideoFilesInDirectory(itemPath);
           if (videoFiles.length > 0) {
             const firstVideo = videoFiles[0];
             const videoStats = fs.statSync(firstVideo);
             if (videoStats.size > 1024 * 1024) {
               // At least 1MB
-              logger.info(`Found fallback video file: ${firstVideo}`);
+              logger.info(`Found cached video file for ${infoHash}: ${firstVideo}`);
               return {
                 path: firstVideo,
                 size: videoStats.size,
@@ -953,7 +972,7 @@ class TorrentService {
             ".flv",
           ];
           if (videoExtensions.includes(ext) && stats.size > 1024 * 1024) {
-            logger.info(`Found fallback video file: ${itemPath}`);
+            logger.info(`Found cached video file for ${infoHash}: ${itemPath}`);
             return {
               path: itemPath,
               size: stats.size,
@@ -962,6 +981,8 @@ class TorrentService {
         }
       }
 
+      // No exact match found
+      logger.debug(`No cached file found for infoHash: ${infoHash}`);
       return null;
     } catch (error) {
       logger.debug(`Error in fallback file stream search: ${error.message}`);

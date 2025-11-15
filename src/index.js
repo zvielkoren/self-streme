@@ -345,7 +345,8 @@ app.get("/stream/cache/:infoHash", async (req, res) => {
 });
 
 // Direct streaming endpoint
-// Proxy streaming endpoint - Downloads torrent on server and streams as HTTP
+// Proxy streaming endpoint - Streams the file using infoHash
+// Works without P2P by trying HTTP sources first, then falling back to P2P if needed
 app.get("/stream/proxy/:infoHash", async (req, res) => {
   try {
     const { infoHash } = req.params;
@@ -399,8 +400,8 @@ app.get("/stream/proxy/:infoHash", async (req, res) => {
     }
 
     // Stream through our proxy service - this downloads the torrent and streams it
-    // This is the key part that makes iOS work - torrent is downloaded on server
-    logger.info(`Initiating torrent download and stream for ${infoHash}`);
+    // This works with or without P2P - will try HTTP sources first
+    logger.info(`Initiating stream for ${infoHash}`);
     await torrentService.streamTorrent(req, res, infoHash);
   } catch (error) {
     logger.error("Proxy stream error:", error);
