@@ -50,6 +50,9 @@ npm install
 npm start
 ```
 
+**Optional - Cloudflare Tunnel:**
+The repository includes a pre-downloaded `cloudflared` binary (Linux x64) for easy tunnel setup. The binary is executable and ready to use.
+
 ---
 
 ## 🌟 Overview
@@ -132,6 +135,11 @@ Self-Streme is a sophisticated Stremio addon that seamlessly bridges your local 
    - Click **"Install from URL"**
    - Enter: `http://127.0.0.1:7000/manifest.json`
    - Click **Install**
+
+6. **Optional: Cloudflare Tunnel Setup**
+   - A `cloudflared` binary is included in the repository root for easy tunnel setup
+   - The binary is already executable and ready to use
+   - For tunnel setup instructions, see the [Pterodactyl deployment guide](./docs/PTERODACTYL_DEPLOYMENT.md)
 
 > **📦 Production Deployment?** See [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for Cloudflare, Plesk, nginx, Render, Docker, and more!
 
