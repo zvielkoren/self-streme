@@ -17,9 +17,10 @@ class HybridStreamService {
   constructor(torrentService, cacheManager) {
     this.torrentService = torrentService;
     this.cacheManager = cacheManager;
-    this.p2pTimeout = parseInt(process.env.P2P_TIMEOUT, 10) || 20000;
+    this.p2pTimeout = parseInt(process.env.P2P_TIMEOUT, 10) || 60000; // Increased to 60s for better P2P success
     this.enableHttpFallback = process.env.ENABLE_HTTP_FALLBACK !== "false";
     this.downloadPath = path.join(process.cwd(), "temp", "downloads");
+    this.maxRetries = parseInt(process.env.HTTP_MAX_RETRIES, 10) || 2; // Retry failed sources
 
     if (!fs.existsSync(this.downloadPath)) {
       fs.mkdirSync(this.downloadPath, { recursive: true });
@@ -337,76 +338,110 @@ class HybridStreamService {
     );
     logger.info(`[Hybrid] Sources: ${sources.map((s) => s.name).join(", ")}`);
 
+    // Try each source with retries
     for (const source of sources) {
-      try {
-        logger.info(`[Hybrid] 📥 Trying ${source.name}...`);
+      let lastError = null;
 
-        // Handle async URL building (for premium services)
-        let url = source.url;
-        if (source.isAsync && typeof source.buildUrl === "function") {
-          logger.info(`[Hybrid] Getting URL from ${source.name}...`);
-          url = await source.buildUrl(infoHash, fileName, torrentData);
-        }
+      // Retry each source up to maxRetries times
+      for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+        try {
+          const retryMsg =
+            attempt > 1 ? ` (attempt ${attempt}/${this.maxRetries})` : "";
+          logger.info(`[Hybrid] 📥 Trying ${source.name}${retryMsg}...`);
 
-        logger.info(`[Hybrid] URL: ${url}`);
-        logger.info(
-          `[Hybrid] Size: ${this.formatBytes(fileSize)} - may take several minutes`,
-        );
-
-        const response = await axios({
-          method: "GET",
-          url: url,
-          responseType: "stream",
-          timeout: 600000,
-          maxContentLength: fileSize + 10000000,
-          headers: {
-            "User-Agent": "Mozilla/5.0",
-            Accept: "*/*",
-            "Accept-Encoding": "identity",
-          },
-          maxRedirects: 5,
-          validateStatus: (status) => status >= 200 && status < 300,
-        });
-
-        const writer = fs.createWriteStream(localPath);
-        let downloaded = 0;
-        let lastLog = Date.now();
-
-        response.data.on("data", (chunk) => {
-          downloaded += chunk.length;
-          if (Date.now() - lastLog > 5000) {
-            const percent = ((downloaded / fileSize) * 100).toFixed(1);
-            logger.info(
-              `[Hybrid] [${source.name}] Progress: ${percent}% (${this.formatBytes(downloaded)}/${this.formatBytes(fileSize)})`,
-            );
-            lastLog = Date.now();
+          // Handle async URL building (for premium services)
+          let url = source.url;
+          if (source.isAsync && typeof source.buildUrl === "function") {
+            logger.info(`[Hybrid] Getting URL from ${source.name}...`);
+            url = await source.buildUrl(infoHash, fileName, torrentData);
           }
-        });
 
-        await pipeline(response.data, writer);
+          if (!url) {
+            logger.warn(`[Hybrid] ${source.name} returned no URL, skipping...`);
+            break; // Don't retry if no URL
+          }
 
-        const stats = fs.statSync(localPath);
-        logger.info(
-          `[Hybrid] ✅ Downloaded from ${source.name}: ${this.formatBytes(stats.size)}`,
-        );
-
-        if (stats.size < fileSize * 0.95) {
-          logger.warn(
-            `[Hybrid] Size mismatch (expected ${this.formatBytes(fileSize)}, got ${this.formatBytes(stats.size)})`,
+          logger.info(`[Hybrid] URL: ${url}`);
+          logger.info(
+            `[Hybrid] Size: ${this.formatBytes(fileSize)} - may take several minutes`,
           );
-          fs.unlinkSync(localPath);
-          downloadSources.updateSourceHealth(source.name, false);
-          continue;
-        }
 
-        logger.info(`[Hybrid] ✓ Successfully downloaded from ${source.name}!`);
-        downloadSources.updateSourceHealth(source.name, true);
-        return localPath;
-      } catch (error) {
-        logger.error(`[Hybrid] ${source.name} failed: ${error.message}`);
-        downloadSources.updateSourceHealth(source.name, false);
-        if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
-        // Continue to next source
+          const response = await axios({
+            method: "GET",
+            url: url,
+            responseType: "stream",
+            timeout: 600000,
+            maxContentLength: fileSize + 10000000,
+            headers: {
+              "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+              Accept: "*/*",
+              "Accept-Encoding": "identity",
+              Referer: new URL(url).origin,
+            },
+            maxRedirects: 5,
+            validateStatus: (status) => status >= 200 && status < 300,
+          });
+
+          const writer = fs.createWriteStream(localPath);
+          let downloaded = 0;
+          let lastLog = Date.now();
+
+          response.data.on("data", (chunk) => {
+            downloaded += chunk.length;
+            if (Date.now() - lastLog > 5000) {
+              const percent = ((downloaded / fileSize) * 100).toFixed(1);
+              logger.info(
+                `[Hybrid] [${source.name}] Progress: ${percent}% (${this.formatBytes(downloaded)}/${this.formatBytes(fileSize)})`,
+              );
+              lastLog = Date.now();
+            }
+          });
+
+          await pipeline(response.data, writer);
+
+          const stats = fs.statSync(localPath);
+          logger.info(
+            `[Hybrid] ✅ Downloaded from ${source.name}: ${this.formatBytes(stats.size)}`,
+          );
+
+          if (stats.size < fileSize * 0.95) {
+            logger.warn(
+              `[Hybrid] Size mismatch (expected ${this.formatBytes(fileSize)}, got ${this.formatBytes(stats.size)})`,
+            );
+            fs.unlinkSync(localPath);
+            downloadSources.updateSourceHealth(source.name, false);
+            lastError = new Error("Size mismatch");
+            continue; // Retry this source
+          }
+
+          logger.info(
+            `[Hybrid] ✓ Successfully downloaded from ${source.name}!`,
+          );
+          downloadSources.updateSourceHealth(source.name, true);
+          return localPath;
+        } catch (error) {
+          lastError = error;
+          logger.error(
+            `[Hybrid] ${source.name} failed (attempt ${attempt}/${this.maxRetries}): ${error.message}`,
+          );
+          downloadSources.updateSourceHealth(source.name, false);
+          if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+
+          // Wait before retry (exponential backoff)
+          if (attempt < this.maxRetries) {
+            const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+            logger.info(`[Hybrid] Waiting ${waitTime}ms before retry...`);
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
+          }
+        }
+      }
+
+      // All retries failed for this source, log final error
+      if (lastError) {
+        logger.error(
+          `[Hybrid] ${source.name} exhausted all retries: ${lastError.message}`,
+        );
       }
     }
 

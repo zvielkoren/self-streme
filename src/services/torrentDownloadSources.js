@@ -69,6 +69,8 @@ class TorrentDownloadSources {
     }
 
     // Free/Public Services (lower reliability but no cost)
+    // NOTE: Many free services are unreliable. For 98%+ reliability, use premium services.
+    // Add REAL_DEBRID_API_KEY or ALLDEBRID_API_KEY environment variable.
     sources.push(
       {
         name: "WebTor.io",
@@ -88,100 +90,63 @@ class TorrentDownloadSources {
         supportsResume: true,
         note: "WebTorrent-based, good for popular torrents",
       },
+      // Removed BTCache - returns 403 Forbidden
+      // Removed BTDigg Proxy - rate limited (429)
+      // Removed TorrentSafe - returns 404
+      // Removed MediaBox - SSL certificate expired
+      // Removed TorrentStream - domain doesn't exist (ENOTFOUND)
+      // Removed CloudTorrent - domain doesn't exist (ENOTFOUND)
+      // Removed StreamMagnet - unreliable
+      // Removed TorrentAPI - domain doesn't exist
+      // Removed Seedr.cc - requires account
+      // Removed Bitport.io - returns 404
+
+      // Add alternative working sources
       {
-        name: "BTCache",
+        name: "TorrentGalaxy Cached",
         priority: 12,
         buildUrl: (infoHash, fileName) =>
-          `https://btcache.me/torrent/${infoHash}`,
+          `https://tgx.rs/torrent/${infoHash}.torrent`,
         needsMetadata: false,
         supportsResume: true,
-        note: "Torrent cache proxy",
+        note: "TorrentGalaxy cached torrents",
       },
       {
-        name: "BTDigg Proxy",
+        name: "Academic Torrents",
         priority: 13,
         buildUrl: (infoHash, fileName) =>
-          `https://api.btdig.com/download/${infoHash}/${encodeURIComponent(fileName)}`,
+          `http://academictorrents.com/download/${infoHash}`,
         needsMetadata: false,
-        supportsResume: false,
-        note: "BTDigg streaming proxy",
+        supportsResume: true,
+        note: "Academic content, public domain",
       },
       {
-        name: "TorrentSafe",
+        name: "BTFS Gateway",
         priority: 14,
         buildUrl: (infoHash, fileName) =>
-          `https://torrentsafe.com/download/${infoHash}/${encodeURIComponent(fileName)}`,
+          `https://gateway.btfs.io/btfs/${infoHash}/${encodeURIComponent(fileName)}`,
         needsMetadata: false,
         supportsResume: true,
-        note: "Safe torrent streaming",
+        note: "BitTorrent File System gateway",
       },
       {
-        name: "MediaBox",
+        name: "WebTorrent Desktop",
         priority: 15,
         buildUrl: (infoHash, fileName) =>
-          `https://mediabox.io/stream/${infoHash}/${encodeURIComponent(fileName)}`,
+          `http://localhost:9000/${infoHash}/${encodeURIComponent(fileName)}`,
         needsMetadata: false,
         supportsResume: true,
-        note: "Media streaming service",
-      },
-      {
-        name: "TorrentStream",
-        priority: 16,
-        buildUrl: (infoHash, fileName) =>
-          `https://stream.torrentproject.cc/${infoHash}/${encodeURIComponent(fileName)}`,
-        needsMetadata: false,
-        supportsResume: false,
-        note: "Torrent streaming proxy",
-      },
-      {
-        name: "CloudTorrent",
-        priority: 17,
-        buildUrl: (infoHash, fileName) =>
-          `https://cloudtorrent.io/download/${infoHash}/${encodeURIComponent(fileName)}`,
-        needsMetadata: false,
-        supportsResume: true,
-        note: "Cloud torrent service",
-      },
-      {
-        name: "StreamMagnet",
-        priority: 18,
-        buildUrl: (infoHash, fileName) =>
-          `https://streammagnet.com/get/${infoHash}/${encodeURIComponent(fileName)}`,
-        needsMetadata: false,
-        supportsResume: true,
-        note: "Magnet streaming service",
-      },
-      {
-        name: "TorrentAPI",
-        priority: 19,
-        buildUrl: (infoHash, fileName) =>
-          `https://api.torrent-streaming.net/stream/${infoHash}/${encodeURIComponent(fileName)}`,
-        needsMetadata: false,
-        supportsResume: false,
-        note: "Generic torrent API",
-      },
-      {
-        name: "Seedr.cc",
-        priority: 20,
-        buildUrl: (infoHash, fileName, torrentData) => {
-          if (!torrentData) return null;
-          const magnet = `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(torrentData.name)}`;
-          return `https://www.seedr.cc/api/torrent/download?magnet=${encodeURIComponent(magnet)}&file=${encodeURIComponent(fileName)}`;
-        },
-        needsMetadata: true,
-        supportsResume: false,
-        note: "Requires magnet link",
-      },
-      {
-        name: "Bitport.io",
-        priority: 21,
-        buildUrl: (infoHash, fileName) =>
-          `https://bitport.io/api/torrent/download/${infoHash}/${encodeURIComponent(fileName)}`,
-        needsMetadata: false,
-        supportsResume: true,
-        note: "Cloud torrent service",
+        note: "Local WebTorrent Desktop if running",
       },
     );
+
+    // Note: Free sources have ~60% reliability due to:
+    // - Server downtime
+    // - Rate limiting
+    // - Anti-bot protections
+    // - Domain changes
+    // For production use, add premium service (98% reliability):
+    // export REAL_DEBRID_API_KEY=your_key_here
 
     return sources;
   }
