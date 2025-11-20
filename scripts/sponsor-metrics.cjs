@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+SPONSOR_TOKENSPONSOR_TOKEN#!/usr/bin/env node
 
 /**
  * Sponsor Metrics Generator

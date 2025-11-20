@@ -43,7 +43,7 @@ jobs:
         env:
           SPONSOR_TOKEN: ${{ secrets.SPONSOR_TOKEN }}
         run: |
-          node scripts/update-sponsors.js
+          node scripts/update-sponsors.cjs
 
       - name: Commit and push if changed
         run: |
@@ -77,7 +77,7 @@ jobs:
           TIER_NAME: ${{ github.event.client_payload.tier_name }}
           MONTHLY_AMOUNT: ${{ github.event.client_payload.monthly_amount }}
         run: |
-          node scripts/welcome-sponsor.js
+          node scripts/welcome-sponsor.cjs
 
   tier-changed:
     name: Handle Tier Change
@@ -104,7 +104,7 @@ jobs:
           NEW_TIER: ${{ github.event.client_payload.new_tier }}
           OLD_TIER: ${{ github.event.client_payload.old_tier }}
         run: |
-          node scripts/tier-changed.js
+          node scripts/tier-changed.cjs
 
   cancelled-sponsor:
     name: Handle Sponsor Cancellation
@@ -130,7 +130,7 @@ jobs:
           SPONSOR_LOGIN: ${{ github.event.client_payload.sponsor_login }}
           TIER_NAME: ${{ github.event.client_payload.tier_name }}
         run: |
-          node scripts/cancelled-sponsor.js
+          node scripts/cancelled-sponsor.cjs
 
   monthly-updates:
     name: Send Monthly Updates
@@ -164,7 +164,7 @@ jobs:
         env:
           SPONSOR_TOKEN: ${{ secrets.SPONSOR_TOKEN }}
         run: |
-          node scripts/monthly-updates.js
+          node scripts/monthly-updates.cjs
 
   sponsor-metrics:
     name: Generate Sponsor Metrics
@@ -188,7 +188,7 @@ jobs:
         env:
           SPONSOR_TOKEN: ${{ secrets.SPONSOR_TOKEN }}
         run: |
-          node scripts/sponsor-metrics.js
+          node scripts/sponsor-metrics.cjs
 
       - name: Upload metrics artifact
         uses: actions/upload-artifact@v4
