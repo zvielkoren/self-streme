@@ -1,8 +1,8 @@
-import express from 'express';
-import fs from 'fs';
-import path from 'path';
-import pump from 'pump';
-import logger from '../utils/logger.js';
+import express from "express";
+import fs from "fs";
+import path from "path";
+import pump from "pump";
+import logger from "../utils/logger.js";
 
 /**
  * Streaming API Router
@@ -19,10 +19,10 @@ export function createStreamingRouter(torrentService, cacheManager) {
    *   - fileIndex: Index of file to stream (default: 0, largest file)
    *   - download: Set to 'true' to force download instead of stream
    */
-  router.get('/stream/proxy/:infoHash', async (req, res) => {
+  router.get("/stream/proxy/:infoHash", async (req, res) => {
     const { infoHash } = req.params;
     const fileIndex = parseInt(req.query.fileIndex, 10) || 0;
-    const forceDownload = req.query.download === 'true';
+    const forceDownload = req.query.download === "true";
 
     try {
       logger.info(`Stream request for ${infoHash}, fileIndex: ${fileIndex}`);
@@ -50,14 +50,16 @@ export function createStreamingRouter(torrentService, cacheManager) {
 
       // If not in cache, download torrent
       if (!filePath) {
-        logger.info(`File not in cache, starting torrent download: ${infoHash}`);
+        logger.info(
+          `File not in cache, starting torrent download: ${infoHash}`,
+        );
 
         const result = await torrentService.addTorrent(infoHash);
         torrent = result.torrent;
 
         if (!torrent) {
           return res.status(404).json({
-            error: 'Torrent not found or failed to start',
+            error: "Torrent not found or failed to start",
             infoHash,
           });
         }
@@ -66,7 +68,7 @@ export function createStreamingRouter(torrentService, cacheManager) {
         const file = torrent.files[fileIndex] || torrent.files[0];
         if (!file) {
           return res.status(404).json({
-            error: 'File not found in torrent',
+            error: "File not found in torrent",
             infoHash,
             fileIndex,
           });
@@ -83,14 +85,22 @@ export function createStreamingRouter(torrentService, cacheManager) {
       }
 
       // Set up streaming response
-      await streamFile(req, res, filePath, fileSize, fileName, forceDownload, torrent, fileIndex);
-
+      await streamFile(
+        req,
+        res,
+        filePath,
+        fileSize,
+        fileName,
+        forceDownload,
+        torrent,
+        fileIndex,
+      );
     } catch (error) {
-      logger.error('Streaming error:', error);
+      logger.error("Streaming error:", error);
 
       if (!res.headersSent) {
         res.status(500).json({
-          error: 'Streaming failed',
+          error: "Streaming failed",
           message: error.message,
           infoHash,
         });
@@ -102,13 +112,13 @@ export function createStreamingRouter(torrentService, cacheManager) {
    * GET /stream/file/:infoHash/:fileIndex
    * Stream a specific file from a torrent by index
    */
-  router.get('/stream/file/:infoHash/:fileIndex', async (req, res) => {
+  router.get("/stream/file/:infoHash/:fileIndex", async (req, res) => {
     const { infoHash, fileIndex } = req.params;
     const index = parseInt(fileIndex, 10);
 
     if (isNaN(index) || index < 0) {
       return res.status(400).json({
-        error: 'Invalid file index',
+        error: "Invalid file index",
       });
     }
 
@@ -119,7 +129,16 @@ export function createStreamingRouter(torrentService, cacheManager) {
   /**
    * Helper function to stream a file with Range Request support
    */
-  async function streamFile(req, res, filePath, fileSize, fileName, forceDownload, torrent, fileIndex) {
+  async function streamFile(
+    req,
+    res,
+    filePath,
+    fileSize,
+    fileName,
+    forceDownload,
+    torrent,
+    fileIndex,
+  ) {
     const range = req.headers.range;
 
     // Determine MIME type
@@ -127,14 +146,14 @@ export function createStreamingRouter(torrentService, cacheManager) {
 
     // Handle Range Requests (HTTP 206 Partial Content)
     if (range) {
-      const parts = range.replace(/bytes=/, '').split('-');
+      const parts = range.replace(/bytes=/, "").split("-");
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
       const chunkSize = end - start + 1;
 
       if (start >= fileSize || end >= fileSize) {
         res.status(416).set({
-          'Content-Range': `bytes */${fileSize}`,
+          "Content-Range": `bytes */${fileSize}`,
         });
         return res.end();
       }
@@ -144,17 +163,18 @@ export function createStreamingRouter(torrentService, cacheManager) {
       // Set response headers for partial content
       res.status(206);
       res.set({
-        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-        'Accept-Ranges': 'bytes',
-        'Content-Length': chunkSize,
-        'Content-Type': mimeType,
-        'Cache-Control': 'public, max-age=3600',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length',
+        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+        "Accept-Ranges": "bytes",
+        "Content-Length": chunkSize,
+        "Content-Type": mimeType,
+        "Cache-Control": "public, max-age=3600",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Expose-Headers":
+          "Content-Range, Accept-Ranges, Content-Length",
       });
 
       if (forceDownload) {
-        res.set('Content-Disposition', `attachment; filename="${fileName}"`);
+        res.set("Content-Disposition", `attachment; filename="${fileName}"`);
       }
 
       // Stream from torrent if available
@@ -162,32 +182,32 @@ export function createStreamingRouter(torrentService, cacheManager) {
         const file = torrent.files[fileIndex] || torrent.files[0];
         const stream = file.createReadStream({ start, end });
 
-        stream.on('error', (err) => {
-          logger.error('Stream error:', err);
+        stream.on("error", (err) => {
+          logger.error("Stream error:", err);
           if (!res.headersSent) {
             res.status(500).end();
           }
         });
 
         pump(stream, res, (err) => {
-          if (err && err.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
-            logger.error('Pump error:', err);
+          if (err && err.code !== "ERR_STREAM_PREMATURE_CLOSE") {
+            logger.error("Pump error:", err);
           }
         });
       } else {
         // Stream from file system
         const stream = fs.createReadStream(filePath, { start, end });
 
-        stream.on('error', (err) => {
-          logger.error('File stream error:', err);
+        stream.on("error", (err) => {
+          logger.error("File stream error:", err);
           if (!res.headersSent) {
             res.status(500).end();
           }
         });
 
         pump(stream, res, (err) => {
-          if (err && err.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
-            logger.error('Pump error:', err);
+          if (err && err.code !== "ERR_STREAM_PREMATURE_CLOSE") {
+            logger.error("Pump error:", err);
           }
         });
       }
@@ -197,15 +217,15 @@ export function createStreamingRouter(torrentService, cacheManager) {
 
       res.status(200);
       res.set({
-        'Content-Length': fileSize,
-        'Content-Type': mimeType,
-        'Accept-Ranges': 'bytes',
-        'Cache-Control': 'public, max-age=3600',
-        'Access-Control-Allow-Origin': '*',
+        "Content-Length": fileSize,
+        "Content-Type": mimeType,
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "public, max-age=3600",
+        "Access-Control-Allow-Origin": "*",
       });
 
       if (forceDownload) {
-        res.set('Content-Disposition', `attachment; filename="${fileName}"`);
+        res.set("Content-Disposition", `attachment; filename="${fileName}"`);
       }
 
       // Stream from torrent if available
@@ -213,32 +233,32 @@ export function createStreamingRouter(torrentService, cacheManager) {
         const file = torrent.files[fileIndex] || torrent.files[0];
         const stream = file.createReadStream();
 
-        stream.on('error', (err) => {
-          logger.error('Stream error:', err);
+        stream.on("error", (err) => {
+          logger.error("Stream error:", err);
           if (!res.headersSent) {
             res.status(500).end();
           }
         });
 
         pump(stream, res, (err) => {
-          if (err && err.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
-            logger.error('Pump error:', err);
+          if (err && err.code !== "ERR_STREAM_PREMATURE_CLOSE") {
+            logger.error("Pump error:", err);
           }
         });
       } else {
         // Stream from file system
         const stream = fs.createReadStream(filePath);
 
-        stream.on('error', (err) => {
-          logger.error('File stream error:', err);
+        stream.on("error", (err) => {
+          logger.error("File stream error:", err);
           if (!res.headersSent) {
             res.status(500).end();
           }
         });
 
         pump(stream, res, (err) => {
-          if (err && err.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
-            logger.error('Pump error:', err);
+          if (err && err.code !== "ERR_STREAM_PREMATURE_CLOSE") {
+            logger.error("Pump error:", err);
           }
         });
       }
@@ -251,45 +271,64 @@ export function createStreamingRouter(torrentService, cacheManager) {
   function getMimeType(fileName) {
     const ext = path.extname(fileName).toLowerCase();
     const mimeTypes = {
-      '.mp4': 'video/mp4',
-      '.mkv': 'video/x-matroska',
-      '.avi': 'video/x-msvideo',
-      '.webm': 'video/webm',
-      '.mov': 'video/quicktime',
-      '.flv': 'video/x-flv',
-      '.m4v': 'video/x-m4v',
-      '.wmv': 'video/x-ms-wmv',
-      '.mpg': 'video/mpeg',
-      '.mpeg': 'video/mpeg',
-      '.ogv': 'video/ogg',
-      '.3gp': 'video/3gpp',
-      '.mp3': 'audio/mpeg',
-      '.wav': 'audio/wav',
-      '.ogg': 'audio/ogg',
-      '.flac': 'audio/flac',
-      '.m4a': 'audio/mp4',
-      '.srt': 'text/plain',
-      '.vtt': 'text/vtt',
-      '.ass': 'text/plain',
-      '.ssa': 'text/plain',
+      ".mp4": "video/mp4",
+      ".mkv": "video/x-matroska",
+      ".avi": "video/x-msvideo",
+      ".webm": "video/webm",
+      ".mov": "video/quicktime",
+      ".flv": "video/x-flv",
+      ".m4v": "video/x-m4v",
+      ".wmv": "video/x-ms-wmv",
+      ".mpg": "video/mpeg",
+      ".mpeg": "video/mpeg",
+      ".ogv": "video/ogg",
+      ".3gp": "video/3gpp",
+      ".mp3": "audio/mpeg",
+      ".wav": "audio/wav",
+      ".ogg": "audio/ogg",
+      ".flac": "audio/flac",
+      ".m4a": "audio/mp4",
+      ".srt": "text/plain",
+      ".vtt": "text/vtt",
+      ".ass": "text/plain",
+      ".ssa": "text/plain",
     };
 
-    return mimeTypes[ext] || 'application/octet-stream';
+    return mimeTypes[ext] || "application/octet-stream";
   }
 
   /**
    * GET /stream/info/:infoHash
    * Get information about streamable files in a torrent
    */
-  router.get('/stream/info/:infoHash', async (req, res) => {
+  router.get("/stream/info/:infoHash", async (req, res) => {
     const { infoHash } = req.params;
 
     try {
       const files = await torrentService.getTorrentFiles(infoHash);
 
+      // Check if files is valid
+      if (!files || !Array.isArray(files)) {
+        logger.warn(`No files found for torrent: ${infoHash}`);
+        return res.status(404).json({
+          error: "Torrent not found or no files available",
+          infoHash,
+          message:
+            "The torrent may not have been added yet or failed to load. Try adding it via /api/torrents first.",
+        });
+      }
+
       // Filter video files
-      const videoExtensions = ['.mp4', '.mkv', '.avi', '.webm', '.mov', '.flv', '.m4v'];
-      const videoFiles = files.filter(file => {
+      const videoExtensions = [
+        ".mp4",
+        ".mkv",
+        ".avi",
+        ".webm",
+        ".mov",
+        ".flv",
+        ".m4v",
+      ];
+      const videoFiles = files.filter((file) => {
         const ext = path.extname(file.name).toLowerCase();
         return videoExtensions.includes(ext);
       });
@@ -300,18 +339,21 @@ export function createStreamingRouter(torrentService, cacheManager) {
           infoHash,
           totalFiles: files.length,
           videoFiles: videoFiles.length,
-          files: files.map(file => ({
+          files: files.map((file) => ({
             ...file,
             streamUrl: `/stream/file/${infoHash}/${file.index}`,
-            isVideo: videoExtensions.includes(path.extname(file.name).toLowerCase()),
+            isVideo: videoExtensions.includes(
+              path.extname(file.name).toLowerCase(),
+            ),
           })),
         },
       });
     } catch (error) {
-      logger.error('Error getting stream info:', error);
+      logger.error("Error getting stream info:", error);
       res.status(500).json({
-        error: 'Failed to get stream info',
+        error: "Failed to get stream info",
         message: error.message,
+        infoHash,
       });
     }
   });
@@ -320,13 +362,14 @@ export function createStreamingRouter(torrentService, cacheManager) {
    * OPTIONS /stream/proxy/:infoHash
    * CORS preflight for streaming
    */
-  router.options('/stream/proxy/:infoHash', (req, res) => {
+  router.options("/stream/proxy/:infoHash", (req, res) => {
     res.set({
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Range, Content-Type',
-      'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length',
-      'Access-Control-Max-Age': '86400',
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Range, Content-Type",
+      "Access-Control-Expose-Headers":
+        "Content-Range, Accept-Ranges, Content-Length",
+      "Access-Control-Max-Age": "86400",
     });
     res.status(204).end();
   });
