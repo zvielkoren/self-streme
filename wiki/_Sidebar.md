@@ -54,6 +54,7 @@
 - [Contributing](Contributing)
 - [Code of Conduct](Code-of-Conduct)
 - [Contributors](Contributors)
+- [Sponsors](https://github.com/zviel/self-streme/blob/main/SPONSORS.md)
 
 ## 🔗 Links
 - [GitHub Repo](https://github.com/zviel/self-streme)

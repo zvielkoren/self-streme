@@ -276,6 +276,32 @@ See [CONTRIBUTORS.md](https://github.com/zviel/self-streme/blob/main/CONTRIBUTOR
 
 ---
 
+## 💖 Support & Sponsorship
+
+Love Self-Streme? Help keep it maintained and growing!
+
+### Ways to Support
+- ⭐ **Star** the repository on GitHub
+- 💰 **Become a Sponsor** - [GitHub Sponsors](https://github.com/sponsors/zvielkoren)
+- 🐛 **Report Bugs** and suggest features
+- 📢 **Share** with the community
+- 🤝 **Contribute** code or documentation
+
+### 💎 Sponsorship Tiers
+We offer multiple tiers with exclusive benefits:
+- ☕ **Coffee Supporter** ($5/month) - Sponsor badge & early announcements
+- 🥉 **Bronze Sponsor** ($10/month) - Priority bug reports & feature requests
+- 🥈 **Silver Sponsor** ($25/month) - Priority support & logo in docs
+- 🥇 **Gold Sponsor** ($50/month) - VIP support & prominent recognition
+- 💎 **Diamond Sponsor** ($100/month) - Enterprise support & direct input
+- 🌟 **Platinum Sponsor** ($250+/month) - 24/7 support & guaranteed features
+
+**[View all benefits and details →](https://github.com/zviel/self-streme/blob/main/SPONSORS.md)**
+
+Your support helps maintain and improve Self-Streme for everyone!
+
+---
+
 ## 📊 Statistics
 
 ### Project Stats

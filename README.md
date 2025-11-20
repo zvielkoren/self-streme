@@ -657,12 +657,24 @@ CACHE_PERSISTENT=true
 If you find Self-Streme useful and would like to support its development, you can:
 
 - ⭐ **Star this repository** on GitHub
-- 💰 **Sponsor the developer** via [GitHub Sponsors](https://github.com/sponsors/zvielkoren)
+- 💰 **Sponsor the developer** via [GitHub Sponsors](https://github.com/sponsors/zvielkoren) - See [SPONSORS.md](SPONSORS.md) for tiers and benefits
 - 🐛 **Report bugs** and suggest features through GitHub Issues
 - 📢 **Share** Self-Streme with the community
 - 🤝 **Contribute** - See [CONTRIBUTORS.md](CONTRIBUTORS.md)
 
 Your support helps maintain and improve Self-Streme for everyone!
+
+### 💎 Sponsorship Tiers
+
+We offer multiple sponsorship tiers with exclusive benefits:
+- ☕ **Coffee Supporter** ($5/month) - Sponsor badge & early announcements
+- 🥉 **Bronze Sponsor** ($10/month) - Priority bug reports & feature requests
+- 🥈 **Silver Sponsor** ($25/month) - Priority support & logo in docs
+- 🥇 **Gold Sponsor** ($50/month) - VIP support & prominent recognition
+- 💎 **Diamond Sponsor** ($100/month) - Enterprise support & direct input
+- 🌟 **Platinum Sponsor** ($250+/month) - 24/7 support & guaranteed features
+
+**[View all benefits and details →](SPONSORS.md)**
 
 ## 📄 License
 

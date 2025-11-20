@@ -135,9 +135,16 @@ git push origin feature/your-feature
 
 Every contribution makes Self-Streme better!
 
+**Ways to Support:**
+- 💻 **Contribute Code** - Follow guidelines above
+- 💰 **Become a Sponsor** - See [SPONSORS.md](SPONSORS.md) for tiers and benefits
+- 🐛 **Report Issues** - Help identify and fix bugs
+- ⭐ **Star & Share** - Spread the word about Self-Streme
+
 **Contact:**
 - GitHub: https://github.com/zviel/self-streme
 - Issues: https://github.com/zviel/self-streme/issues
+- Sponsors: https://github.com/sponsors/zvielkoren
 
 ---
 

@@ -317,14 +317,47 @@ curl http://localhost:11470/api/sources/stats
   - Restricted CORS origins
   - HTTPS/TLS encryption
 
+## 💖 Support & Sponsorship
+
+Love Self-Streme? Help keep it maintained and growing!
+
+### Ways to Support
+- ⭐ **Star** the repository on GitHub
+- 💰 **Become a Sponsor** - [GitHub Sponsors](https://github.com/sponsors/zvielkoren)
+- 🐛 **Report Bugs** and suggest features
+- 📢 **Share** with the community
+- 🤝 **Contribute** code or documentation
+
+### 💎 Sponsorship Tiers
+Quick overview of sponsorship benefits:
+
+| Tier | Price | Response Time | Key Benefits |
+|------|-------|---------------|--------------|
+| ☕ Coffee | $5/mo | Standard | Badge, early announcements |
+| 🥉 Bronze | $10/mo | 48h | Priority bug reports & features |
+| 🥈 Silver | $25/mo | 24h | Priority support, logo in docs |
+| 🥇 Gold | $50/mo | 12h | VIP support, roadmap influence |
+| 💎 Diamond | $100/mo | 6h | Enterprise support, custom help |
+| 🌟 Platinum | $250+/mo | 24/7 | Guaranteed features, SLA |
+
+**📚 Documentation:**
+- [SPONSORS.md](../SPONSORS.md) - Complete sponsorship details, rules & benefits
+- [SPONSORS_GUIDE.md](SPONSORS_GUIDE.md) - Quick reference guide
+
+Your support helps maintain and improve Self-Streme for everyone!
+
+---
+
 ## 🤝 Contributing
 
-Want to contribute?
+Want to contribute code or documentation?
 
 1. Add new download sources to `torrentDownloadSources.js`
 2. Improve documentation
 3. Report bugs and issues
 4. Submit feature requests
+
+**See [CONTRIBUTORS.md](../CONTRIBUTORS.md) for detailed contribution guidelines.**
 
 ## 📞 Support
 

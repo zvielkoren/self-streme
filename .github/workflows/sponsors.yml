@@ -1,0 +1,174 @@
+name: Sponsor Management Automation
+
+on:
+  schedule:
+    # Run daily at 00:00 UTC to check for new sponsors
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allow manual trigger
+  sponsor:
+    types: [created, cancelled, tier_changed, pending_cancellation, pending_tier_change]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  update-sponsors:
+    name: Update Sponsors List
+    runs-on: ubuntu-latest
+    if: github.event_name == 'sponsor' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm install --save-dev @octokit/rest
+
+      - name: Update sponsors list
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/update-sponsors.js
+
+      - name: Commit and push if changed
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add SPONSORS.md README.md
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: update sponsors list [skip ci]" && git push)
+
+  welcome-sponsor:
+    name: Welcome New Sponsor
+    runs-on: ubuntu-latest
+    if: github.event_name == 'sponsor' && github.event.action == 'created'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Send welcome message
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPONSOR_LOGIN: ${{ github.event.sponsorship.sponsor.login }}
+          TIER_NAME: ${{ github.event.sponsorship.tier.name }}
+          MONTHLY_AMOUNT: ${{ github.event.sponsorship.tier.monthly_price_in_dollars }}
+        run: |
+          node scripts/welcome-sponsor.js
+
+  tier-changed:
+    name: Handle Tier Change
+    runs-on: ubuntu-latest
+    if: github.event_name == 'sponsor' && github.event.action == 'tier_changed'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Handle tier change
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPONSOR_LOGIN: ${{ github.event.sponsorship.sponsor.login }}
+          NEW_TIER: ${{ github.event.sponsorship.tier.name }}
+          OLD_TIER: ${{ github.event.changes.tier.from.name }}
+        run: |
+          node scripts/tier-changed.js
+
+  cancelled-sponsor:
+    name: Handle Sponsor Cancellation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'sponsor' && github.event.action == 'cancelled'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Thank departed sponsor
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPONSOR_LOGIN: ${{ github.event.sponsorship.sponsor.login }}
+          TIER_NAME: ${{ github.event.sponsorship.tier.name }}
+        run: |
+          node scripts/cancelled-sponsor.js
+
+  monthly-updates:
+    name: Send Monthly Updates
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check if first day of month
+        id: check-date
+        run: |
+          if [ $(date +%d) = "01" ]; then
+            echo "send_updates=true" >> $GITHUB_OUTPUT
+          else
+            echo "send_updates=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send monthly updates
+        if: steps.check-date.outputs.send_updates == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/monthly-updates.js
+
+  sponsor-metrics:
+    name: Generate Sponsor Metrics
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate metrics
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/sponsor-metrics.js
+
+      - name: Upload metrics artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sponsor-metrics
+          path: metrics/sponsor-metrics.json
+          retention-days: 90
