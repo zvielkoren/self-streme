@@ -6,16 +6,15 @@ import logger from "../utils/logger.js";
 import { createHybridStreamService } from "../services/hybridStreamService.js";
 
 /**
- * Streaming API Router with Hybrid P2P + HTTP Download Fallback
- * Never gets stuck - always provides a stream!
+ * Streaming API Router with Hybrid P2P + External Fallback
  */
 export function createStreamingRouter(torrentService, cacheManager) {
   const router = express.Router();
-  const hybridService = createHybridStreamService(torrentService, cacheManager);
+  const hybridService = createHybridStreamService(torrentService);
 
   /**
    * GET /stream/proxy/:infoHash
-   * Smart hybrid streaming with HTTP download fallback
+   * Smart hybrid streaming - tries P2P first, falls back to external
    */
   router.get("/stream/proxy/:infoHash", async (req, res) => {
     const { infoHash } = req.params;
@@ -23,36 +22,77 @@ export function createStreamingRouter(torrentService, cacheManager) {
     const forceDownload = req.query.download === "true";
 
     try {
-      logger.info(`[API] Stream request for ${infoHash}, fileIndex: ${fileIndex}`);
+      logger.info(`[Streaming] Request for ${infoHash}, fileIndex: ${fileIndex}`);
 
-      // Get stream via hybrid service
-      const result = await hybridService.getStream(infoHash, { fileIndex });
+      // Try hybrid approach (P2P + fallback)
+      const result = await hybridService.getStreamUrl(infoHash, { fileIndex });
 
-      logger.info(`[API] Stream method: ${result.method} for ${infoHash}`);
+      if (result.method === 'p2p' && result.local) {
+        // P2P succeeded - stream from local
+        logger.info(`[Streaming] Using P2P for ${infoHash}`);
+        return await streamFromP2P(req, res, result, fileIndex, forceDownload);
+      } else if (result.method === 'external' && result.streamUrl) {
+        // External service - redirect
+        logger.info(`[Streaming] Using external service for ${infoHash}`);
+        return res.redirect(302, result.streamUrl);
+      }
 
-      // All methods result in a local file we can stream
-      const filePath = result.filePath;
-      const fileSize = result.fileSize || fs.statSync(filePath).size;
-      const fileName = result.fileName || path.basename(filePath);
-
-      logger.info(`[API] Streaming ${fileName} (${formatBytes(fileSize)}) via ${result.method}`);
-
-      // Stream the file with Range support
-      return await streamFile(req, res, filePath, fileSize, fileName, forceDownload, result.torrent, fileIndex);
+      // Shouldn't reach here, but handle it
+      return res.status(500).json({
+        error: 'Unknown streaming method',
+        result
+      });
 
     } catch (error) {
-      logger.error(`[API] Streaming error for ${infoHash}:`, error);
+      logger.error(`[Streaming] Error for ${infoHash}:`, error);
 
       if (!res.headersSent) {
         res.status(500).json({
           error: "Streaming failed",
           message: error.message,
           infoHash,
-          hint: "The torrent may be unavailable or have no seeders"
+          hint: "Try accessing via /stream/magnet?magnet=... for guaranteed external fallback"
         });
       }
     }
   });
+
+  /**
+   * Stream from P2P (local torrent)
+   */
+  async function streamFromP2P(req, res, result, fileIndex, forceDownload) {
+    const { torrent, infoHash, cached } = result;
+
+    let filePath, fileSize, fileName;
+
+    if (cached && result.localPath) {
+      // Stream from cache
+      filePath = result.localPath;
+      const stat = fs.statSync(filePath);
+      fileSize = stat.size;
+      fileName = path.basename(filePath);
+      logger.info(`[Streaming] From cache: ${filePath}`);
+    } else if (torrent) {
+      // Stream from active torrent
+      const file = torrent.files[fileIndex] || torrent.files[0];
+      if (!file) {
+        throw new Error('File not found in torrent');
+      }
+
+      filePath = path.join(torrent.path, file.path);
+      fileSize = file.length;
+      fileName = file.name;
+
+      // Enable sequential download
+      file.select();
+      logger.info(`[Streaming] From torrent: ${fileName}`);
+    } else {
+      throw new Error('Invalid P2P result');
+    }
+
+    // Set up streaming with Range support
+    return await streamFile(req, res, filePath, fileSize, fileName, forceDownload, torrent, fileIndex);
+  }
 
   /**
    * Helper function to stream a file with Range Request support
@@ -75,7 +115,7 @@ export function createStreamingRouter(torrentService, cacheManager) {
         return res.end();
       }
 
-      logger.debug(`[API] Range request: ${start}-${end}/${fileSize}`);
+      logger.debug(`[Streaming] Range: ${start}-${end}/${fileSize}`);
 
       res.status(206);
       res.set({
@@ -93,27 +133,23 @@ export function createStreamingRouter(torrentService, cacheManager) {
       }
 
       // Stream from torrent or file system
-      let stream;
-      if (torrent && !torrent.destroyed) {
-        const file = torrent.files[fileIndex] || torrent.files[0];
-        stream = file.createReadStream({ start, end });
-      } else {
-        stream = fs.createReadStream(filePath, { start, end });
-      }
+      const stream = torrent
+        ? (torrent.files[fileIndex] || torrent.files[0]).createReadStream({ start, end })
+        : fs.createReadStream(filePath, { start, end });
 
       stream.on("error", (err) => {
-        logger.error("[API] Stream error:", err);
+        logger.error("[Streaming] Stream error:", err);
         if (!res.headersSent) res.status(500).end();
       });
 
       pump(stream, res, (err) => {
         if (err && err.code !== "ERR_STREAM_PREMATURE_CLOSE") {
-          logger.error("[API] Pump error:", err);
+          logger.error("[Streaming] Pump error:", err);
         }
       });
     } else {
       // Full file stream
-      logger.debug(`[API] Full file stream: ${fileSize} bytes`);
+      logger.debug(`[Streaming] Full file: ${fileSize} bytes`);
 
       res.status(200);
       res.set({
@@ -128,22 +164,18 @@ export function createStreamingRouter(torrentService, cacheManager) {
         res.set("Content-Disposition", `attachment; filename="${fileName}"`);
       }
 
-      let stream;
-      if (torrent && !torrent.destroyed) {
-        const file = torrent.files[fileIndex] || torrent.files[0];
-        stream = file.createReadStream();
-      } else {
-        stream = fs.createReadStream(filePath);
-      }
+      const stream = torrent
+        ? (torrent.files[fileIndex] || torrent.files[0]).createReadStream()
+        : fs.createReadStream(filePath);
 
       stream.on("error", (err) => {
-        logger.error("[API] Stream error:", err);
+        logger.error("[Streaming] Stream error:", err);
         if (!res.headersSent) res.status(500).end();
       });
 
       pump(stream, res, (err) => {
         if (err && err.code !== "ERR_STREAM_PREMATURE_CLOSE") {
-          logger.error("[API] Pump error:", err);
+          logger.error("[Streaming] Pump error:", err);
         }
       });
     }
@@ -162,69 +194,35 @@ export function createStreamingRouter(torrentService, cacheManager) {
       ".mov": "video/quicktime",
       ".flv": "video/x-flv",
       ".m4v": "video/x-m4v",
-      ".wmv": "video/x-ms-wmv",
-      ".mpg": "video/mpeg",
-      ".mpeg": "video/mpeg",
     };
     return mimeTypes[ext] || "application/octet-stream";
   }
 
   /**
-   * Format bytes
-   */
-  function formatBytes(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-  }
-
-  /**
-   * GET /stream/file/:infoHash/:fileIndex
-   * Stream a specific file from a torrent by index
-   */
-  router.get("/stream/file/:infoHash/:fileIndex", async (req, res) => {
-    const { infoHash, fileIndex } = req.params;
-    const index = parseInt(fileIndex, 10);
-
-    if (isNaN(index) || index < 0) {
-      return res.status(400).json({
-        error: "Invalid file index",
-      });
-    }
-
-    res.redirect(`/stream/proxy/${infoHash}?fileIndex=${index}`);
-  });
-
-  /**
    * GET /stream/info/:infoHash
-   * Get info about available stream methods
+   * Get info about torrent with hybrid status
    */
   router.get("/stream/info/:infoHash", async (req, res) => {
     const { infoHash } = req.params;
 
     try {
-      // Check if in cache
-      const inCache = cacheManager && cacheManager.has(infoHash);
-      
+      // Check if available via P2P
+      const status = await hybridService.checkStatus(infoHash);
+
       res.json({
         success: true,
         infoHash,
-        cached: inCache,
-        methods: {
-          p2p: "Will try P2P first (20s timeout)",
-          httpFallback: "Will download via HTTP if P2P fails",
-          cache: inCache ? "Available in cache" : "Not cached yet"
-        },
-        streamUrl: `/stream/proxy/${infoHash}`,
-        note: "Stream will never get stuck - automatic fallback included"
+        method: status.method,
+        available: status.available,
+        p2p: status.method === 'p2p' ? status : null,
+        fallbackAvailable: hybridService.useExternalFallback
       });
     } catch (error) {
-      logger.error("[API] Info error:", error);
+      logger.error("[Streaming] Info error:", error);
       res.status(500).json({
         error: "Failed to get stream info",
         message: error.message,
+        infoHash,
       });
     }
   });
