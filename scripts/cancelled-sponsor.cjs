@@ -1,4 +1,4 @@
-SPONSOR_TOKENSPONSOR_TOKEN#!/usr/bin/env node
+#!/usr/bin/env node
 
 /**
  * Cancelled Sponsor Handler Script
