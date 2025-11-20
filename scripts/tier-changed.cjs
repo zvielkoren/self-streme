@@ -14,7 +14,7 @@ const SPONSOR_TOKEN = process.env.SPONSOR_TOKEN;
 const SPONSOR_LOGIN = process.env.SPONSOR_LOGIN;
 const NEW_TIER = process.env.NEW_TIER;
 const OLD_TIER = process.env.OLD_TIER;
-const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || "zviel";
+const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || "zvielkoren";
 const REPO_NAME = "self-streme";
 
 // Tier emoji mapping

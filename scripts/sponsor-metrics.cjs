@@ -13,7 +13,7 @@ const path = require("path");
 
 // Configuration
 const SPONSOR_TOKEN = process.env.SPONSOR_TOKEN;
-const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || "zviel";
+const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || "zvielkoren";
 const REPO_NAME = "self-streme";
 
 // Tier configuration
