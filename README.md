@@ -720,6 +720,8 @@ We welcome contributions! See [CONTRIBUTORS.md](CONTRIBUTORS.md) for guidelines.
 - [🚀 Speed Optimization](docs/summaries/SPEED_OPTIMIZATION_SUMMARY.md) - All features
 - [🆘 Troubleshooting](docs/TROUBLESHOOTING_DOWNLOAD_FAILURES.md)
 - [💎 Premium Services](docs/guides/PREMIUM_SERVICES.md) - 95%+ reliability
+- [📚 Documentation Index](docs/DOCUMENTATION_INDEX.md) - Complete navigation guide
+- [🗂️ Project Organization](docs/PROJECT_ORGANIZATION.md) - File structure reference
 
 ---
 

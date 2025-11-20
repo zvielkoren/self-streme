@@ -3,6 +3,7 @@
  * Fixed: Better .torrent file validation and DHT fallback
  * Enhanced: Dynamic download sources instead of hardcoded WebTor.io
  * Enhanced: Multi-part parallel downloading for speed optimization
+ * Enhanced: Instant streaming - start playback before download completes
  */
 
 import logger from "../utils/logger.js";
@@ -14,6 +15,7 @@ import parseTorrent from "parse-torrent";
 import { pipeline } from "stream/promises";
 import downloadSources from "./torrentDownloadSources.js";
 import MultipartDownloader from "./multipartDownloader.js";
+import StreamingDownloader from "./streamingDownloader.js";
 
 class HybridStreamService {
   constructor(torrentService, cacheManager) {
@@ -45,6 +47,18 @@ class HybridStreamService {
       minFileSizeForMultipart: this.multipartMinSize,
     });
 
+    // Instant streaming configuration
+    this.enableInstantStreaming =
+      process.env.ENABLE_INSTANT_STREAMING !== "false";
+    this.initialBufferSize =
+      parseInt(process.env.INITIAL_BUFFER_SIZE, 10) || 10 * 1024 * 1024; // 10MB buffer
+
+    this.streamingDownloader = new StreamingDownloader({
+      chunkSize: 2 * 1024 * 1024, // 2MB chunks for responsive streaming
+      maxConnections: 4, // Conservative for stability
+      initialBufferSize: this.initialBufferSize,
+    });
+
     if (!fs.existsSync(this.downloadPath)) {
       fs.mkdirSync(this.downloadPath, { recursive: true });
     }
@@ -62,6 +76,12 @@ class HybridStreamService {
       logger.info(`[Hybrid] Connections: ${this.multipartConnections}`);
       logger.info(
         `[Hybrid] Min file size: ${this.formatBytes(this.multipartMinSize)}`,
+      );
+    }
+    logger.info(`[Hybrid] Instant streaming: ${this.enableInstantStreaming}`);
+    if (this.enableInstantStreaming) {
+      logger.info(
+        `[Hybrid] Initial buffer: ${this.formatBytes(this.initialBufferSize)}`,
       );
     }
   }
@@ -510,6 +530,59 @@ class HybridStreamService {
     );
 
     const tempPath = `${localPath}.${source.name}.tmp`;
+
+    // Use instant streaming if enabled (start playback before download completes)
+    if (this.enableInstantStreaming && source.supportsResume) {
+      try {
+        logger.info(
+          `[Hybrid] [${source.name}] 🎬 Using instant streaming mode (playback starts immediately)`,
+        );
+
+        const result = await this.streamingDownloader.startStreamingDownload(
+          url,
+          tempPath,
+          {
+            fileSize,
+            headers: {
+              "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+              Accept: "*/*",
+              Referer: new URL(url).origin,
+            },
+            onProgress: (progress) => {
+              if (
+                progress.percent % 10 === 0 ||
+                progress.downloaded < this.initialBufferSize
+              ) {
+                logger.info(
+                  `[Hybrid] [${source.name}] Progress: ${progress.percent}% (${this.formatBytes(progress.downloaded)}/${this.formatBytes(progress.total)})`,
+                );
+              }
+            },
+          },
+        );
+
+        if (result.success && result.ready) {
+          // File is ready to stream (initial buffer downloaded)
+          // Background download continues automatically
+          logger.info(
+            `[Hybrid] ✅ Ready to stream! Initial buffer downloaded, continuing in background...`,
+          );
+
+          // Move temp file to final location
+          if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+          fs.renameSync(tempPath, localPath);
+
+          return true;
+        }
+      } catch (error) {
+        logger.warn(
+          `[Hybrid] Instant streaming failed: ${error.message}, trying multi-part download`,
+        );
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        // Fall through to multi-part or single connection
+      }
+    }
 
     // Use multi-part downloader if enabled and supported
     if (
