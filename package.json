@@ -5,8 +5,14 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
+    "quick-start": "bash quick-start.sh",
+    "quick-start:win": "quick-start.bat",
     "start": "node src/index.js",
+    "start:stremio": "node src/index.js",
+    "start:torrent": "node start-torrent-server.js",
     "dev": "nodemon src/index.js",
+    "dev:stremio": "nodemon src/index.js",
+    "dev:torrent": "nodemon start-torrent-server.js",
     "dev:docker": "docker-compose -f docker-compose.dev.yml up",
     "docker:build": "docker build -t self-streme .",
     "docker:run": "docker-compose up -d",
@@ -17,7 +23,8 @@
     "docker:shell": "docker-compose exec self-streme sh",
     "docker:health": "docker inspect --format='{{.State.Health.Status}}' self-streme",
     "test:tunnel": "./scripts/test-tunnel.sh",
-    "test:health": "curl http://localhost:3000/health"
+    "test:health": "curl http://localhost:3000/health",
+    "test:torrent": "curl http://localhost:7000/health"
   },
   "dependencies": {
     "axios": "^1.11.0",

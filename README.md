@@ -14,7 +14,37 @@
 
 ## 🚀 Quick Start
 
-### Docker Deployment (Recommended)
+### ⚡ ONE COMMAND - Run This Now!
+
+**Linux / macOS:**
+```bash
+./start.sh
+```
+
+**Windows:**
+```cmd
+quick-start.bat
+```
+
+**That's it!** The script automatically:
+- ✅ Checks Node.js (requires 18+)
+- ✅ Installs all dependencies
+- ✅ Creates `.env` configuration
+- ✅ Starts Torrent Streaming API (port 7000)
+- ✅ Starts Stremio Addon (port 7001)
+
+**Then open:** http://localhost:7000/test-torrent-streaming
+
+**Test with Big Buck Bunny:**
+```
+magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c
+```
+
+📖 **Complete Guide:** [ONE_COMMAND_START.md](ONE_COMMAND_START.md) | [QUICK_START.md](QUICK_START.md)
+
+---
+
+### Docker Deployment (Recommended for Production)
 ```bash
 # Copy configuration
 cp .env.docker.example .env

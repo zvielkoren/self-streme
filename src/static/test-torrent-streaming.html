@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Torrent Streaming Test Interface</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      color: #fff;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+      font-size: 2.5em;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .subtitle {
+      text-align: center;
+      opacity: 0.9;
+      margin-bottom: 30px;
+      font-size: 1.1em;
+    }
+
+    .section {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 15px;
+      padding: 25px;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+    }
+
+    h2 {
+      margin-bottom: 15px;
+      font-size: 1.5em;
+      border-bottom: 2px solid rgba(255,255,255,0.3);
+      padding-bottom: 10px;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 600;
+    }
+
+    input[type="text"], textarea, select {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+      font-size: 1em;
+      transition: background 0.3s;
+    }
+
+    input[type="text"]::placeholder, textarea::placeholder {
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    input[type="text"]:focus, textarea:focus {
+      outline: none;
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+
+    .btn-primary {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #45a049;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+    }
+
+    .btn-secondary {
+      background: #2196F3;
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: #0b7dda;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+    }
+
+    .btn-danger {
+      background: #f44336;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #da190b;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .output {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 15px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9em;
+      max-height: 400px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .video-container {
+      position: relative;
+      width: 100%;
+      padding-top: 56.25%; /* 16:9 Aspect Ratio */
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 15px;
+    }
+
+    video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 30px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 15px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4CAF50 0%, #8BC34A 100%);
+      transition: width 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 0.9em;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-top: 15px;
+    }
+
+    .stat-box {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 15px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .stat-label {
+      font-size: 0.9em;
+      opacity: 0.8;
+      margin-bottom: 5px;
+    }
+
+    .stat-value {
+      font-size: 1.8em;
+      font-weight: bold;
+    }
+
+    .file-list {
+      margin-top: 15px;
+    }
+
+    .file-item {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .file-info {
+      flex: 1;
+    }
+
+    .file-name {
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+
+    .file-size {
+      font-size: 0.9em;
+      opacity: 0.8;
+    }
+
+    .status-badge {
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 0.85em;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status-success {
+      background: #4CAF50;
+    }
+
+    .status-warning {
+      background: #FF9800;
+    }
+
+    .status-error {
+      background: #f44336;
+    }
+
+    .status-info {
+      background: #2196F3;
+    }
+
+    .example-magnets {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 10px;
+    }
+
+    .example-magnet {
+      cursor: pointer;
+      padding: 8px;
+      margin: 5px 0;
+      border-radius: 5px;
+      transition: background 0.3s;
+    }
+
+    .example-magnet:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .example-title {
+      font-weight: 600;
+      margin-bottom: 3px;
+    }
+
+    .example-hash {
+      font-size: 0.85em;
+      opacity: 0.7;
+      font-family: monospace;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎬 Torrent Streaming Test Interface</h1>
+    <div class="subtitle">Test all torrent streaming features and APIs</div>
+
+    <!-- Add Torrent Section -->
+    <div class="section">
+      <h2>📥 Add Torrent</h2>
+      <div class="form-group">
+        <label for="magnetInput">Magnet Link or Info Hash</label>
+        <textarea id="magnetInput" rows="3" placeholder="magnet:?xt=urn:btih:... or just the info hash"></textarea>
+      </div>
+      <button class="btn-primary" onclick="addTorrent()">Add Torrent</button>
+      <button class="btn-secondary" onclick="toggleExamples()">Show Examples</button>
+
+      <div id="exampleMagnets" class="example-magnets" style="display: none;">
+        <strong>Example Torrents (Public Domain):</strong>
+        <div class="example-magnet" onclick="useExample('big_buck_bunny')">
+          <div class="example-title">Big Buck Bunny (Open Source Movie)</div>
+          <div class="example-hash">dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c</div>
+        </div>
+        <div class="example-magnet" onclick="useExample('sintel')">
+          <div class="example-title">Sintel (Open Source Movie)</div>
+          <div class="example-hash">08ada5a7a6183aae1e09d831df6748d566095a10</div>
+        </div>
+        <div class="example-magnet" onclick="useExample('cosmic_flower')">
+          <div class="example-title">Cosmic Flower (Public Domain)</div>
+          <div class="example-hash">dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c</div>
+        </div>
+      </div>
+
+      <div id="addOutput" class="output" style="display: none;"></div>
+    </div>
+
+    <!-- Torrent Status Section -->
+    <div class="section">
+      <h2>📊 Torrent Status</h2>
+      <div class="form-group">
+        <label for="statusHash">Info Hash</label>
+        <input type="text" id="statusHash" placeholder="Enter torrent info hash">
+      </div>
+      <button class="btn-primary" onclick="getTorrentStatus()">Get Status</button>
+      <button class="btn-secondary" onclick="listAllTorrents()">List All Torrents</button>
+      <button class="btn-secondary" onclick="startStatusPolling()">Auto Refresh (5s)</button>
+      <button class="btn-danger" onclick="stopStatusPolling()">Stop Auto Refresh</button>
+
+      <div id="statusOutput" class="output" style="display: none;"></div>
+
+      <div id="progressContainer" style="display: none;">
+        <div class="progress-bar">
+          <div id="progressFill" class="progress-fill" style="width: 0%;">0%</div>
+        </div>
+      </div>
+
+      <div id="statsGrid" class="stats-grid" style="display: none;"></div>
+    </div>
+
+    <!-- Files List Section -->
+    <div class="section">
+      <h2>📁 Torrent Files</h2>
+      <div class="form-group">
+        <label for="filesHash">Info Hash</label>
+        <input type="text" id="filesHash" placeholder="Enter torrent info hash">
+      </div>
+      <button class="btn-primary" onclick="getTorrentFiles()">Get Files</button>
+
+      <div id="filesOutput" class="output" style="display: none;"></div>
+      <div id="filesList" class="file-list" style="display: none;"></div>
+    </div>
+
+    <!-- Streaming Section -->
+    <div class="section">
+      <h2>🎥 Stream Video</h2>
+      <div class="form-group">
+        <label for="streamHash">Info Hash</label>
+        <input type="text" id="streamHash" placeholder="Enter torrent info hash">
+      </div>
+      <div class="form-group">
+        <label for="fileIndex">File Index (optional)</label>
+        <input type="text" id="fileIndex" placeholder="0" value="0">
+      </div>
+      <button class="btn-primary" onclick="streamVideo()">Stream Video</button>
+      <button class="btn-secondary" onclick="getStreamInfo()">Get Stream Info</button>
+      <button class="btn-danger" onclick="stopVideo()">Stop Video</button>
+
+      <div id="videoContainer" style="display: none;">
+        <div class="video-container">
+          <video id="videoPlayer" controls></video>
+        </div>
+      </div>
+
+      <div id="streamOutput" class="output" style="display: none;"></div>
+    </div>
+
+    <!-- Cache Management Section -->
+    <div class="section">
+      <h2>💾 Cache Management</h2>
+      <div class="grid-2">
+        <div>
+          <button class="btn-primary" onclick="getCacheStats()">Get Cache Stats</button>
+          <button class="btn-secondary" onclick="getCacheConfig()">Get Cache Config</button>
+          <button class="btn-danger" onclick="forceCleanup()">Force Cleanup</button>
+        </div>
+        <div id="cacheStatsDisplay" class="stats-grid" style="display: none;"></div>
+      </div>
+      <div id="cacheOutput" class="output" style="display: none;"></div>
+    </div>
+
+    <!-- System Health Section -->
+    <div class="section">
+      <h2>🏥 System Health</h2>
+      <button class="btn-primary" onclick="checkHealth()">Check Health</button>
+      <button class="btn-secondary" onclick="getSystemStatus()">Get System Status</button>
+      <div id="healthOutput" class="output" style="display: none;"></div>
+    </div>
+
+    <!-- Remove Torrent Section -->
+    <div class="section">
+      <h2>🗑️ Remove Torrent</h2>
+      <div class="form-group">
+        <label for="removeHash">Info Hash</label>
+        <input type="text" id="removeHash" placeholder="Enter torrent info hash">
+      </div>
+      <div class="form-group">
+        <label>
+          <input type="checkbox" id="deleteFiles" checked> Delete Files
+        </label>
+      </div>
+      <button class="btn-danger" onclick="removeTorrent()">Remove Torrent</button>
+      <div id="removeOutput" class="output" style="display: none;"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+    let statusPollingInterval = null;
+    const examples = {
+      big_buck_bunny: 'dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c',
+      sintel: '08ada5a7a6183aae1e09d831df6748d566095a10',
+      cosmic_flower: 'dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c'
+    };
+
+    function toggleExamples() {
+      const elem = document.getElementById('exampleMagnets');
+      elem.style.display = elem.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function useExample(key) {
+      document.getElementById('magnetInput').value = examples[key];
+      toggleExamples();
+    }
+
+    function showOutput(elementId, content, isJson = true) {
+      const elem = document.getElementById(elementId);
+      elem.style.display = 'block';
+      if (isJson) {
+        elem.textContent = JSON.stringify(content, null, 2);
+      } else {
+        elem.textContent = content;
+      }
+    }
+
+    function showLoading(elementId) {
+      const elem = document.getElementById(elementId);
+      elem.style.display = 'block';
+      elem.innerHTML = '<span class="loading"></span> Loading...';
+    }
+
+    function showError(elementId, error) {
+      showOutput(elementId, `❌ Error: ${error.message || error}`, false);
+    }
+
+    async function addTorrent() {
+      const magnet = document.getElementById('magnetInput').value.trim();
+      if (!magnet) {
+        alert('Please enter a magnet link or info hash');
+        return;
+      }
+
+      showLoading('addOutput');
+
+      try {
+        const response = await fetch(`${API_BASE}/api/torrents`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ magnetUri: magnet })
+        });
+
+        const data = await response.json();
+        showOutput('addOutput', data);
+
+        if (data.success && data.data.infoHash) {
+          document.getElementById('statusHash').value = data.data.infoHash;
+          document.getElementById('filesHash').value = data.data.infoHash;
+          document.getElementById('streamHash').value = data.data.infoHash;
+          document.getElementById('removeHash').value = data.data.infoHash;
+        }
+      } catch (error) {
+        showError('addOutput', error);
+      }
+    }
+
+    async function getTorrentStatus() {
+      const hash = document.getElementById('statusHash').value.trim();
+      if (!hash) {
+        alert('Please enter an info hash');
+        return;
+      }
+
+      showLoading('statusOutput');
+
+      try {
+        const response = await fetch(`${API_BASE}/api/torrents/${hash}`);
+        const data = await response.json();
+        showOutput('statusOutput', data);
+
+        if (data.success && data.data.progress) {
+          updateProgress(data.data);
+        }
+      } catch (error) {
+        showError('statusOutput', error);
+      }
+    }
+
+    function updateProgress(status) {
+      const progressContainer = document.getElementById('progressContainer');
+      const progressFill = document.getElementById('progressFill');
+      const statsGrid = document.getElementById('statsGrid');
+
+      progressContainer.style.display = 'block';
+      progressFill.style.width = status.progress + '%';
+      progressFill.textContent = status.progress + '%';
+
+      statsGrid.style.display = 'grid';
+      statsGrid.innerHTML = `
+        <div class="stat-box">
+          <div class="stat-label">Progress</div>
+          <div class="stat-value">${status.progress}%</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Peers</div>
+          <div class="stat-value">${status.numPeers || 0}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Download Speed</div>
+          <div class="stat-value">${formatBytes(status.downloadSpeed)}/s</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Upload Speed</div>
+          <div class="stat-value">${formatBytes(status.uploadSpeed)}/s</div>
+        </div>
+      `;
+    }
+
+    function startStatusPolling() {
+      const hash = document.getElementById('statusHash').value.trim();
+      if (!hash) {
+        alert('Please enter an info hash first');
+        return;
+      }
+
+      stopStatusPolling();
+      getTorrentStatus();
+      statusPollingInterval = setInterval(getTorrentStatus, 5000);
+    }
+
+    function stopStatusPolling() {
+      if (statusPollingInterval) {
+        clearInterval(statusPollingInterval);
+        statusPollingInterval = null;
+      }
+    }
+
+    async function listAllTorrents() {
+      showLoading('statusOutput');
+
+      try {
+        const response = await fetch(`${API_BASE}/api/torrents`);
+        const data = await response.json();
+        showOutput('statusOutput', data);
+      } catch (error) {
+        showError('statusOutput', error);
+      }
+    }
+
+    async function getTorrentFiles() {
+      const hash = document.getElementById('filesHash').value.trim();
+      if (!hash) {
+        alert('Please enter an info hash');
+        return;
+      }
+
+      showLoading('filesOutput');
+
+      try {
+        const response = await fetch(`${API_BASE}/api/torrents/${hash}/files`);
+        const data = await response.json();
+        showOutput('filesOutput', data);
+
+        if (data.success && data.data.files) {
+          displayFilesList(data.data.files, hash);
+        }
+      } catch (error) {
+        showError('filesOutput', error);
+      }
+    }
+
+    function displayFilesList(files, hash) {
+      const filesList = document.getElementById('filesList');
+      filesList.style.display = 'block';
+      filesList.innerHTML = files.map((file, index) => `
+        <div class="file-item">
+          <div class="file-info">
+            <div class="file-name">${file.name}</div>
+            <div class="file-size">${formatBytes(file.length)} - ${file.progress}% complete</div>
+          </div>
+          <button class="btn-primary" onclick="streamFileByIndex('${hash}', ${index})">Stream</button>
+        </div>
+      `).join('');
+    }
+
+    function streamFileByIndex(hash, index) {
+      document.getElementById('streamHash').value = hash;
+      document.getElementById('fileIndex').value = index;
+      streamVideo();
+    }
+
+    async function streamVideo() {
+      const hash = document.getElementById('streamHash').value.trim();
+      const fileIndex = document.getElementById('fileIndex').value || '0';
+
+      if (!hash) {
+        alert('Please enter an info hash');
+        return;
+      }
+
+      const streamUrl = `${API_BASE}/stream/proxy/${hash}?fileIndex=${fileIndex}`;
+      const videoContainer = document.getElementById('videoContainer');
+      const videoPlayer = document.getElementById('videoPlayer');
+
+      videoContainer.style.display = 'block';
+      videoPlayer.src = streamUrl;
+      videoPlayer.load();
+      videoPlayer.play();
+
+      showOutput('streamOutput', `Streaming from: ${streamUrl}`, false);
+    }
+
+    function stopVideo() {
+      const videoPlayer = document.getElementById('videoPlayer');
+      videoPlayer.pause();
+      videoPlayer.src = '';
+      document.getElementById('videoContainer').style.display = 'none';
+    }
+
+    async function getStreamInfo() {
+      const hash = document.getElementById('streamHash').value.trim();
+      if (!hash) {
+        alert('Please enter an info hash');
+        return;
+      }
+
+      showLoading('streamOutput');
+
+      try {
+        const response = await fetch(`${API_BASE}/stream/info/${hash}`);
+        const data = await response.json();
+        showOutput('streamOutput', data);
+      } catch (error) {
+        showError('streamOutput', error);
+      }
+    }
+
+    async function getCacheStats() {
+      showLoading('cacheOutput');
+
+      try {
+        const response = await fetch(`${API_BASE}/api/cache-stats`);
+        const data = await response.json();
+        showOutput('cacheOutput', data);
+
+        if (data.success) {
+          displayCacheStats(data.data);
+        }
+      } catch (error) {
+        showError('cacheOutput', error);
+      }
+    }
+
+    function displayCacheStats(stats) {
+      const statsDisplay = document.getElementById('cacheStatsDisplay');
+      statsDisplay.style.display = 'grid';
+      statsDisplay.innerHTML = `
+        <div class="stat-box">
+          <div class="stat-label">Backend</div>
+          <div class="stat-value">${stats.backend}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Cached Files</div>
+          <div class="stat-value">${stats.size}/${stats.maxSize}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Disk Usage</div>
+          <div class="stat-value">${stats.diskUsagePercent}%</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Storage</div>
+          <div class="stat-value">${stats.diskUsage.toFixed(2)}MB</div>
+        </div>
+      `;
+    }
+
+    async function getCacheConfig() {
+      showLoading('cacheOutput');
+
+      try {
+        const response = await fetch(`${API_BASE}/api/cache-config`);
+        const data = await response.json();
+        showOutput('cacheOutput', data);
+      } catch (error) {
+        showError('cacheOutput', error);
+      }
+    }
+
+    async function forceCleanup() {
+      if (!confirm('Are you sure you want to clear the cache?')) {
+        return;
+      }
+
+      showLoading('cacheOutput');
+
+      try {
+        const response = await fetch(`${API_BASE}/api/cache-config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ forceCleanup: true })
+        });
+
+        const data = await response.json();
+        showOutput('cacheOutput', data);
+      } catch (error) {
+        showError('cacheOutput', error);
+      }
+    }
+
+    async function checkHealth() {
+      showLoading('healthOutput');
+
+      try {
+        const response = await fetch(`${API_BASE}/health`);
+        const data = await response.json();
+        showOutput('healthOutput', data);
+      } catch (error) {
+        showError('healthOutput', error);
+      }
+    }
+
+    async function getSystemStatus() {
+      showLoading('healthOutput');
+
+      try {
+        const response = await fetch(`${API_BASE}/status`);
+        const data = await response.json();
+        showOutput('healthOutput', data);
+      } catch (error) {
+        showError('healthOutput', error);
+      }
+    }
+
+    async function removeTorrent() {
+      const hash = document.getElementById('removeHash').value.trim();
+      const deleteFiles = document.getElementById('deleteFiles').checked;
+
+      if (!hash) {
+        alert('Please enter an info hash');
+        return;
+      }
+
+      if (!confirm('Are you sure you want to remove this torrent?')) {
+        return;
+      }
+
+      showLoading('removeOutput');
+
+      try {
+        const response = await fetch(`${API_BASE}/api/torrents/${hash}?deleteFiles=${deleteFiles}`, {
+          method: 'DELETE'
+        });
+
+        const data = await response.json();
+        showOutput('removeOutput', data);
+      } catch (error) {
+        showError('removeOutput', error);
+      }
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes || bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Auto-load health check on page load
+    window.addEventListener('load', () => {
+      checkHealth();
+    });
+  </script>
+</body>
+</html>

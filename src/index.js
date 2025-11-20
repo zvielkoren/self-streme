@@ -13,6 +13,9 @@ import streamService from "./core/streamService.js";
 import torrentService from "./core/torrentService.js";
 import subtitleService from "./services/subtitleService.js";
 import manifest from "./manifest.js";
+import TorrentService from "./services/torrentService.js";
+import { createTorrentRouter } from "./api/torrentApi.js";
+import { createStreamingRouter } from "./api/streamingApi.js";
 import {
   getProxyAwareBaseUrl,
   getBaseUrlFromRequest,
@@ -44,6 +47,10 @@ const cacheManager = new ScalableCacheManager({
   cleanupInterval: config.cache.cleanupInterval,
   tempDir: TEMP_DIR,
 });
+
+// Initialize Torrent Streaming Service
+const torrentStreamingService = new TorrentService(cacheManager);
+logger.info("Torrent Streaming Service initialized");
 
 // Legacy compatibility - maintain old constants for existing code
 const CACHE_LIFETIME = config.cache.ttl * 1000;
@@ -97,9 +104,27 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "install.html"));
 });
 
+// Mount Torrent Streaming API routes
+const torrentApiRouter = createTorrentRouter(
+  torrentStreamingService,
+  cacheManager,
+);
+const streamingApiRouter = createStreamingRouter(
+  torrentStreamingService,
+  cacheManager,
+);
+app.use("/api", torrentApiRouter);
+app.use("/", streamingApiRouter);
+logger.info("Torrent Streaming API routes mounted");
+
 // Serve iOS fix test page
 app.get("/test-ios-fix", (req, res) => {
   res.sendFile(path.join(__dirname, "test-ios-fix.html"));
+});
+
+// Serve torrent streaming test page
+app.get("/test-torrent-streaming", (req, res) => {
+  res.sendFile(path.join(__dirname, "static", "test-torrent-streaming.html"));
 });
 
 // Serve source selection test page
@@ -409,16 +434,17 @@ app.get("/stream/proxy/:infoHash", async (req, res) => {
     if (!res.headersSent) {
       // Provide more specific error messages based on the error type
       if (error.message && error.message.includes("cooldown")) {
-        return res.status(503).json({ 
-          error: "Torrent temporarily unavailable", 
+        return res.status(503).json({
+          error: "Torrent temporarily unavailable",
           message: error.message,
-          type: "cooldown"
+          type: "cooldown",
         });
       } else if (error.message && error.message.includes("No peers")) {
-        return res.status(404).json({ 
-          error: "No peers found for this torrent", 
-          message: "This content may not be available in the torrent network. Please try a different source.",
-          type: "no_peers"
+        return res.status(404).json({
+          error: "No peers found for this torrent",
+          message:
+            "This content may not be available in the torrent network. Please try a different source.",
+          type: "no_peers",
         });
       } else {
         return res.status(500).json({ error: "Internal server error" });
@@ -434,12 +460,13 @@ app.get("/stream/proxy/:infoHash", async (req, res) => {
 app.get("/stream/magnet", express.json(), async (req, res) => {
   try {
     const magnetLink = req.query.magnet || req.query.url;
-    
+
     if (!magnetLink) {
       return res.status(400).json({
         error: "Missing magnet link",
-        message: "Please provide a magnet link using the 'magnet' or 'url' query parameter",
-        example: "/stream/magnet?magnet=magnet:?xt=urn:btih:..."
+        message:
+          "Please provide a magnet link using the 'magnet' or 'url' query parameter",
+        example: "/stream/magnet?magnet=magnet:?xt=urn:btih:...",
       });
     }
 
@@ -447,29 +474,38 @@ app.get("/stream/magnet", express.json(), async (req, res) => {
     if (!magnetLink.startsWith("magnet:")) {
       return res.status(400).json({
         error: "Invalid magnet link",
-        message: "The provided link is not a valid magnet URI. It must start with 'magnet:'",
-        provided: magnetLink.substring(0, 50)
+        message:
+          "The provided link is not a valid magnet URI. It must start with 'magnet:'",
+        provided: magnetLink.substring(0, 50),
       });
     }
 
     // Extract infoHash from magnet link
     const infoHash = streamService.extractInfoHash(magnetLink);
-    
+
     if (!infoHash) {
       return res.status(400).json({
         error: "Invalid magnet link",
         message: "Could not extract infoHash from the provided magnet link",
-        provided: magnetLink.substring(0, 100)
+        provided: magnetLink.substring(0, 100),
       });
     }
 
-    logger.info(`Magnet to stream conversion requested for infoHash: ${infoHash}`);
+    logger.info(
+      `Magnet to stream conversion requested for infoHash: ${infoHash}`,
+    );
 
     // Enhance magnet link with additional trackers for better connectivity
-    const enhancedMagnet = magnetToHttpService.enhanceMagnetLink(magnetLink, infoHash);
+    const enhancedMagnet = magnetToHttpService.enhanceMagnetLink(
+      magnetLink,
+      infoHash,
+    );
 
     // Generate stream URLs using external services (works without P2P)
-    const streamResult = await magnetToHttpService.generateStreamUrls(enhancedMagnet, infoHash);
+    const streamResult = await magnetToHttpService.generateStreamUrls(
+      enhancedMagnet,
+      infoHash,
+    );
 
     // Also provide local proxy option as fallback
     const baseUrl = getProxyAwareBaseUrl(req);
@@ -493,32 +529,37 @@ app.get("/stream/magnet", express.json(), async (req, res) => {
           url: localStreamUrl,
           type: "local_proxy",
           priority: 10,
-          note: "Requires P2P connectivity and peers"
+          note: "Requires P2P connectivity and peers",
         },
         // Torrent cache (direct torrent file download)
-        cache: cacheUrl ? {
-          name: "Torrent Cache",
-          url: cacheUrl,
-          type: "torrent_file",
-          priority: 5,
-          note: "Download .torrent file directly"
-        } : null
+        cache: cacheUrl
+          ? {
+              name: "Torrent Cache",
+              url: cacheUrl,
+              type: "torrent_file",
+              priority: 5,
+              note: "Download .torrent file directly",
+            }
+          : null,
       },
       recommended: streamResult.primaryUrl || localStreamUrl,
-      message: "Multiple streaming options available. External services work on any server without P2P.",
+      message:
+        "Multiple streaming options available. External services work on any server without P2P.",
       usage: {
         external: "Use external URLs - work on any server, no P2P required",
         local: "Use local proxy - requires P2P connectivity",
-        stremio: "Copy any URL to use in Stremio or video players"
-      }
+        stremio: "Copy any URL to use in Stremio or video players",
+      },
     });
 
-    logger.info(`Successfully converted magnet to stream URLs. Primary: ${streamResult.primaryUrl || localStreamUrl}`);
+    logger.info(
+      `Successfully converted magnet to stream URLs. Primary: ${streamResult.primaryUrl || localStreamUrl}`,
+    );
   } catch (error) {
     logger.error("Magnet to stream conversion error:", error);
     res.status(500).json({
       error: "Internal server error",
-      message: error.message
+      message: error.message,
     });
   }
 });
@@ -527,12 +568,13 @@ app.get("/stream/magnet", express.json(), async (req, res) => {
 app.post("/stream/magnet", express.json(), async (req, res) => {
   try {
     const magnetLink = req.body.magnet || req.body.url;
-    
+
     if (!magnetLink) {
       return res.status(400).json({
         error: "Missing magnet link",
-        message: "Please provide a magnet link in the request body using 'magnet' or 'url' field",
-        example: { magnet: "magnet:?xt=urn:btih:..." }
+        message:
+          "Please provide a magnet link in the request body using 'magnet' or 'url' field",
+        example: { magnet: "magnet:?xt=urn:btih:..." },
       });
     }
 
@@ -540,29 +582,38 @@ app.post("/stream/magnet", express.json(), async (req, res) => {
     if (!magnetLink.startsWith("magnet:")) {
       return res.status(400).json({
         error: "Invalid magnet link",
-        message: "The provided link is not a valid magnet URI. It must start with 'magnet:'",
-        provided: magnetLink.substring(0, 50)
+        message:
+          "The provided link is not a valid magnet URI. It must start with 'magnet:'",
+        provided: magnetLink.substring(0, 50),
       });
     }
 
     // Extract infoHash from magnet link
     const infoHash = streamService.extractInfoHash(magnetLink);
-    
+
     if (!infoHash) {
       return res.status(400).json({
         error: "Invalid magnet link",
         message: "Could not extract infoHash from the provided magnet link",
-        provided: magnetLink.substring(0, 100)
+        provided: magnetLink.substring(0, 100),
       });
     }
 
-    logger.info(`Magnet to stream conversion requested (POST) for infoHash: ${infoHash}`);
+    logger.info(
+      `Magnet to stream conversion requested (POST) for infoHash: ${infoHash}`,
+    );
 
     // Enhance magnet link with additional trackers for better connectivity
-    const enhancedMagnet = magnetToHttpService.enhanceMagnetLink(magnetLink, infoHash);
+    const enhancedMagnet = magnetToHttpService.enhanceMagnetLink(
+      magnetLink,
+      infoHash,
+    );
 
     // Generate stream URLs using external services (works without P2P)
-    const streamResult = await magnetToHttpService.generateStreamUrls(enhancedMagnet, infoHash);
+    const streamResult = await magnetToHttpService.generateStreamUrls(
+      enhancedMagnet,
+      infoHash,
+    );
 
     // Also provide local proxy option as fallback
     const baseUrl = getProxyAwareBaseUrl(req);
@@ -586,32 +637,37 @@ app.post("/stream/magnet", express.json(), async (req, res) => {
           url: localStreamUrl,
           type: "local_proxy",
           priority: 10,
-          note: "Requires P2P connectivity and peers"
+          note: "Requires P2P connectivity and peers",
         },
         // Torrent cache (direct torrent file download)
-        cache: cacheUrl ? {
-          name: "Torrent Cache",
-          url: cacheUrl,
-          type: "torrent_file",
-          priority: 5,
-          note: "Download .torrent file directly"
-        } : null
+        cache: cacheUrl
+          ? {
+              name: "Torrent Cache",
+              url: cacheUrl,
+              type: "torrent_file",
+              priority: 5,
+              note: "Download .torrent file directly",
+            }
+          : null,
       },
       recommended: streamResult.primaryUrl || localStreamUrl,
-      message: "Multiple streaming options available. External services work on any server without P2P.",
+      message:
+        "Multiple streaming options available. External services work on any server without P2P.",
       usage: {
         external: "Use external URLs - work on any server, no P2P required",
         local: "Use local proxy - requires P2P connectivity",
-        stremio: "Copy any URL to use in Stremio or video players"
-      }
+        stremio: "Copy any URL to use in Stremio or video players",
+      },
     });
 
-    logger.info(`Successfully converted magnet to stream URLs (POST). Primary: ${streamResult.primaryUrl || localStreamUrl}`);
+    logger.info(
+      `Successfully converted magnet to stream URLs (POST). Primary: ${streamResult.primaryUrl || localStreamUrl}`,
+    );
   } catch (error) {
     logger.error("Magnet to stream conversion error (POST):", error);
     res.status(500).json({
       error: "Internal server error",
-      message: error.message
+      message: error.message,
     });
   }
 });
@@ -760,23 +816,25 @@ app.get("/stream/:type/:imdbId", async (req, res) => {
 app.get("/subtitles/:type/:imdbId/:season?/:episode?", async (req, res) => {
   try {
     const { type, imdbId, season, episode } = req.params;
-    const { lang = 'heb' } = req.query; // Default to Hebrew
-    
-    logger.info(`Subtitle request: ${type}:${imdbId} S${season || "-"}E${episode || "-"} lang=${lang}`);
-    
+    const { lang = "heb" } = req.query; // Default to Hebrew
+
+    logger.info(
+      `Subtitle request: ${type}:${imdbId} S${season || "-"}E${episode || "-"} lang=${lang}`,
+    );
+
     const subtitles = await subtitleService.getStremioSubtitles(
       imdbId,
       type,
       season ? Number(season) : undefined,
-      episode ? Number(episode) : undefined
+      episode ? Number(episode) : undefined,
     );
-    
-    res.json({ 
+
+    res.json({
       subtitles,
       count: subtitles.length,
       imdbId,
       type,
-      language: lang
+      language: lang,
     });
   } catch (error) {
     logger.error("Subtitle request error:", error);
@@ -908,6 +966,60 @@ app.get("/play/:type/:imdbId/:fileIdx/:season?/:episode?", async (req, res) => {
     logger.error(`Error playing stream for ${imdbId} index ${fileIdx}:`, err);
     res.status(500).send("Failed to play stream");
   }
+});
+
+// Torrent API Documentation endpoint
+app.get("/docs", (req, res) => {
+  res.json({
+    name: "Self-Streme with Torrent Streaming",
+    version: "1.0.0",
+    description:
+      "Self-hosted streaming server with Stremio addon support and torrent streaming",
+    endpoints: {
+      stremio: {
+        "GET /manifest.json": "Stremio addon manifest",
+        "GET /stream/:type/:id": "Get streams for content",
+        "GET /stream/:type/:id.json": "iOS-optimized source listing",
+        "GET /play/:type/:id/:fileIdx": "Play specific source by index",
+      },
+      torrents: {
+        "POST /api/torrents": "Add new torrent",
+        "GET /api/torrents/:infoHash": "Get torrent status",
+        "GET /api/torrents/:infoHash/files": "List files in torrent",
+        "DELETE /api/torrents/:infoHash": "Remove torrent",
+        "GET /api/torrents": "List all active torrents",
+      },
+      streaming: {
+        "GET /stream/proxy/:infoHash": "Stream file with Range Request support",
+        "GET /stream/file/:infoHash/:fileIndex":
+          "Stream specific file by index",
+        "GET /stream/info/:infoHash": "Get streamable files info",
+      },
+      cache: {
+        "GET /api/cache-stats": "Cache statistics",
+        "GET /api/cache-config": "Cache configuration",
+        "POST /api/cache-config": "Force cache cleanup",
+      },
+      system: {
+        "GET /health": "Health check",
+        "GET /status": "System status",
+        "GET /": "Installation page",
+        "GET /docs": "API documentation",
+        "GET /test-torrent-streaming": "Torrent streaming test interface",
+      },
+    },
+    features: [
+      "Stremio addon integration",
+      "WebTorrent streaming",
+      "HTTP Range Request support (206 Partial Content)",
+      "Sequential download for faster streaming",
+      "LRU cache with multiple backends (Memory/SQLite/Redis)",
+      "DHT and tracker connectivity",
+      "60-second timeout with retry logic",
+      "Multi-file torrent support",
+      "iOS and mobile optimization",
+    ],
+  });
 });
 
 // Initialize server
@@ -1070,7 +1182,9 @@ async function startServer() {
       logger.info(`💚 Health check: http://localhost:${port}/health`);
       logger.info(``);
       logger.info(`ℹ️  Access from devices on the same network:`);
-      logger.info(`   1. Find your server's IP address (use 'hostname -I' or 'ipconfig')`);
+      logger.info(
+        `   1. Find your server's IP address (use 'hostname -I' or 'ipconfig')`,
+      );
       logger.info(`   2. Use: http://<YOUR_IP>:${port}/manifest.json`);
       logger.info(`ℹ️  URLs are automatically detected from request headers`);
       logger.info(
@@ -1084,10 +1198,25 @@ async function startServer() {
       }
     });
   } catch (error) {
-    logger.error("Failed to start servers:", error);
+    logger.error("Server failed to start:", error);
     process.exit(1);
   }
 }
+
+// Enhanced startup logging
+logger.info("=".repeat(60));
+logger.info("🎬 Self-Streme Server with Torrent Streaming");
+logger.info("=".repeat(60));
+logger.info(`📍 Main Server: http://localhost:${config.server.port}`);
+logger.info(
+  `📡 Stremio Addon: http://localhost:${config.server.addonPort}/manifest.json`,
+);
+logger.info(
+  `🎥 Torrent Streaming: http://localhost:${config.server.port}/test-torrent-streaming`,
+);
+logger.info(`💾 Cache Backend: ${config.cache.backend}`);
+logger.info(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
+logger.info("=".repeat(60));
 
 // Graceful shutdown handler
 function setupGracefulShutdown() {
