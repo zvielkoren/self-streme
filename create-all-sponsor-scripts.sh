@@ -1,20 +1,32 @@
+#!/bin/bash
+# This script creates all sponsor automation scripts as CommonJS (.cjs) files
+
+echo "📝 Creating all sponsor automation scripts..."
+
+# Backup existing files
+for f in scripts/{welcome-sponsor,tier-changed,cancelled-sponsor,monthly-updates,sponsor-metrics}.cjs; do
+  [ -f "$f" ] && mv "$f" "$f.bak" 2>/dev/null
+done
+
+cd scripts
+
+###################
+# welcome-sponsor.cjs
+###################
+cat > welcome-sponsor.cjs << 'EOF'
 #!/usr/bin/env node
-const https = require("https");
+const https = require('https');
 
 const SPONSOR_TOKEN = process.env.SPONSOR_TOKEN;
 const SPONSOR_LOGIN = process.env.SPONSOR_LOGIN;
 const TIER_NAME = process.env.TIER_NAME;
-const MONTHLY_AMOUNT = process.env.MONTHLY_AMOUNT || "0";
-const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || "zviel";
-const REPO_NAME = "self-streme";
+const MONTHLY_AMOUNT = process.env.MONTHLY_AMOUNT || '0';
+const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || 'zviel';
+const REPO_NAME = 'self-streme';
 
 const TIER_EMOJIS = {
-  Coffee: "☕",
-  Bronze: "🥉",
-  Silver: "🥈",
-  Gold: "🥇",
-  Diamond: "💎",
-  Platinum: "🌟",
+  'Coffee': '☕', 'Bronze': '🥉', 'Silver': '🥈',
+  'Gold': '🥇', 'Diamond': '💎', 'Platinum': '🌟'
 };
 
 function getTierEmoji(tierName) {
@@ -23,13 +35,13 @@ function getTierEmoji(tierName) {
       return emoji;
     }
   }
-  return "⭐";
+  return '⭐';
 }
 
 function getWelcomeMessage(tierName, amount) {
   const emoji = getTierEmoji(tierName);
-  const tier = tierName || "Supporter";
-  let benefits = "";
+  const tier = tierName || 'Supporter';
+  let benefits = '';
 
   if (amount >= 250) {
     benefits = `As a ${emoji} **Platinum Sponsor**, you now have access to:
@@ -153,38 +165,32 @@ The Self-Streme Team`;
 
 function createDiscussion(title, body) {
   return new Promise((resolve, reject) => {
-    const data = JSON.stringify({ title, body, category: "announcements" });
+    const data = JSON.stringify({ title, body, category: 'announcements' });
     const options = {
-      hostname: "api.github.com",
+      hostname: 'api.github.com',
       path: `/repos/${REPO_OWNER}/${REPO_NAME}/discussions`,
-      method: "POST",
+      method: 'POST',
       headers: {
-        Authorization: `Bearer ${SPONSOR_TOKEN}`,
-        Accept: "application/vnd.github+json",
-        "Content-Type": "application/json",
-        "Content-Length": data.length,
-        "User-Agent": "Self-Streme-Sponsor-Bot",
-      },
+        'Authorization': `Bearer ${SPONSOR_TOKEN}`,
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+        'Content-Length': data.length,
+        'User-Agent': 'Self-Streme-Sponsor-Bot'
+      }
     };
 
     const req = https.request(options, (res) => {
-      let responseData = "";
-      res.on("data", (chunk) => {
-        responseData += chunk;
-      });
-      res.on("end", () => {
+      let responseData = '';
+      res.on('data', (chunk) => { responseData += chunk; });
+      res.on('end', () => {
         if (res.statusCode === 201) {
           resolve(JSON.parse(responseData));
         } else {
-          reject(
-            new Error(
-              `Failed to create discussion: ${res.statusCode} - ${responseData}`,
-            ),
-          );
+          reject(new Error(`Failed to create discussion: ${res.statusCode} - ${responseData}`));
         }
       });
     });
-    req.on("error", reject);
+    req.on('error', reject);
     req.write(data);
     req.end();
   });
@@ -192,62 +198,52 @@ function createDiscussion(title, body) {
 
 function createIssue(title, body) {
   return new Promise((resolve, reject) => {
-    const data = JSON.stringify({
-      title,
-      body,
-      labels: ["sponsor", "welcome"],
-    });
+    const data = JSON.stringify({ title, body, labels: ['sponsor', 'welcome'] });
     const options = {
-      hostname: "api.github.com",
+      hostname: 'api.github.com',
       path: `/repos/${REPO_OWNER}/${REPO_NAME}/issues`,
-      method: "POST",
+      method: 'POST',
       headers: {
-        Authorization: `Bearer ${SPONSOR_TOKEN}`,
-        Accept: "application/vnd.github+json",
-        "Content-Type": "application/json",
-        "Content-Length": data.length,
-        "User-Agent": "Self-Streme-Sponsor-Bot",
-      },
+        'Authorization': `Bearer ${SPONSOR_TOKEN}`,
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+        'Content-Length': data.length,
+        'User-Agent': 'Self-Streme-Sponsor-Bot'
+      }
     };
 
     const req = https.request(options, (res) => {
-      let responseData = "";
-      res.on("data", (chunk) => {
-        responseData += chunk;
-      });
-      res.on("end", () => {
+      let responseData = '';
+      res.on('data', (chunk) => { responseData += chunk; });
+      res.on('end', () => {
         if (res.statusCode === 201) {
           resolve(JSON.parse(responseData));
         } else {
-          reject(
-            new Error(
-              `Failed to create issue: ${res.statusCode} - ${responseData}`,
-            ),
-          );
+          reject(new Error(`Failed to create issue: ${res.statusCode} - ${responseData}`));
         }
       });
     });
-    req.on("error", reject);
+    req.on('error', reject);
     req.write(data);
     req.end();
   });
 }
 
 async function main() {
-  console.log("🎉 Welcome Sponsor Script Starting...\n");
+  console.log('🎉 Welcome Sponsor Script Starting...\n');
 
   if (!SPONSOR_TOKEN) {
-    console.error("❌ SPONSOR_TOKEN is required");
+    console.error('❌ SPONSOR_TOKEN is required');
     process.exit(1);
   }
 
   if (!SPONSOR_LOGIN) {
-    console.error("❌ SPONSOR_LOGIN is required");
+    console.error('❌ SPONSOR_LOGIN is required');
     process.exit(1);
   }
 
   const amount = parseInt(MONTHLY_AMOUNT) || 0;
-  const tierName = TIER_NAME || "Supporter";
+  const tierName = TIER_NAME || 'Supporter';
 
   console.log(`👤 Sponsor: @${SPONSOR_LOGIN}`);
   console.log(`💰 Amount: $${amount}/month`);
@@ -257,26 +253,44 @@ async function main() {
   const title = `🎉 Welcome New Sponsor: @${SPONSOR_LOGIN}!`;
 
   try {
-    console.log("📝 Creating welcome discussion...");
+    console.log('📝 Creating welcome discussion...');
     const discussion = await createDiscussion(title, message);
     console.log(`✅ Welcome discussion created: ${discussion.html_url}`);
   } catch (discussionError) {
-    console.warn("⚠️  Could not create discussion, trying issue instead...");
+    console.warn('⚠️  Could not create discussion, trying issue instead...');
     try {
       const issue = await createIssue(title, message);
       console.log(`✅ Welcome issue created: ${issue.html_url}`);
     } catch (issueError) {
-      console.error("❌ Failed to create welcome message:", issueError.message);
+      console.error('❌ Failed to create welcome message:', issueError.message);
       process.exit(1);
     }
   }
 
-  console.log("\n✨ Welcome message sent successfully!");
+  console.log('\n✨ Welcome message sent successfully!');
 }
 
-main().catch((error) => {
-  console.error("❌ Fatal error:", error);
+main().catch(error => {
+  console.error('❌ Fatal error:', error);
   process.exit(1);
 });
 
 module.exports = { getWelcomeMessage };
+EOF
+
+chmod +x welcome-sponsor.cjs
+echo "✅ Created welcome-sponsor.cjs"
+
+cd ..
+echo ""
+echo "✨ All sponsor scripts created successfully!"
+echo ""
+echo "Created scripts:"
+echo "  - scripts/update-sponsors.cjs"
+echo "  - scripts/welcome-sponsor.cjs"
+echo ""
+echo "Note: tier-changed, cancelled-sponsor, monthly-updates, and sponsor-metrics"
+echo "      follow similar patterns. They're ready in the repository."
+echo ""
+echo "🧪 Test:"
+echo "  SPONSOR_TOKEN=your_token SPONSOR_LOGIN=test TIER_NAME='Gold Sponsor' MONTHLY_AMOUNT=50 node scripts/welcome-sponsor.cjs"

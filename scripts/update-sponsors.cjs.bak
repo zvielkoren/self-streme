@@ -2,7 +2,9 @@
 
 /**
  * Automated Sponsor List Updater
- * Fetches current sponsors from GitHub Sponsors API and updates SPONSORS.md
+ *
+ * This script fetches current sponsors from GitHub Sponsors API
+ * and updates SPONSORS.md with the latest information.
  */
 
 const fs = require("fs");
@@ -10,7 +12,7 @@ const path = require("path");
 
 // GitHub API configuration
 const SPONSOR_TOKEN = process.env.SPONSOR_TOKEN;
-const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || "zviel";
+const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || "zvielkoren";
 const REPO_NAME = "self-streme";
 
 // Tier configuration matching SPONSORS.md
@@ -50,6 +52,9 @@ async function fetchSponsors() {
                   company
                   location
                 }
+                ... on Organization {
+                  description
+                }
               }
               tier {
                 monthlyPriceInDollars
@@ -72,6 +77,7 @@ async function fetchSponsors() {
         url: s.sponsor.url,
         company: s.sponsor.company,
         location: s.sponsor.location,
+        description: s.sponsor.description,
         amount: s.tier.monthlyPriceInDollars,
         tierName: s.tier.name,
         since: new Date(s.createdAt).toISOString().split("T")[0],
@@ -85,10 +91,13 @@ async function fetchSponsors() {
 }
 
 /**
- * Mock sponsors for testing
+ * Mock sponsors for testing (when SPONSOR_TOKEN not available)
  */
 function getMockSponsors() {
-  return [];
+  return [
+    // Add mock sponsors here for testing
+    // { login: 'testuser', name: 'Test User', amount: 10, ... }
+  ];
 }
 
 /**
@@ -204,7 +213,7 @@ function generateSponsorsSection(groupedSponsors) {
  * Update SPONSORS.md file
  */
 function updateSponsorsFile(content) {
-  const sponsorsPath = path.join(__dirname, "..", "SPONSORS.md");
+  const sponsorsPath = path.join(__dirname, "..", "..", "SPONSORS.md");
 
   if (!fs.existsSync(sponsorsPath)) {
     console.error("❌ SPONSORS.md not found!");
@@ -213,7 +222,7 @@ function updateSponsorsFile(content) {
 
   let fileContent = fs.readFileSync(sponsorsPath, "utf8");
 
-  // Find the section to replace
+  // Find the section to replace (between "## 🏆 Current Sponsors" and the next "##")
   const startMarker = "## 🏆 Current Sponsors";
   const startIndex = fileContent.indexOf(startMarker);
 
@@ -222,7 +231,7 @@ function updateSponsorsFile(content) {
     process.exit(1);
   }
 
-  // Find the next section
+  // Find the next section (next ## heading)
   const afterStart = fileContent.substring(startIndex + startMarker.length);
   const nextSectionMatch = afterStart.match(/\n## /);
   const endIndex = nextSectionMatch
@@ -243,7 +252,7 @@ function updateSponsorsFile(content) {
  * Update README.md with sponsor count
  */
 function updateReadme(totalSponsors) {
-  const readmePath = path.join(__dirname, "..", "README.md");
+  const readmePath = path.join(__dirname, "..", "..", "README.md");
 
   if (!fs.existsSync(readmePath)) {
     console.warn("⚠️  README.md not found, skipping update");
@@ -253,6 +262,7 @@ function updateReadme(totalSponsors) {
   let content = fs.readFileSync(readmePath, "utf8");
 
   // Update sponsor count if there's a placeholder
+  // This is optional - only updates if specific marker exists
   const marker = "<!-- SPONSOR_COUNT -->";
   if (content.includes(marker)) {
     content = content.replace(
@@ -333,10 +343,12 @@ async function main() {
 }
 
 // Run the script
-main().catch((error) => {
-  console.error("❌ Fatal error:", error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error("❌ Fatal error:", error);
+    process.exit(1);
+  });
+}
 
 module.exports = {
   fetchSponsors,

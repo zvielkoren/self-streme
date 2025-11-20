@@ -149,6 +149,9 @@ Your sponsorship helps ensure the project remains active, well-maintained, and c
 
 ## 🏆 Current Sponsors
 
+### 🌟 Platinum Sponsors
+*Be the first Platinum Sponsor!*
+
 ### 💎 Diamond Sponsors
 *Be the first Diamond Sponsor!*
 
@@ -161,10 +164,9 @@ Your sponsorship helps ensure the project remains active, well-maintained, and c
 ### 🥉 Bronze Sponsors
 *Be the first Bronze Sponsor!*
 
-### ☕ Coffee Supporters
-*Thank you to all our coffee supporters!*
+### ☕ Coffee Sponsors
+*Be the first Coffee Sponsor!*
 
----
 
 ## 🎁 One-Time Donations
 

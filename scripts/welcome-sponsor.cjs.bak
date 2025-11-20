@@ -1,13 +1,23 @@
 #!/usr/bin/env node
+
+/**
+ * Welcome New Sponsor Script
+ *
+ * Automatically sends a personalized welcome message to new sponsors
+ * via GitHub issue or discussion.
+ */
+
 const https = require("https");
 
+// Configuration
 const SPONSOR_TOKEN = process.env.SPONSOR_TOKEN;
 const SPONSOR_LOGIN = process.env.SPONSOR_LOGIN;
 const TIER_NAME = process.env.TIER_NAME;
 const MONTHLY_AMOUNT = process.env.MONTHLY_AMOUNT || "0";
-const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || "zviel";
+const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || "zvielkoren";
 const REPO_NAME = "self-streme";
 
+// Tier emoji mapping
 const TIER_EMOJIS = {
   Coffee: "☕",
   Bronze: "🥉",
@@ -17,6 +27,9 @@ const TIER_EMOJIS = {
   Platinum: "🌟",
 };
 
+/**
+ * Get tier emoji
+ */
 function getTierEmoji(tierName) {
   for (const [key, emoji] of Object.entries(TIER_EMOJIS)) {
     if (tierName && tierName.toLowerCase().includes(key.toLowerCase())) {
@@ -26,9 +39,13 @@ function getTierEmoji(tierName) {
   return "⭐";
 }
 
+/**
+ * Get tier-specific welcome message
+ */
 function getWelcomeMessage(tierName, amount) {
   const emoji = getTierEmoji(tierName);
   const tier = tierName || "Supporter";
+
   let benefits = "";
 
   if (amount >= 250) {
@@ -134,6 +151,14 @@ ${benefits}
 - **GitHub Issues:** [Report bugs or request features](https://github.com/${REPO_OWNER}/${REPO_NAME}/issues)
 - **Sponsors Forum:** Check your email for exclusive access link
 
+## 🤝 Get Involved
+
+Your sponsorship entitles you to priority support, but we also welcome:
+- 💡 Feature suggestions and ideas
+- 🐛 Bug reports (with priority response!)
+- 📝 Documentation improvements
+- 💻 Code contributions
+
 ## ❓ Questions?
 
 If you have any questions about your sponsorship benefits or how to access them:
@@ -148,12 +173,24 @@ If you have any questions about your sponsorship benefits or how to access them:
 We're excited to have you as part of our sponsors community! 🌟
 
 Best regards,
-The Self-Streme Team`;
+The Self-Streme Team
+
+---
+
+*This is an automated welcome message. For personalized assistance, please reach out via any of the channels above.*`;
 }
 
-function createDiscussion(title, body) {
+/**
+ * Create GitHub discussion
+ */
+async function createDiscussion(title, body) {
   return new Promise((resolve, reject) => {
-    const data = JSON.stringify({ title, body, category: "announcements" });
+    const data = JSON.stringify({
+      title: title,
+      body: body,
+      category: "announcements", // Adjust category as needed
+    });
+
     const options = {
       hostname: "api.github.com",
       path: `/repos/${REPO_OWNER}/${REPO_NAME}/discussions`,
@@ -169,9 +206,11 @@ function createDiscussion(title, body) {
 
     const req = https.request(options, (res) => {
       let responseData = "";
+
       res.on("data", (chunk) => {
         responseData += chunk;
       });
+
       res.on("end", () => {
         if (res.statusCode === 201) {
           resolve(JSON.parse(responseData));
@@ -184,19 +223,27 @@ function createDiscussion(title, body) {
         }
       });
     });
-    req.on("error", reject);
+
+    req.on("error", (error) => {
+      reject(error);
+    });
+
     req.write(data);
     req.end();
   });
 }
 
-function createIssue(title, body) {
+/**
+ * Create GitHub issue (alternative if discussions not available)
+ */
+async function createIssue(title, body) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify({
-      title,
-      body,
+      title: title,
+      body: body,
       labels: ["sponsor", "welcome"],
     });
+
     const options = {
       hostname: "api.github.com",
       path: `/repos/${REPO_OWNER}/${REPO_NAME}/issues`,
@@ -212,9 +259,11 @@ function createIssue(title, body) {
 
     const req = https.request(options, (res) => {
       let responseData = "";
+
       res.on("data", (chunk) => {
         responseData += chunk;
       });
+
       res.on("end", () => {
         if (res.statusCode === 201) {
           resolve(JSON.parse(responseData));
@@ -227,15 +276,23 @@ function createIssue(title, body) {
         }
       });
     });
-    req.on("error", reject);
+
+    req.on("error", (error) => {
+      reject(error);
+    });
+
     req.write(data);
     req.end();
   });
 }
 
+/**
+ * Main execution
+ */
 async function main() {
   console.log("🎉 Welcome Sponsor Script Starting...\n");
 
+  // Validate environment variables
   if (!SPONSOR_TOKEN) {
     console.error("❌ SPONSOR_TOKEN is required");
     process.exit(1);
@@ -253,30 +310,43 @@ async function main() {
   console.log(`💰 Amount: $${amount}/month`);
   console.log(`🎯 Tier: ${tierName}\n`);
 
+  // Generate welcome message
   const message = getWelcomeMessage(tierName, amount);
   const title = `🎉 Welcome New Sponsor: @${SPONSOR_LOGIN}!`;
 
+  // Try to create a discussion first, fall back to issue
   try {
     console.log("📝 Creating welcome discussion...");
     const discussion = await createDiscussion(title, message);
     console.log(`✅ Welcome discussion created: ${discussion.html_url}`);
   } catch (discussionError) {
     console.warn("⚠️  Could not create discussion, trying issue instead...");
+    console.warn(`   Reason: ${discussionError.message}`);
+
     try {
+      console.log("📝 Creating welcome issue...");
       const issue = await createIssue(title, message);
       console.log(`✅ Welcome issue created: ${issue.html_url}`);
     } catch (issueError) {
       console.error("❌ Failed to create welcome message:", issueError.message);
+      console.log("\n📧 Welcome message (copy manually if needed):");
+      console.log("─".repeat(80));
+      console.log(message);
+      console.log("─".repeat(80));
       process.exit(1);
     }
   }
 
   console.log("\n✨ Welcome message sent successfully!");
+  console.log(`   New sponsor @${SPONSOR_LOGIN} has been welcomed.`);
 }
 
-main().catch((error) => {
-  console.error("❌ Fatal error:", error);
-  process.exit(1);
-});
+// Run the script
+if (require.main === module) {
+  main().catch((error) => {
+    console.error("❌ Fatal error:", error);
+    process.exit(1);
+  });
+}
 
 module.exports = { getWelcomeMessage };
