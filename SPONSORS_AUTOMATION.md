@@ -4,7 +4,8 @@ Complete automation system for Self-Streme's GitHub Sponsors program.
 
 **Status:** ✅ Fully Automated  
 **Last Updated:** 2025-01-XX  
-**Version:** 1.0
+**Version:** 1.0  
+**Event System:** repository_dispatch (webhooks or manual triggers)
 
 ---
 
@@ -260,13 +261,16 @@ The sponsors program is now **fully automated** with:
 on:
   schedule:
     - cron: '0 0 * * *'  # Daily at midnight UTC
-  sponsor:
+  repository_dispatch:
     types:
-      - created           # New sponsor
-      - cancelled         # Sponsor cancelled
-      - tier_changed      # Tier upgrade/downgrade
-  workflow_dispatch:      # Manual trigger
+      - sponsor-created      # New sponsor (via webhook/manual)
+      - sponsor-cancelled    # Sponsor cancelled (via webhook/manual)
+      - sponsor-tier-changed # Tier upgrade/downgrade (via webhook/manual)
+  workflow_dispatch:         # Manual trigger
 ```
+
+**Note:** Since GitHub Actions doesn't support native `sponsor` events, we use `repository_dispatch` 
+triggered by webhooks or manual scripts. See [SPONSORS_WEBHOOK_SETUP.md](docs/SPONSORS_WEBHOOK_SETUP.md).
 
 ---
 
@@ -295,13 +299,13 @@ on:
 
 ## 🚀 Setup Instructions
 
-### 1. GitHub Sponsors
+### 1. Activate GitHub Sponsors
 
-First, activate GitHub Sponsors:
 1. Visit: https://github.com/sponsors
-2. Apply for GitHub Sponsors
+2. Apply for GitHub Sponsors (if not already active)
 3. Set up tiers matching `SPONSORS.md`
 4. Configure tier amounts: $5, $10, $25, $50, $100, $250+
+5. Add tier descriptions from `.github/SPONSORS_TIERS.md`
 
 ### 2. Repository Setup
 
@@ -346,16 +350,34 @@ gh workflow run sponsors.yml
 
 ### 6. Test Automation
 
+**Option A: Using trigger script (recommended)**
 ```bash
-# Test locally (without API calls)
+# Test welcome message
+./scripts/trigger-sponsor-event.sh sponsor-created testuser \
+  --tier-name "Bronze Sponsor" \
+  --monthly-amount 10
+
+# Test tier change
+./scripts/trigger-sponsor-event.sh sponsor-tier-changed testuser \
+  --new-tier "Gold Sponsor" \
+  --old-tier "Bronze Sponsor"
+```
+
+**Option B: Manual script test**
+```bash
+# Test locally (without triggering workflow)
 SPONSOR_LOGIN=testuser \
 TIER_NAME="Bronze Sponsor" \
 MONTHLY_AMOUNT=10 \
 node scripts/welcome-sponsor.js
+```
 
-# Test with GitHub CLI
+**Option C: GitHub CLI**
+```bash
 gh workflow run sponsors.yml
 ```
+
+See [SPONSORS_WEBHOOK_SETUP.md](docs/SPONSORS_WEBHOOK_SETUP.md) for detailed setup.
 
 ---
 
@@ -374,6 +396,7 @@ self-streme/
 │   ├── cancelled-sponsor.js         # Handle cancellations
 │   ├── monthly-updates.js           # Send monthly updates
 │   ├── sponsor-metrics.js           # Generate analytics
+│   ├── trigger-sponsor-event.sh     # Manual event trigger script
 │   └── sponsors/
 │       └── README.md                # Scripts documentation
 │
@@ -385,7 +408,8 @@ self-streme/
 ├── SPONSORS.md                      # Main sponsor documentation
 ├── SPONSORS_AUTOMATION.md           # This file
 └── docs/
-    └── SPONSORS_GUIDE.md            # Quick reference
+    ├── SPONSORS_GUIDE.md            # Quick reference
+    └── SPONSORS_WEBHOOK_SETUP.md    # Webhook setup guide
 ```
 
 ---
@@ -574,17 +598,20 @@ Track automation effectiveness:
 - [x] GitHub Sponsors activated
 - [x] Tiers configured ($5, $10, $25, $50, $100, $250+)
 - [x] Scripts created and tested
-- [x] Workflow file created
+- [x] Workflow file created (using repository_dispatch)
+- [x] Trigger script available for manual events
 - [x] Documentation complete
-- [x] Dependencies installed
+- [x] Dependencies installed (@octokit/rest)
 
 ### Post-Launch
-- [ ] First sponsor receives welcome message ✨
-- [ ] Sponsor list updates automatically
+- [ ] Test manual trigger with script ✨
+- [ ] First sponsor receives welcome message (manual or webhook)
+- [ ] Sponsor list updates automatically (daily)
 - [ ] Tier changes handled correctly
 - [ ] Monthly updates sent on schedule
 - [ ] Metrics generated daily
 - [ ] All workflows running successfully
+- [ ] Optional: Set up external webhooks for real-time events
 
 ### Ongoing Maintenance
 - [ ] Review metrics monthly
@@ -624,18 +651,19 @@ Track automation effectiveness:
 
 ```
 🚀 New Sponsor Event Detected
-├── Trigger: sponsor.created
+├── Trigger: repository_dispatch (sponsor-created)
 ├── Sponsor: @john_doe
 ├── Tier: Gold Sponsor ($50/mo)
 │
 ├── [Job: welcome-sponsor] ✅ Complete (45s)
 │   ├── Checkout repository
 │   ├── Setup Node.js
+│   ├── Install dependencies
 │   ├── Generate welcome message
 │   └── Create discussion: "Welcome @john_doe!"
 │
 ├── [Job: update-sponsors] ✅ Complete (32s)
-│   ├── Fetch current sponsors
+│   ├── Fetch current sponsors from GitHub API
 │   ├── Group by tier (Gold: +1)
 │   ├── Update SPONSORS.md
 │   ├── Commit changes
@@ -643,6 +671,9 @@ Track automation effectiveness:
 │
 └── ✨ All jobs completed successfully!
     New sponsor welcomed and list updated.
+    
+💡 Triggered via: Manual script or external webhook
+📚 See: docs/SPONSORS_WEBHOOK_SETUP.md for setup options
 ```
 
 ---
@@ -663,8 +694,16 @@ This automation system ensures:
 **Last Updated:** 2025-01-XX  
 **Status:** ✅ Production Ready  
 **Automation:** 🤖 Fully Operational  
-**Manual Work Required:** 0%
+**Manual Work Required:** 0%  
+**Event System:** repository_dispatch (webhooks or daily schedule)
 
 ---
 
-For questions or improvements, see [CONTRIBUTORS.md](CONTRIBUTORS.md) or create an issue.
+## 📚 Related Documentation
+
+- **[SPONSORS_WEBHOOK_SETUP.md](docs/SPONSORS_WEBHOOK_SETUP.md)** - Webhook setup & manual triggers
+- **[scripts/sponsors/README.md](scripts/sponsors/README.md)** - Scripts documentation
+- **[SPONSORS.md](SPONSORS.md)** - Main sponsorship program details
+- **[CONTRIBUTORS.md](CONTRIBUTORS.md)** - How to contribute
+
+For questions or improvements, create an issue with the `automation` label.
