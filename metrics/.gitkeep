@@ -56,7 +56,7 @@ cat metrics/sponsor-metrics.md
 
 Generate manually:
 ```bash
-GITHUB_TOKEN=your_token node scripts/sponsor-metrics.js
+SPONSOR_TOKEN=your_token node scripts/sponsor-metrics.js
 ```
 
 ## Note

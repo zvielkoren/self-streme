@@ -7,23 +7,23 @@
  * and handles graceful offboarding.
  */
 
-const https = require('https');
+const https = require("https");
 
 // Configuration
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const SPONSOR_TOKEN = process.env.SPONSOR_TOKEN;
 const SPONSOR_LOGIN = process.env.SPONSOR_LOGIN;
 const TIER_NAME = process.env.TIER_NAME;
-const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || 'zviel';
-const REPO_NAME = 'self-streme';
+const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || "zviel";
+const REPO_NAME = "self-streme";
 
 // Tier emoji mapping
 const TIER_EMOJIS = {
-  'Coffee': '☕',
-  'Bronze': '🥉',
-  'Silver': '🥈',
-  'Gold': '🥇',
-  'Diamond': '💎',
-  'Platinum': '🌟'
+  Coffee: "☕",
+  Bronze: "🥉",
+  Silver: "🥈",
+  Gold: "🥇",
+  Diamond: "💎",
+  Platinum: "🌟",
 };
 
 /**
@@ -35,7 +35,7 @@ function getTierEmoji(tierName) {
       return emoji;
     }
   }
-  return '⭐';
+  return "⭐";
 }
 
 /**
@@ -43,7 +43,7 @@ function getTierEmoji(tierName) {
  */
 function getFarewellMessage(tierName) {
   const emoji = getTierEmoji(tierName);
-  const tier = tierName || 'Supporter';
+  const tier = tierName || "Supporter";
 
   return `# 🙏 Thank You for Your Support!
 
@@ -132,39 +132,43 @@ async function createDiscussion(title, body) {
     const data = JSON.stringify({
       title: title,
       body: body,
-      category: 'announcements'
+      category: "announcements",
     });
 
     const options = {
-      hostname: 'api.github.com',
+      hostname: "api.github.com",
       path: `/repos/${REPO_OWNER}/${REPO_NAME}/discussions`,
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${GITHUB_TOKEN}`,
-        'Accept': 'application/vnd.github+json',
-        'Content-Type': 'application/json',
-        'Content-Length': data.length,
-        'User-Agent': 'Self-Streme-Sponsor-Bot'
-      }
+        Authorization: `Bearer ${SPONSOR_TOKEN}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+        "Content-Length": data.length,
+        "User-Agent": "Self-Streme-Sponsor-Bot",
+      },
     };
 
     const req = https.request(options, (res) => {
-      let responseData = '';
+      let responseData = "";
 
-      res.on('data', (chunk) => {
+      res.on("data", (chunk) => {
         responseData += chunk;
       });
 
-      res.on('end', () => {
+      res.on("end", () => {
         if (res.statusCode === 201) {
           resolve(JSON.parse(responseData));
         } else {
-          reject(new Error(`Failed to create discussion: ${res.statusCode} - ${responseData}`));
+          reject(
+            new Error(
+              `Failed to create discussion: ${res.statusCode} - ${responseData}`,
+            ),
+          );
         }
       });
     });
 
-    req.on('error', (error) => {
+    req.on("error", (error) => {
       reject(error);
     });
 
@@ -181,39 +185,43 @@ async function createIssue(title, body) {
     const data = JSON.stringify({
       title: title,
       body: body,
-      labels: ['sponsor', 'cancellation']
+      labels: ["sponsor", "cancellation"],
     });
 
     const options = {
-      hostname: 'api.github.com',
+      hostname: "api.github.com",
       path: `/repos/${REPO_OWNER}/${REPO_NAME}/issues`,
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${GITHUB_TOKEN}`,
-        'Accept': 'application/vnd.github+json',
-        'Content-Type': 'application/json',
-        'Content-Length': data.length,
-        'User-Agent': 'Self-Streme-Sponsor-Bot'
-      }
+        Authorization: `Bearer ${SPONSOR_TOKEN}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+        "Content-Length": data.length,
+        "User-Agent": "Self-Streme-Sponsor-Bot",
+      },
     };
 
     const req = https.request(options, (res) => {
-      let responseData = '';
+      let responseData = "";
 
-      res.on('data', (chunk) => {
+      res.on("data", (chunk) => {
         responseData += chunk;
       });
 
-      res.on('end', () => {
+      res.on("end", () => {
         if (res.statusCode === 201) {
           resolve(JSON.parse(responseData));
         } else {
-          reject(new Error(`Failed to create issue: ${res.statusCode} - ${responseData}`));
+          reject(
+            new Error(
+              `Failed to create issue: ${res.statusCode} - ${responseData}`,
+            ),
+          );
         }
       });
     });
 
-    req.on('error', (error) => {
+    req.on("error", (error) => {
       reject(error);
     });
 
@@ -226,35 +234,35 @@ async function createIssue(title, body) {
  * Send internal notification about cancellation
  */
 async function sendInternalNotification(sponsor, tier) {
-  console.log('\n📊 Internal Notification:');
-  console.log('─'.repeat(60));
+  console.log("\n📊 Internal Notification:");
+  console.log("─".repeat(60));
   console.log(`Sponsor @${sponsor} cancelled their ${tier} sponsorship`);
   console.log(`Action items:`);
   console.log(`  1. Benefits remain active until billing period ends`);
   console.log(`  2. Remove from SPONSORS.md after 30 days`);
   console.log(`  3. Monitor for feedback in discussion`);
   console.log(`  4. Consider follow-up after 90 days`);
-  console.log('─'.repeat(60));
+  console.log("─".repeat(60));
 }
 
 /**
  * Main execution
  */
 async function main() {
-  console.log('👋 Cancelled Sponsor Handler Starting...\n');
+  console.log("👋 Cancelled Sponsor Handler Starting...\n");
 
   // Validate environment variables
-  if (!GITHUB_TOKEN) {
-    console.error('❌ GITHUB_TOKEN is required');
+  if (!SPONSOR_TOKEN) {
+    console.error("❌ SPONSOR_TOKEN is required");
     process.exit(1);
   }
 
   if (!SPONSOR_LOGIN) {
-    console.error('❌ SPONSOR_LOGIN is required');
+    console.error("❌ SPONSOR_LOGIN is required");
     process.exit(1);
   }
 
-  const tierName = TIER_NAME || 'Supporter';
+  const tierName = TIER_NAME || "Supporter";
 
   console.log(`👤 Sponsor: @${SPONSOR_LOGIN}`);
   console.log(`🎯 Tier: ${tierName}`);
@@ -266,23 +274,26 @@ async function main() {
 
   // Try to create a discussion first, fall back to issue
   try {
-    console.log('📝 Creating farewell message...');
+    console.log("📝 Creating farewell message...");
     const discussion = await createDiscussion(title, message);
     console.log(`✅ Farewell message created: ${discussion.html_url}`);
   } catch (discussionError) {
-    console.warn('⚠️  Could not create discussion, trying issue instead...');
+    console.warn("⚠️  Could not create discussion, trying issue instead...");
     console.warn(`   Reason: ${discussionError.message}`);
 
     try {
-      console.log('📝 Creating farewell issue...');
+      console.log("📝 Creating farewell issue...");
       const issue = await createIssue(title, message);
       console.log(`✅ Farewell issue created: ${issue.html_url}`);
     } catch (issueError) {
-      console.error('❌ Failed to create farewell message:', issueError.message);
-      console.log('\n📧 Farewell message (copy manually if needed):');
-      console.log('─'.repeat(80));
+      console.error(
+        "❌ Failed to create farewell message:",
+        issueError.message,
+      );
+      console.log("\n📧 Farewell message (copy manually if needed):");
+      console.log("─".repeat(80));
       console.log(message);
-      console.log('─'.repeat(80));
+      console.log("─".repeat(80));
       process.exit(1);
     }
   }
@@ -290,8 +301,10 @@ async function main() {
   // Send internal notification
   await sendInternalNotification(SPONSOR_LOGIN, tierName);
 
-  console.log('\n✨ Cancellation handled successfully!');
-  console.log(`   Sponsor @${SPONSOR_LOGIN} has been thanked for their support.`);
+  console.log("\n✨ Cancellation handled successfully!");
+  console.log(
+    `   Sponsor @${SPONSOR_LOGIN} has been thanked for their support.`,
+  );
   console.log(`   Remember to:`);
   console.log(`   - Keep benefits active until billing period ends`);
   console.log(`   - Remove from SPONSORS.md after 30 days`);
@@ -300,8 +313,8 @@ async function main() {
 
 // Run the script
 if (require.main === module) {
-  main().catch(error => {
-    console.error('❌ Fatal error:', error);
+  main().catch((error) => {
+    console.error("❌ Fatal error:", error);
     process.exit(1);
   });
 }

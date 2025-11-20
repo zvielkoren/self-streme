@@ -327,7 +327,7 @@ npm install --save-dev @octokit/rest
 ### 4. Configure Secrets
 
 **Required:**
-- `GITHUB_TOKEN` - Automatically provided by GitHub Actions
+- `SPONSOR_TOKEN` - Automatically provided by GitHub Actions
   - Has `repo` and `admin:org` permissions
   - No manual setup needed!
 
@@ -464,7 +464,7 @@ const TIERS = {
 - Check repository permissions
 
 **No sponsors fetched:**
-- Verify GITHUB_TOKEN has permissions
+- Verify SPONSOR_TOKEN has permissions
 - Check if you have active sponsors
 - Ensure sponsors are public (not private)
 
@@ -491,7 +491,7 @@ View detailed logs:
 If automation fails:
 ```bash
 # Run script manually
-GITHUB_TOKEN=your_token \
+SPONSOR_TOKEN=your_token \
 node scripts/update-sponsors.js
 
 # Force workflow trigger
@@ -530,7 +530,7 @@ Track automation effectiveness:
 
 - ✅ Private sponsors excluded from public lists
 - ✅ Email addresses never exposed
-- ✅ GITHUB_TOKEN secured via GitHub Secrets
+- ✅ SPONSOR_TOKEN secured via GitHub Secrets
 - ✅ No sensitive data in logs
 - ✅ Metrics anonymized in reports
 

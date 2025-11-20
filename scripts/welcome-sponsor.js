@@ -7,24 +7,24 @@
  * via GitHub issue or discussion.
  */
 
-const https = require('https');
+const https = require("https");
 
 // Configuration
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const SPONSOR_TOKEN = process.env.SPONSOR_TOKEN;
 const SPONSOR_LOGIN = process.env.SPONSOR_LOGIN;
 const TIER_NAME = process.env.TIER_NAME;
-const MONTHLY_AMOUNT = process.env.MONTHLY_AMOUNT || '0';
-const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || 'zviel';
-const REPO_NAME = 'self-streme';
+const MONTHLY_AMOUNT = process.env.MONTHLY_AMOUNT || "0";
+const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || "zviel";
+const REPO_NAME = "self-streme";
 
 // Tier emoji mapping
 const TIER_EMOJIS = {
-  'Coffee': '☕',
-  'Bronze': '🥉',
-  'Silver': '🥈',
-  'Gold': '🥇',
-  'Diamond': '💎',
-  'Platinum': '🌟'
+  Coffee: "☕",
+  Bronze: "🥉",
+  Silver: "🥈",
+  Gold: "🥇",
+  Diamond: "💎",
+  Platinum: "🌟",
 };
 
 /**
@@ -36,7 +36,7 @@ function getTierEmoji(tierName) {
       return emoji;
     }
   }
-  return '⭐';
+  return "⭐";
 }
 
 /**
@@ -44,9 +44,9 @@ function getTierEmoji(tierName) {
  */
 function getWelcomeMessage(tierName, amount) {
   const emoji = getTierEmoji(tierName);
-  const tier = tierName || 'Supporter';
+  const tier = tierName || "Supporter";
 
-  let benefits = '';
+  let benefits = "";
 
   if (amount >= 250) {
     benefits = `As a ${emoji} **Platinum Sponsor**, you now have access to:
@@ -188,39 +188,43 @@ async function createDiscussion(title, body) {
     const data = JSON.stringify({
       title: title,
       body: body,
-      category: 'announcements' // Adjust category as needed
+      category: "announcements", // Adjust category as needed
     });
 
     const options = {
-      hostname: 'api.github.com',
+      hostname: "api.github.com",
       path: `/repos/${REPO_OWNER}/${REPO_NAME}/discussions`,
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${GITHUB_TOKEN}`,
-        'Accept': 'application/vnd.github+json',
-        'Content-Type': 'application/json',
-        'Content-Length': data.length,
-        'User-Agent': 'Self-Streme-Sponsor-Bot'
-      }
+        Authorization: `Bearer ${SPONSOR_TOKEN}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+        "Content-Length": data.length,
+        "User-Agent": "Self-Streme-Sponsor-Bot",
+      },
     };
 
     const req = https.request(options, (res) => {
-      let responseData = '';
+      let responseData = "";
 
-      res.on('data', (chunk) => {
+      res.on("data", (chunk) => {
         responseData += chunk;
       });
 
-      res.on('end', () => {
+      res.on("end", () => {
         if (res.statusCode === 201) {
           resolve(JSON.parse(responseData));
         } else {
-          reject(new Error(`Failed to create discussion: ${res.statusCode} - ${responseData}`));
+          reject(
+            new Error(
+              `Failed to create discussion: ${res.statusCode} - ${responseData}`,
+            ),
+          );
         }
       });
     });
 
-    req.on('error', (error) => {
+    req.on("error", (error) => {
       reject(error);
     });
 
@@ -237,39 +241,43 @@ async function createIssue(title, body) {
     const data = JSON.stringify({
       title: title,
       body: body,
-      labels: ['sponsor', 'welcome']
+      labels: ["sponsor", "welcome"],
     });
 
     const options = {
-      hostname: 'api.github.com',
+      hostname: "api.github.com",
       path: `/repos/${REPO_OWNER}/${REPO_NAME}/issues`,
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${GITHUB_TOKEN}`,
-        'Accept': 'application/vnd.github+json',
-        'Content-Type': 'application/json',
-        'Content-Length': data.length,
-        'User-Agent': 'Self-Streme-Sponsor-Bot'
-      }
+        Authorization: `Bearer ${SPONSOR_TOKEN}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+        "Content-Length": data.length,
+        "User-Agent": "Self-Streme-Sponsor-Bot",
+      },
     };
 
     const req = https.request(options, (res) => {
-      let responseData = '';
+      let responseData = "";
 
-      res.on('data', (chunk) => {
+      res.on("data", (chunk) => {
         responseData += chunk;
       });
 
-      res.on('end', () => {
+      res.on("end", () => {
         if (res.statusCode === 201) {
           resolve(JSON.parse(responseData));
         } else {
-          reject(new Error(`Failed to create issue: ${res.statusCode} - ${responseData}`));
+          reject(
+            new Error(
+              `Failed to create issue: ${res.statusCode} - ${responseData}`,
+            ),
+          );
         }
       });
     });
 
-    req.on('error', (error) => {
+    req.on("error", (error) => {
       reject(error);
     });
 
@@ -282,21 +290,21 @@ async function createIssue(title, body) {
  * Main execution
  */
 async function main() {
-  console.log('🎉 Welcome Sponsor Script Starting...\n');
+  console.log("🎉 Welcome Sponsor Script Starting...\n");
 
   // Validate environment variables
-  if (!GITHUB_TOKEN) {
-    console.error('❌ GITHUB_TOKEN is required');
+  if (!SPONSOR_TOKEN) {
+    console.error("❌ SPONSOR_TOKEN is required");
     process.exit(1);
   }
 
   if (!SPONSOR_LOGIN) {
-    console.error('❌ SPONSOR_LOGIN is required');
+    console.error("❌ SPONSOR_LOGIN is required");
     process.exit(1);
   }
 
   const amount = parseInt(MONTHLY_AMOUNT) || 0;
-  const tierName = TIER_NAME || 'Supporter';
+  const tierName = TIER_NAME || "Supporter";
 
   console.log(`👤 Sponsor: @${SPONSOR_LOGIN}`);
   console.log(`💰 Amount: $${amount}/month`);
@@ -308,35 +316,35 @@ async function main() {
 
   // Try to create a discussion first, fall back to issue
   try {
-    console.log('📝 Creating welcome discussion...');
+    console.log("📝 Creating welcome discussion...");
     const discussion = await createDiscussion(title, message);
     console.log(`✅ Welcome discussion created: ${discussion.html_url}`);
   } catch (discussionError) {
-    console.warn('⚠️  Could not create discussion, trying issue instead...');
+    console.warn("⚠️  Could not create discussion, trying issue instead...");
     console.warn(`   Reason: ${discussionError.message}`);
 
     try {
-      console.log('📝 Creating welcome issue...');
+      console.log("📝 Creating welcome issue...");
       const issue = await createIssue(title, message);
       console.log(`✅ Welcome issue created: ${issue.html_url}`);
     } catch (issueError) {
-      console.error('❌ Failed to create welcome message:', issueError.message);
-      console.log('\n📧 Welcome message (copy manually if needed):');
-      console.log('─'.repeat(80));
+      console.error("❌ Failed to create welcome message:", issueError.message);
+      console.log("\n📧 Welcome message (copy manually if needed):");
+      console.log("─".repeat(80));
       console.log(message);
-      console.log('─'.repeat(80));
+      console.log("─".repeat(80));
       process.exit(1);
     }
   }
 
-  console.log('\n✨ Welcome message sent successfully!');
+  console.log("\n✨ Welcome message sent successfully!");
   console.log(`   New sponsor @${SPONSOR_LOGIN} has been welcomed.`);
 }
 
 // Run the script
 if (require.main === module) {
-  main().catch(error => {
-    console.error('❌ Fatal error:', error);
+  main().catch((error) => {
+    console.error("❌ Fatal error:", error);
     process.exit(1);
   });
 }

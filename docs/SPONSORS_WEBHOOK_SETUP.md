@@ -21,7 +21,7 @@ Use the included trigger script:
 
 ```bash
 # Set your GitHub token
-export GITHUB_TOKEN="your_github_token"
+export SPONSOR_TOKEN="your_SPONSOR_TOKEN"
 
 # Welcome new sponsor
 ./scripts/trigger-sponsor-event.sh sponsor-created john_doe \
@@ -75,7 +75,7 @@ Action: Webhook POST to GitHub API
 URL: https://api.github.com/repos/{owner}/{repo}/dispatches
 Method: POST
 Headers:
-  Authorization: Bearer {github_token}
+  Authorization: Bearer {SPONSOR_TOKEN}
   Accept: application/vnd.github+json
 Body:
 {
@@ -100,7 +100,7 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const SPONSOR_TOKEN = process.env.SPONSOR_TOKEN;
 const REPO_OWNER = 'zviel';
 const REPO_NAME = 'self-streme';
 
@@ -137,7 +137,7 @@ app.post('/sponsor-webhook', async (req, res) => {
       payload,
       {
         headers: {
-          'Authorization': `Bearer ${GITHUB_TOKEN}`,
+          'Authorization': `Bearer ${SPONSOR_TOKEN}`,
           'Accept': 'application/vnd.github+json'
         }
       }
@@ -264,7 +264,7 @@ app.post('/sponsor-webhook', (req, res) => {
 # Test with curl
 curl -X POST \
   -H "Accept: application/vnd.github+json" \
-  -H "Authorization: Bearer $GITHUB_TOKEN" \
+  -H "Authorization: Bearer $SPONSOR_TOKEN" \
   -H "X-GitHub-Api-Version: 2022-11-28" \
   https://api.github.com/repos/zviel/self-streme/dispatches \
   -d '{
@@ -337,7 +337,7 @@ gh run view <run-id> --log
 **Debug:**
 ```bash
 # Test script locally
-GITHUB_TOKEN=your_token \
+SPONSOR_TOKEN=your_token \
 SPONSOR_LOGIN=testuser \
 TIER_NAME="Bronze Sponsor" \
 MONTHLY_AMOUNT=10 \
@@ -350,7 +350,7 @@ node scripts/welcome-sponsor.js
 ```bash
 # Check repository_dispatch endpoint
 curl -X POST \
-  -H "Authorization: Bearer $GITHUB_TOKEN" \
+  -H "Authorization: Bearer $SPONSOR_TOKEN" \
   https://api.github.com/repos/zviel/self-streme/dispatches \
   -d '{"event_type": "test"}'
 ```

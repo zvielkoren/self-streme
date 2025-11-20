@@ -7,24 +7,24 @@
  * and sends appropriate notification messages.
  */
 
-const https = require('https');
+const https = require("https");
 
 // Configuration
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const SPONSOR_TOKEN = process.env.SPONSOR_TOKEN;
 const SPONSOR_LOGIN = process.env.SPONSOR_LOGIN;
 const NEW_TIER = process.env.NEW_TIER;
 const OLD_TIER = process.env.OLD_TIER;
-const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || 'zviel';
-const REPO_NAME = 'self-streme';
+const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || "zviel";
+const REPO_NAME = "self-streme";
 
 // Tier emoji mapping
 const TIER_EMOJIS = {
-  'Coffee': '☕',
-  'Bronze': '🥉',
-  'Silver': '🥈',
-  'Gold': '🥇',
-  'Diamond': '💎',
-  'Platinum': '🌟'
+  Coffee: "☕",
+  Bronze: "🥉",
+  Silver: "🥈",
+  Gold: "🥇",
+  Diamond: "💎",
+  Platinum: "🌟",
 };
 
 /**
@@ -36,7 +36,7 @@ function getTierEmoji(tierName) {
       return emoji;
     }
   }
-  return '⭐';
+  return "⭐";
 }
 
 /**
@@ -45,12 +45,12 @@ function getTierEmoji(tierName) {
 function getTierAmount(tierName) {
   if (!tierName) return 0;
   const lower = tierName.toLowerCase();
-  if (lower.includes('platinum')) return 250;
-  if (lower.includes('diamond')) return 100;
-  if (lower.includes('gold')) return 50;
-  if (lower.includes('silver')) return 25;
-  if (lower.includes('bronze')) return 10;
-  if (lower.includes('coffee')) return 5;
+  if (lower.includes("platinum")) return 250;
+  if (lower.includes("diamond")) return 100;
+  if (lower.includes("gold")) return 50;
+  if (lower.includes("silver")) return 25;
+  if (lower.includes("bronze")) return 10;
+  if (lower.includes("coffee")) return 5;
   return 0;
 }
 
@@ -69,11 +69,11 @@ function isUpgrade(oldTier, newTier) {
 function getTierChangeMessage(oldTier, newTier, upgrade) {
   const oldEmoji = getTierEmoji(oldTier);
   const newEmoji = getTierEmoji(newTier);
-  const action = upgrade ? 'upgraded' : 'changed';
-  const emoji = upgrade ? '🎉' : '📋';
+  const action = upgrade ? "upgraded" : "changed";
+  const emoji = upgrade ? "🎉" : "📋";
   const newAmount = getTierAmount(newTier);
 
-  let benefits = '';
+  let benefits = "";
 
   if (newAmount >= 250) {
     benefits = `## 🌟 Your New Platinum Benefits
@@ -143,15 +143,15 @@ As a **Coffee Supporter**, you have access to:
 - 📢 Early announcements of new features`;
   }
 
-  let nextSteps = '';
+  let nextSteps = "";
   if (upgrade) {
     nextSteps = `## 🚀 Next Steps
 
 1. Your new benefits are now active!
 2. Check your email for updated access information
-${newAmount >= 50 ? '3. Schedule your video call (link will be sent shortly)' : ''}
-${newAmount >= 100 ? '4. Send us your company logo if you haven\'t already' : ''}
-${newAmount >= 250 ? '5. We\'ll reach out to set up your custom SLA' : ''}
+${newAmount >= 50 ? "3. Schedule your video call (link will be sent shortly)" : ""}
+${newAmount >= 100 ? "4. Send us your company logo if you haven't already" : ""}
+${newAmount >= 250 ? "5. We'll reach out to set up your custom SLA" : ""}
 
 **Need help?** Reply to this discussion or reach out via the sponsors forum.`;
   } else {
@@ -167,14 +167,14 @@ If you have any questions about your new tier, please:
 **Thank you for your continued support!**`;
   }
 
-  return `# ${emoji} Tier ${upgrade ? 'Upgrade' : 'Change'} Confirmation
+  return `# ${emoji} Tier ${upgrade ? "Upgrade" : "Change"} Confirmation
 
 Hi @${SPONSOR_LOGIN},
 
-Thank you for ${action === 'upgraded' ? 'upgrading' : 'updating'} your sponsorship!
+Thank you for ${action === "upgraded" ? "upgrading" : "updating"} your sponsorship!
 
 **Tier Change:**
-- Previous: ${oldEmoji} ${oldTier || 'Unknown'}
+- Previous: ${oldEmoji} ${oldTier || "Unknown"}
 - New: ${newEmoji} ${newTier}
 
 ${benefits}
@@ -189,7 +189,7 @@ ${nextSteps}
 
 ---
 
-**Thank you for your ${upgrade ? 'increased' : 'continued'} support!** ${upgrade ? '🎉' : '🙏'}
+**Thank you for your ${upgrade ? "increased" : "continued"} support!** ${upgrade ? "🎉" : "🙏"}
 
 Your contribution helps us maintain and improve Self-Streme for everyone.
 
@@ -209,39 +209,43 @@ async function createDiscussion(title, body) {
     const data = JSON.stringify({
       title: title,
       body: body,
-      category: 'announcements'
+      category: "announcements",
     });
 
     const options = {
-      hostname: 'api.github.com',
+      hostname: "api.github.com",
       path: `/repos/${REPO_OWNER}/${REPO_NAME}/discussions`,
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${GITHUB_TOKEN}`,
-        'Accept': 'application/vnd.github+json',
-        'Content-Type': 'application/json',
-        'Content-Length': data.length,
-        'User-Agent': 'Self-Streme-Sponsor-Bot'
-      }
+        Authorization: `Bearer ${SPONSOR_TOKEN}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+        "Content-Length": data.length,
+        "User-Agent": "Self-Streme-Sponsor-Bot",
+      },
     };
 
     const req = https.request(options, (res) => {
-      let responseData = '';
+      let responseData = "";
 
-      res.on('data', (chunk) => {
+      res.on("data", (chunk) => {
         responseData += chunk;
       });
 
-      res.on('end', () => {
+      res.on("end", () => {
         if (res.statusCode === 201) {
           resolve(JSON.parse(responseData));
         } else {
-          reject(new Error(`Failed to create discussion: ${res.statusCode} - ${responseData}`));
+          reject(
+            new Error(
+              `Failed to create discussion: ${res.statusCode} - ${responseData}`,
+            ),
+          );
         }
       });
     });
 
-    req.on('error', (error) => {
+    req.on("error", (error) => {
       reject(error);
     });
 
@@ -258,39 +262,43 @@ async function createIssue(title, body) {
     const data = JSON.stringify({
       title: title,
       body: body,
-      labels: ['sponsor', 'tier-change']
+      labels: ["sponsor", "tier-change"],
     });
 
     const options = {
-      hostname: 'api.github.com',
+      hostname: "api.github.com",
       path: `/repos/${REPO_OWNER}/${REPO_NAME}/issues`,
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${GITHUB_TOKEN}`,
-        'Accept': 'application/vnd.github+json',
-        'Content-Type': 'application/json',
-        'Content-Length': data.length,
-        'User-Agent': 'Self-Streme-Sponsor-Bot'
-      }
+        Authorization: `Bearer ${SPONSOR_TOKEN}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+        "Content-Length": data.length,
+        "User-Agent": "Self-Streme-Sponsor-Bot",
+      },
     };
 
     const req = https.request(options, (res) => {
-      let responseData = '';
+      let responseData = "";
 
-      res.on('data', (chunk) => {
+      res.on("data", (chunk) => {
         responseData += chunk;
       });
 
-      res.on('end', () => {
+      res.on("end", () => {
         if (res.statusCode === 201) {
           resolve(JSON.parse(responseData));
         } else {
-          reject(new Error(`Failed to create issue: ${res.statusCode} - ${responseData}`));
+          reject(
+            new Error(
+              `Failed to create issue: ${res.statusCode} - ${responseData}`,
+            ),
+          );
         }
       });
     });
 
-    req.on('error', (error) => {
+    req.on("error", (error) => {
       reject(error);
     });
 
@@ -303,69 +311,71 @@ async function createIssue(title, body) {
  * Main execution
  */
 async function main() {
-  console.log('📋 Tier Change Handler Starting...\n');
+  console.log("📋 Tier Change Handler Starting...\n");
 
   // Validate environment variables
-  if (!GITHUB_TOKEN) {
-    console.error('❌ GITHUB_TOKEN is required');
+  if (!SPONSOR_TOKEN) {
+    console.error("❌ SPONSOR_TOKEN is required");
     process.exit(1);
   }
 
   if (!SPONSOR_LOGIN) {
-    console.error('❌ SPONSOR_LOGIN is required');
+    console.error("❌ SPONSOR_LOGIN is required");
     process.exit(1);
   }
 
   if (!NEW_TIER) {
-    console.error('❌ NEW_TIER is required');
+    console.error("❌ NEW_TIER is required");
     process.exit(1);
   }
 
   const upgrade = isUpgrade(OLD_TIER, NEW_TIER);
-  const emoji = upgrade ? '⬆️' : '🔄';
+  const emoji = upgrade ? "⬆️" : "🔄";
 
   console.log(`👤 Sponsor: @${SPONSOR_LOGIN}`);
-  console.log(`${emoji} Old Tier: ${OLD_TIER || 'Unknown'}`);
+  console.log(`${emoji} Old Tier: ${OLD_TIER || "Unknown"}`);
   console.log(`${emoji} New Tier: ${NEW_TIER}`);
-  console.log(`📊 Type: ${upgrade ? 'UPGRADE' : 'CHANGE'}\n`);
+  console.log(`📊 Type: ${upgrade ? "UPGRADE" : "CHANGE"}\n`);
 
   // Generate tier change message
   const message = getTierChangeMessage(OLD_TIER, NEW_TIER, upgrade);
-  const titleEmoji = upgrade ? '🎉' : '📋';
-  const titleAction = upgrade ? 'Upgrade' : 'Tier Change';
+  const titleEmoji = upgrade ? "🎉" : "📋";
+  const titleAction = upgrade ? "Upgrade" : "Tier Change";
   const title = `${titleEmoji} Sponsor ${titleAction}: @${SPONSOR_LOGIN}`;
 
   // Try to create a discussion first, fall back to issue
   try {
-    console.log('📝 Creating tier change notification...');
+    console.log("📝 Creating tier change notification...");
     const discussion = await createDiscussion(title, message);
     console.log(`✅ Notification created: ${discussion.html_url}`);
   } catch (discussionError) {
-    console.warn('⚠️  Could not create discussion, trying issue instead...');
+    console.warn("⚠️  Could not create discussion, trying issue instead...");
     console.warn(`   Reason: ${discussionError.message}`);
 
     try {
-      console.log('📝 Creating notification issue...');
+      console.log("📝 Creating notification issue...");
       const issue = await createIssue(title, message);
       console.log(`✅ Notification issue created: ${issue.html_url}`);
     } catch (issueError) {
-      console.error('❌ Failed to create notification:', issueError.message);
-      console.log('\n📧 Notification message (copy manually if needed):');
-      console.log('─'.repeat(80));
+      console.error("❌ Failed to create notification:", issueError.message);
+      console.log("\n📧 Notification message (copy manually if needed):");
+      console.log("─".repeat(80));
       console.log(message);
-      console.log('─'.repeat(80));
+      console.log("─".repeat(80));
       process.exit(1);
     }
   }
 
-  console.log('\n✨ Tier change notification sent successfully!');
-  console.log(`   Sponsor @${SPONSOR_LOGIN} has been notified of their ${upgrade ? 'upgrade' : 'tier change'}.`);
+  console.log("\n✨ Tier change notification sent successfully!");
+  console.log(
+    `   Sponsor @${SPONSOR_LOGIN} has been notified of their ${upgrade ? "upgrade" : "tier change"}.`,
+  );
 }
 
 // Run the script
 if (require.main === module) {
-  main().catch(error => {
-    console.error('❌ Fatal error:', error);
+  main().catch((error) => {
+    console.error("❌ Fatal error:", error);
     process.exit(1);
   });
 }

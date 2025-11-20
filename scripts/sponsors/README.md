@@ -25,7 +25,7 @@ This directory contains automated scripts for managing the Self-Streme sponsorsh
 
 **Usage:**
 ```bash
-GITHUB_TOKEN=your_token node scripts/update-sponsors.js
+SPONSOR_TOKEN=your_token node scripts/update-sponsors.js
 ```
 
 ---
@@ -46,7 +46,7 @@ GITHUB_TOKEN=your_token node scripts/update-sponsors.js
 
 **Usage:**
 ```bash
-GITHUB_TOKEN=your_token \
+SPONSOR_TOKEN=your_token \
 SPONSOR_LOGIN=username \
 TIER_NAME="Gold Sponsor" \
 MONTHLY_AMOUNT=50 \
@@ -71,7 +71,7 @@ node scripts/welcome-sponsor.js
 
 **Usage:**
 ```bash
-GITHUB_TOKEN=your_token \
+SPONSOR_TOKEN=your_token \
 SPONSOR_LOGIN=username \
 NEW_TIER="Diamond Sponsor" \
 OLD_TIER="Gold Sponsor" \
@@ -97,7 +97,7 @@ node scripts/tier-changed.js
 
 **Usage:**
 ```bash
-GITHUB_TOKEN=your_token \
+SPONSOR_TOKEN=your_token \
 SPONSOR_LOGIN=username \
 TIER_NAME="Silver Sponsor" \
 node scripts/cancelled-sponsor.js
@@ -122,7 +122,7 @@ node scripts/cancelled-sponsor.js
 
 **Usage:**
 ```bash
-GITHUB_TOKEN=your_token node scripts/monthly-updates.js
+SPONSOR_TOKEN=your_token node scripts/monthly-updates.js
 ```
 
 ---
@@ -145,7 +145,7 @@ GITHUB_TOKEN=your_token node scripts/monthly-updates.js
 
 **Usage:**
 ```bash
-GITHUB_TOKEN=your_token node scripts/sponsor-metrics.js
+SPONSOR_TOKEN=your_token node scripts/sponsor-metrics.js
 ```
 
 **Output:**
@@ -191,7 +191,7 @@ All scripts require:
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `GITHUB_TOKEN` | GitHub API token with repo and admin:org permissions | ✅ Yes |
+| `SPONSOR_TOKEN` | GitHub API token with repo and admin:org permissions | ✅ Yes |
 | `GITHUB_REPOSITORY_OWNER` | Repository owner (defaults to 'zviel') | ❌ No |
 | `SPONSOR_LOGIN` | Sponsor's GitHub username | ✅ Yes (for welcome/tier/cancel) |
 | `TIER_NAME` | Sponsor tier name | ✅ Yes (for welcome/tier/cancel) |
@@ -201,7 +201,7 @@ All scripts require:
 
 ### GitHub Token Permissions
 
-The `GITHUB_TOKEN` must have:
+The `SPONSOR_TOKEN` must have:
 - ✅ `repo` - Full repository access
 - ✅ `admin:org` - Organization administration (for Sponsors API)
 - ✅ `write:discussion` - Create and manage discussions
@@ -276,8 +276,8 @@ Extend `sponsor-metrics.js` → `calculateMetrics()` function
 
 ### Common Issues
 
-**"GITHUB_TOKEN is required"**
-- Ensure `GITHUB_TOKEN` environment variable is set
+**"SPONSOR_TOKEN is required"**
+- Ensure `SPONSOR_TOKEN` environment variable is set
 - Check token has correct permissions
 
 **"Failed to create discussion"**
@@ -305,7 +305,7 @@ DEBUG=* node scripts/update-sponsors.js
 Check API directly:
 
 ```bash
-curl -H "Authorization: Bearer $GITHUB_TOKEN" \
+curl -H "Authorization: Bearer $SPONSOR_TOKEN" \
      -H "Accept: application/vnd.github+json" \
      https://api.github.com/user/sponsorships
 ```
@@ -356,7 +356,7 @@ Human-readable report with:
 
 ### Best Practices
 
-- ✅ Never commit `GITHUB_TOKEN` to repository
+- ✅ Never commit `SPONSOR_TOKEN` to repository
 - ✅ Use GitHub Secrets for CI/CD
 - ✅ Rotate tokens regularly
 - ✅ Use minimum required permissions

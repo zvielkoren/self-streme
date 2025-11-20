@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 # Configuration
 REPO_OWNER="${GITHUB_REPOSITORY_OWNER:-zviel}"
 REPO_NAME="${GITHUB_REPOSITORY_NAME:-self-streme}"
-GITHUB_TOKEN="${GITHUB_TOKEN}"
+SPONSOR_TOKEN="${SPONSOR_TOKEN}"
 
 # Function to print colored output
 print_info() {
@@ -55,7 +55,7 @@ ${YELLOW}OPTIONS:${NC}
   --monthly-amount <num>   Monthly amount in dollars (optional for created)
   --new-tier <name>        New tier name (required for tier-changed)
   --old-tier <name>        Old tier name (optional for tier-changed)
-  --token <token>          GitHub token (or set GITHUB_TOKEN env var)
+  --token <token>          GitHub token (or set SPONSOR_TOKEN env var)
 
 ${YELLOW}EXAMPLES:${NC}
   # New sponsor
@@ -68,7 +68,7 @@ ${YELLOW}EXAMPLES:${NC}
   $0 sponsor-cancelled john_doe --tier-name "Silver Sponsor"
 
 ${YELLOW}ENVIRONMENT VARIABLES:${NC}
-  GITHUB_TOKEN             GitHub personal access token (required)
+  SPONSOR_TOKEN             GitHub personal access token (required)
   GITHUB_REPOSITORY_OWNER  Repository owner (default: zviel)
   GITHUB_REPOSITORY_NAME   Repository name (default: self-streme)
 
@@ -118,7 +118,7 @@ while [ $# -gt 0 ]; do
             shift 2
             ;;
         --token)
-            GITHUB_TOKEN="$2"
+            SPONSOR_TOKEN="$2"
             shift 2
             ;;
         *)
@@ -129,8 +129,8 @@ while [ $# -gt 0 ]; do
 done
 
 # Validate inputs
-if [ -z "$GITHUB_TOKEN" ]; then
-    print_error "GITHUB_TOKEN is required"
+if [ -z "$SPONSOR_TOKEN" ]; then
+    print_error "SPONSOR_TOKEN is required"
     echo "Set it via environment variable or --token option"
     exit 1
 fi
@@ -246,7 +246,7 @@ print_info "Sending repository_dispatch event..."
 RESPONSE=$(curl -s -w "\n%{http_code}" \
     -X POST \
     -H "Accept: application/vnd.github+json" \
-    -H "Authorization: Bearer $GITHUB_TOKEN" \
+    -H "Authorization: Bearer $SPONSOR_TOKEN" \
     -H "X-GitHub-Api-Version: 2022-11-28" \
     "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/dispatches" \
     -d "$PAYLOAD")

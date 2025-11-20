@@ -7,36 +7,36 @@
  * and updates SPONSORS.md with the latest information.
  */
 
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
 // GitHub API configuration
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || 'zviel';
-const REPO_NAME = 'self-streme';
+const SPONSOR_TOKEN = process.env.SPONSOR_TOKEN;
+const REPO_OWNER = process.env.GITHUB_REPOSITORY_OWNER || "zviel";
+const REPO_NAME = "self-streme";
 
 // Tier configuration matching SPONSORS.md
 const TIERS = {
-  platinum: { min: 250, name: 'Platinum', emoji: '🌟' },
-  diamond: { min: 100, max: 249, name: 'Diamond', emoji: '💎' },
-  gold: { min: 50, max: 99, name: 'Gold', emoji: '🥇' },
-  silver: { min: 25, max: 49, name: 'Silver', emoji: '🥈' },
-  bronze: { min: 10, max: 24, name: 'Bronze', emoji: '🥉' },
-  coffee: { min: 5, max: 9, name: 'Coffee', emoji: '☕' }
+  platinum: { min: 250, name: "Platinum", emoji: "🌟" },
+  diamond: { min: 100, max: 249, name: "Diamond", emoji: "💎" },
+  gold: { min: 50, max: 99, name: "Gold", emoji: "🥇" },
+  silver: { min: 25, max: 49, name: "Silver", emoji: "🥈" },
+  bronze: { min: 10, max: 24, name: "Bronze", emoji: "🥉" },
+  coffee: { min: 5, max: 9, name: "Coffee", emoji: "☕" },
 };
 
 /**
  * Fetch sponsors from GitHub API
  */
 async function fetchSponsors() {
-  if (!GITHUB_TOKEN) {
-    console.warn('⚠️  GITHUB_TOKEN not set. Using mock data for testing.');
+  if (!SPONSOR_TOKEN) {
+    console.warn("⚠️  SPONSOR_TOKEN not set. Using mock data for testing.");
     return getMockSponsors();
   }
 
   try {
-    const { Octokit } = require('@octokit/rest');
-    const octokit = new Octokit({ auth: GITHUB_TOKEN });
+    const { Octokit } = require("@octokit/rest");
+    const octokit = new Octokit({ auth: SPONSOR_TOKEN });
 
     const response = await octokit.graphql(`
       query {
@@ -69,8 +69,8 @@ async function fetchSponsors() {
     `);
 
     const sponsors = response.user.sponsorshipsAsMaintainer.nodes
-      .filter(s => s.privacyLevel === 'PUBLIC')
-      .map(s => ({
+      .filter((s) => s.privacyLevel === "PUBLIC")
+      .map((s) => ({
         login: s.sponsor.login,
         name: s.sponsor.name || s.sponsor.login,
         avatarUrl: s.sponsor.avatarUrl,
@@ -80,18 +80,18 @@ async function fetchSponsors() {
         description: s.sponsor.description,
         amount: s.tier.monthlyPriceInDollars,
         tierName: s.tier.name,
-        since: new Date(s.createdAt).toISOString().split('T')[0]
+        since: new Date(s.createdAt).toISOString().split("T")[0],
       }));
 
     return sponsors;
   } catch (error) {
-    console.error('❌ Error fetching sponsors:', error.message);
+    console.error("❌ Error fetching sponsors:", error.message);
     return [];
   }
 }
 
 /**
- * Mock sponsors for testing (when GITHUB_TOKEN not available)
+ * Mock sponsors for testing (when SPONSOR_TOKEN not available)
  */
 function getMockSponsors() {
   return [
@@ -122,10 +122,10 @@ function groupSponsorsByTier(sponsors) {
     gold: [],
     silver: [],
     bronze: [],
-    coffee: []
+    coffee: [],
   };
 
-  sponsors.forEach(sponsor => {
+  sponsors.forEach((sponsor) => {
     const tier = getTier(sponsor.amount);
     if (tier) {
       grouped[tier.key].push(sponsor);
@@ -133,7 +133,7 @@ function groupSponsorsByTier(sponsors) {
   });
 
   // Sort each tier by amount (descending) then by name
-  Object.keys(grouped).forEach(key => {
+  Object.keys(grouped).forEach((key) => {
     grouped[key].sort((a, b) => {
       if (b.amount !== a.amount) return b.amount - a.amount;
       return a.name.localeCompare(b.name);
@@ -166,14 +166,21 @@ function formatSponsor(sponsor, tier) {
  * Generate sponsors section content
  */
 function generateSponsorsSection(groupedSponsors) {
-  let content = '';
+  let content = "";
   let totalSponsors = 0;
   let totalAmount = 0;
 
   // Generate each tier section
-  const tierOrder = ['platinum', 'diamond', 'gold', 'silver', 'bronze', 'coffee'];
+  const tierOrder = [
+    "platinum",
+    "diamond",
+    "gold",
+    "silver",
+    "bronze",
+    "coffee",
+  ];
 
-  tierOrder.forEach(tierKey => {
+  tierOrder.forEach((tierKey) => {
     const tier = TIERS[tierKey];
     const sponsors = groupedSponsors[tierKey];
 
@@ -182,12 +189,12 @@ function generateSponsorsSection(groupedSponsors) {
     if (sponsors.length === 0) {
       content += `*Be the first ${tier.name} Sponsor!*\n\n`;
     } else {
-      sponsors.forEach(sponsor => {
-        content += formatSponsor(sponsor, tier) + '\n';
+      sponsors.forEach((sponsor) => {
+        content += formatSponsor(sponsor, tier) + "\n";
         totalSponsors++;
         totalAmount += sponsor.amount;
       });
-      content += '\n';
+      content += "\n";
     }
   });
 
@@ -196,7 +203,7 @@ function generateSponsorsSection(groupedSponsors) {
     content += `---\n\n`;
     content += `**Total Sponsors:** ${totalSponsors}\n`;
     content += `**Monthly Support:** $${totalAmount}\n`;
-    content += `**Last Updated:** ${new Date().toISOString().split('T')[0]}\n\n`;
+    content += `**Last Updated:** ${new Date().toISOString().split("T")[0]}\n\n`;
   }
 
   return content;
@@ -206,17 +213,17 @@ function generateSponsorsSection(groupedSponsors) {
  * Update SPONSORS.md file
  */
 function updateSponsorsFile(content) {
-  const sponsorsPath = path.join(__dirname, '..', '..', 'SPONSORS.md');
+  const sponsorsPath = path.join(__dirname, "..", "..", "SPONSORS.md");
 
   if (!fs.existsSync(sponsorsPath)) {
-    console.error('❌ SPONSORS.md not found!');
+    console.error("❌ SPONSORS.md not found!");
     process.exit(1);
   }
 
-  let fileContent = fs.readFileSync(sponsorsPath, 'utf8');
+  let fileContent = fs.readFileSync(sponsorsPath, "utf8");
 
   // Find the section to replace (between "## 🏆 Current Sponsors" and the next "##")
-  const startMarker = '## 🏆 Current Sponsors';
+  const startMarker = "## 🏆 Current Sponsors";
   const startIndex = fileContent.indexOf(startMarker);
 
   if (startIndex === -1) {
@@ -235,35 +242,35 @@ function updateSponsorsFile(content) {
   const before = fileContent.substring(0, startIndex + startMarker.length);
   const after = fileContent.substring(endIndex);
 
-  const newContent = before + '\n\n' + content + after;
+  const newContent = before + "\n\n" + content + after;
 
-  fs.writeFileSync(sponsorsPath, newContent, 'utf8');
-  console.log('✅ Updated SPONSORS.md');
+  fs.writeFileSync(sponsorsPath, newContent, "utf8");
+  console.log("✅ Updated SPONSORS.md");
 }
 
 /**
  * Update README.md with sponsor count
  */
 function updateReadme(totalSponsors) {
-  const readmePath = path.join(__dirname, '..', '..', 'README.md');
+  const readmePath = path.join(__dirname, "..", "..", "README.md");
 
   if (!fs.existsSync(readmePath)) {
-    console.warn('⚠️  README.md not found, skipping update');
+    console.warn("⚠️  README.md not found, skipping update");
     return;
   }
 
-  let content = fs.readFileSync(readmePath, 'utf8');
+  let content = fs.readFileSync(readmePath, "utf8");
 
   // Update sponsor count if there's a placeholder
   // This is optional - only updates if specific marker exists
-  const marker = '<!-- SPONSOR_COUNT -->';
+  const marker = "<!-- SPONSOR_COUNT -->";
   if (content.includes(marker)) {
     content = content.replace(
-      new RegExp(`${marker}\\d+`, 'g'),
-      `${marker}${totalSponsors}`
+      new RegExp(`${marker}\\d+`, "g"),
+      `${marker}${totalSponsors}`,
     );
-    fs.writeFileSync(readmePath, content, 'utf8');
-    console.log('✅ Updated README.md with sponsor count');
+    fs.writeFileSync(readmePath, content, "utf8");
+    console.log("✅ Updated README.md with sponsor count");
   }
 }
 
@@ -278,7 +285,7 @@ function generateSponsorBadge(sponsors) {
     count,
     totalAmount,
     badge: `[![Sponsors](https://img.shields.io/badge/Sponsors-${count}-pink)](https://github.com/sponsors/${REPO_OWNER})`,
-    amountBadge: `[![Monthly Support](https://img.shields.io/badge/Monthly%20Support-$${totalAmount}-green)](https://github.com/sponsors/${REPO_OWNER})`
+    amountBadge: `[![Monthly Support](https://img.shields.io/badge/Monthly%20Support-$${totalAmount}-green)](https://github.com/sponsors/${REPO_OWNER})`,
   };
 }
 
@@ -286,57 +293,65 @@ function generateSponsorBadge(sponsors) {
  * Main execution
  */
 async function main() {
-  console.log('🚀 Starting sponsor list update...\n');
+  console.log("🚀 Starting sponsor list update...\n");
 
   // Fetch sponsors
-  console.log('📡 Fetching sponsors from GitHub...');
+  console.log("📡 Fetching sponsors from GitHub...");
   const sponsors = await fetchSponsors();
   console.log(`✅ Found ${sponsors.length} public sponsor(s)\n`);
 
   if (sponsors.length === 0) {
-    console.log('ℹ️  No public sponsors yet. SPONSORS.md will show "Be the first!" messages.');
+    console.log(
+      'ℹ️  No public sponsors yet. SPONSORS.md will show "Be the first!" messages.',
+    );
   }
 
   // Group by tier
-  console.log('📊 Grouping sponsors by tier...');
+  console.log("📊 Grouping sponsors by tier...");
   const groupedSponsors = groupSponsorsByTier(sponsors);
 
   // Show summary
   Object.entries(groupedSponsors).forEach(([tier, list]) => {
     if (list.length > 0) {
-      console.log(`   ${TIERS[tier].emoji} ${TIERS[tier].name}: ${list.length}`);
+      console.log(
+        `   ${TIERS[tier].emoji} ${TIERS[tier].name}: ${list.length}`,
+      );
     }
   });
   console.log();
 
   // Generate content
-  console.log('✍️  Generating sponsor section content...');
+  console.log("✍️  Generating sponsor section content...");
   const content = generateSponsorsSection(groupedSponsors);
 
   // Update files
-  console.log('💾 Updating SPONSORS.md...');
+  console.log("💾 Updating SPONSORS.md...");
   updateSponsorsFile(content);
 
-  console.log('💾 Updating README.md...');
+  console.log("💾 Updating README.md...");
   updateReadme(sponsors.length);
 
   // Generate badges
   const badges = generateSponsorBadge(sponsors);
-  console.log('\n📛 Sponsor badges:');
+  console.log("\n📛 Sponsor badges:");
   console.log(badges.badge);
   console.log(badges.amountBadge);
 
-  console.log('\n✨ Sponsor list update complete!');
+  console.log("\n✨ Sponsor list update complete!");
   console.log(`   Total sponsors: ${sponsors.length}`);
   console.log(`   Monthly support: $${badges.totalAmount}`);
 }
 
 // Run the script
 if (require.main === module) {
-  main().catch(error => {
-    console.error('❌ Fatal error:', error);
+  main().catch((error) => {
+    console.error("❌ Fatal error:", error);
     process.exit(1);
   });
 }
 
-module.exports = { fetchSponsors, groupSponsorsByTier, generateSponsorsSection };
+module.exports = {
+  fetchSponsors,
+  groupSponsorsByTier,
+  generateSponsorsSection,
+};

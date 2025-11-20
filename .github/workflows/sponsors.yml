@@ -27,7 +27,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.SPONSOR_TOKEN }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -41,7 +41,7 @@ jobs:
 
       - name: Update sponsors list
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPONSOR_TOKEN: ${{ secrets.SPONSOR_TOKEN }}
         run: |
           node scripts/update-sponsors.js
 
@@ -72,7 +72,7 @@ jobs:
 
       - name: Send welcome message
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPONSOR_TOKEN: ${{ secrets.SPONSOR_TOKEN }}
           SPONSOR_LOGIN: ${{ github.event.client_payload.sponsor_login }}
           TIER_NAME: ${{ github.event.client_payload.tier_name }}
           MONTHLY_AMOUNT: ${{ github.event.client_payload.monthly_amount }}
@@ -99,7 +99,7 @@ jobs:
 
       - name: Handle tier change
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPONSOR_TOKEN: ${{ secrets.SPONSOR_TOKEN }}
           SPONSOR_LOGIN: ${{ github.event.client_payload.sponsor_login }}
           NEW_TIER: ${{ github.event.client_payload.new_tier }}
           OLD_TIER: ${{ github.event.client_payload.old_tier }}
@@ -126,7 +126,7 @@ jobs:
 
       - name: Thank departed sponsor
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPONSOR_TOKEN: ${{ secrets.SPONSOR_TOKEN }}
           SPONSOR_LOGIN: ${{ github.event.client_payload.sponsor_login }}
           TIER_NAME: ${{ github.event.client_payload.tier_name }}
         run: |
@@ -162,7 +162,7 @@ jobs:
       - name: Send monthly updates
         if: steps.check-date.outputs.send_updates == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPONSOR_TOKEN: ${{ secrets.SPONSOR_TOKEN }}
         run: |
           node scripts/monthly-updates.js
 
@@ -186,7 +186,7 @@ jobs:
 
       - name: Generate metrics
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPONSOR_TOKEN: ${{ secrets.SPONSOR_TOKEN }}
         run: |
           node scripts/sponsor-metrics.js
 
