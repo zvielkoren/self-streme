@@ -227,6 +227,23 @@ OMDB_API_KEY=your_omdb_api_key      # OMDB API key for metadata
 TORRENT_TIMEOUT=60000            # Torrent connection timeout in ms (default: 60s)
 TORRENT_MAX_RETRIES=3            # Maximum retry attempts for failed torrents
 
+# Download Speed Optimization (NEW) 🚀
+ENABLE_PARALLEL_RACE=true        # Race multiple sources simultaneously
+ENABLE_MULTIPART_DOWNLOAD=true   # Split large files into chunks for parallel download
+PARALLEL_DOWNLOADS=3             # Number of sources to race (recommended: 2-4)
+MULTIPART_CONNECTIONS=8          # Parallel connections per file (recommended: 4-16)
+MULTIPART_CHUNK_SIZE=10485760    # Chunk size in bytes (10 MB default)
+MULTIPART_MIN_SIZE=52428800      # Min file size for multi-part (50 MB default)
+
+# HTTP Download Configuration
+HTTP_MAX_RETRIES=5               # Retry attempts per source (default: 2)
+EXCLUDE_DOWNLOAD_SOURCES=""      # Comma-separated sources to exclude (e.g., "WebTor.io")
+
+# Premium Debrid Services (95%+ reliability, highly recommended)
+REAL_DEBRID_API_KEY=""           # Real-Debrid API key (https://real-debrid.com)
+ALLDEBRID_API_KEY=""             # AllDebrid API key (https://alldebrid.com)
+PREMIUMIZE_API_KEY=""            # Premiumize API key (https://premiumize.me)
+
 # Streaming Mode Configuration (NEW)
 CACHE_ONLY_MODE=false            # Only stream cached content, disable P2P fallback
 DIRECT_STREAM_ONLY=false         # Force direct HTTP streaming (series get this automatically)
@@ -467,6 +484,15 @@ Visit `http://localhost:7000/test-source-selection` for a comprehensive test int
 - For LAN access: Use `http://YOUR_IP:7000` (find IP with `hostname -I`)
 - Firewall: `sudo ufw allow 7000/tcp`
 - Quick fix: Set `BASE_URL=http://YOUR_IP:7000` in `.env`
+
+**Download Failed from All Sources** 🆕 NEW
+- See [docs/TROUBLESHOOTING_DOWNLOAD_FAILURES.md](./docs/TROUBLESHOOTING_DOWNLOAD_FAILURES.md) for complete guide
+- **Quick Fix**: Add Real-Debrid API key for 95%+ reliability: `REAL_DEBRID_API_KEY=your_key`
+- **Speed Optimization**: Enable parallel downloads (3-10x faster): See [docs/PARALLEL_DOWNLOAD_OPTIMIZATION.md](./docs/PARALLEL_DOWNLOAD_OPTIMIZATION.md)
+- **Free Fix**: Remove source filtering: `unset EXCLUDE_DOWNLOAD_SOURCES`
+- **Increase Retries**: Set `HTTP_MAX_RETRIES=5` in `.env`
+- **Check Sources**: `curl http://localhost:7000/api/sources/stats`
+- See [docs/guides/PREMIUM_SERVICES.md](./docs/guides/PREMIUM_SERVICES.md) for premium service setup
 
 **P2P/Torrent Issues (No Peers Found, DHT Not Connecting)** 🔥
 - See [P2P-QUICK-FIX.md](./P2P-QUICK-FIX.md) for instant solutions
