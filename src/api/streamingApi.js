@@ -13,9 +13,204 @@ export function createStreamingRouter(torrentService, cacheManager) {
   const router = express.Router();
   const hybridService = createHybridStreamService(torrentService, cacheManager);
 
+  // Store for async link generation
+  const linkGenerationCache = new Map();
+  const linkGenerationTimeout = 300000; // 5 minutes
+
+  /**
+   * POST /stream/prepare/:infoHash
+   * Pre-generate stream link (async) to avoid Cloudflare tunnel timeout
+   * Returns job ID immediately, client polls for readiness
+   */
+  router.post("/stream/prepare/:infoHash", async (req, res) => {
+    const { infoHash } = req.params;
+    const fileIndex = parseInt(req.query.fileIndex, 10) || 0;
+    const jobId = `${infoHash}:${fileIndex}:${Date.now()}`;
+
+    logger.info(
+      `[API] Preparing stream for ${infoHash}, fileIndex: ${fileIndex}, jobId: ${jobId}`,
+    );
+
+    // Return job ID immediately
+    res.json({
+      success: true,
+      jobId,
+      infoHash,
+      fileIndex,
+      statusUrl: `/stream/status/${jobId}`,
+      streamUrl: `/stream/ready/${jobId}`,
+      estimatedTime: "30-90 seconds",
+      message: "Stream preparation started. Poll statusUrl for progress.",
+    });
+
+    // Start async preparation
+    linkGenerationCache.set(jobId, {
+      status: "preparing",
+      progress: 0,
+      infoHash,
+      fileIndex,
+      startedAt: Date.now(),
+      message: "Starting stream preparation...",
+    });
+
+    // Prepare stream in background
+    (async () => {
+      try {
+        logger.info(
+          `[API] Background: Starting stream preparation for ${jobId}`,
+        );
+
+        // Update progress
+        linkGenerationCache.set(jobId, {
+          ...linkGenerationCache.get(jobId),
+          status: "connecting",
+          progress: 10,
+          message: "Trying P2P connections...",
+        });
+
+        const dedupKey = `stream:${infoHash}:${fileIndex}`;
+        const result = await deduplicator.deduplicate(dedupKey, async () => {
+          return await hybridService.getStream(infoHash, { fileIndex });
+        });
+
+        logger.info(
+          `[API] Background: Stream ready via ${result.method} for ${jobId}`,
+        );
+
+        // Mark as ready
+        linkGenerationCache.set(jobId, {
+          status: "ready",
+          progress: 100,
+          infoHash,
+          fileIndex,
+          method: result.method,
+          filePath: result.filePath,
+          fileSize: result.fileSize || fs.statSync(result.filePath).size,
+          fileName: result.fileName || path.basename(result.filePath),
+          torrent: result.torrent,
+          readyAt: Date.now(),
+          expiresAt: Date.now() + linkGenerationTimeout,
+          message: `Stream ready via ${result.method}`,
+        });
+
+        // Auto-cleanup after timeout
+        setTimeout(() => {
+          linkGenerationCache.delete(jobId);
+          logger.info(`[API] Cleaned up expired job: ${jobId}`);
+        }, linkGenerationTimeout);
+      } catch (error) {
+        logger.error(
+          `[API] Background: Stream preparation failed for ${jobId}:`,
+          error,
+        );
+
+        linkGenerationCache.set(jobId, {
+          status: "failed",
+          progress: 0,
+          infoHash,
+          fileIndex,
+          error: error.message,
+          failedAt: Date.now(),
+          message: `Failed: ${error.message}`,
+        });
+
+        // Cleanup failed jobs after 1 minute
+        setTimeout(() => {
+          linkGenerationCache.delete(jobId);
+        }, 60000);
+      }
+    })();
+  });
+
+  /**
+   * GET /stream/status/:jobId
+   * Check status of async stream preparation
+   */
+  router.get("/stream/status/:jobId", async (req, res) => {
+    const { jobId } = req.params;
+    const job = linkGenerationCache.get(jobId);
+
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: "Job not found",
+        message: "Job may have expired or never existed",
+      });
+    }
+
+    res.json({
+      success: true,
+      jobId,
+      status: job.status,
+      progress: job.progress,
+      message: job.message,
+      ...(job.status === "ready" && {
+        streamUrl: `/stream/ready/${jobId}`,
+        method: job.method,
+        fileName: job.fileName,
+        fileSize: job.fileSize,
+        expiresAt: job.expiresAt,
+      }),
+      ...(job.status === "failed" && {
+        error: job.error,
+      }),
+    });
+  });
+
+  /**
+   * GET /stream/ready/:jobId
+   * Stream pre-generated link (instant response)
+   */
+  router.get("/stream/ready/:jobId", async (req, res) => {
+    const { jobId } = req.params;
+    const job = linkGenerationCache.get(jobId);
+
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: "Job not found",
+        message: "Job may have expired. Please prepare stream again.",
+      });
+    }
+
+    if (job.status !== "ready") {
+      return res.status(202).json({
+        success: false,
+        status: job.status,
+        message: job.message,
+        progress: job.progress,
+        statusUrl: `/stream/status/${jobId}`,
+      });
+    }
+
+    // Stream is ready - serve it immediately
+    logger.info(`[API] Streaming ready job ${jobId}: ${job.fileName}`);
+
+    try {
+      await streamFile(
+        req,
+        res,
+        job.filePath,
+        job.fileSize,
+        job.fileName,
+        false,
+        job.torrent,
+        job.fileIndex,
+      );
+    } catch (error) {
+      logger.error(`[API] Stream error for job ${jobId}:`, error);
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: "Streaming failed",
+          message: error.message,
+        });
+      }
+    }
+  });
+
   /**
    * GET /stream/proxy/:infoHash
-   * Smart streaming with request deduplication
+   * Smart streaming with request deduplication (original endpoint, kept for compatibility)
    */
   router.get("/stream/proxy/:infoHash", async (req, res) => {
     const { infoHash } = req.params;
@@ -23,11 +218,13 @@ export function createStreamingRouter(torrentService, cacheManager) {
     const forceDownload = req.query.download === "true";
 
     try {
-      logger.info(`[API] Stream request for ${infoHash}, fileIndex: ${fileIndex}`);
+      logger.info(
+        `[API] Stream request for ${infoHash}, fileIndex: ${fileIndex}`,
+      );
 
       // Deduplicate concurrent requests for same torrent
       const dedupKey = `stream:${infoHash}:${fileIndex}`;
-      
+
       const result = await deduplicator.deduplicate(dedupKey, async () => {
         return await hybridService.getStream(infoHash, { fileIndex });
       });
@@ -39,11 +236,21 @@ export function createStreamingRouter(torrentService, cacheManager) {
       const fileSize = result.fileSize || fs.statSync(filePath).size;
       const fileName = result.fileName || path.basename(filePath);
 
-      logger.info(`[API] Streaming ${fileName} (${formatBytes(fileSize)}) via ${result.method}`);
+      logger.info(
+        `[API] Streaming ${fileName} (${formatBytes(fileSize)}) via ${result.method}`,
+      );
 
       // Stream the file with Range support
-      return await streamFile(req, res, filePath, fileSize, fileName, forceDownload, result.torrent, fileIndex);
-
+      return await streamFile(
+        req,
+        res,
+        filePath,
+        fileSize,
+        fileName,
+        forceDownload,
+        result.torrent,
+        fileIndex,
+      );
     } catch (error) {
       logger.error(`[API] Streaming error for ${infoHash}:`, error);
 
@@ -52,7 +259,7 @@ export function createStreamingRouter(torrentService, cacheManager) {
           error: "Streaming failed",
           message: error.message,
           infoHash,
-          hint: "The torrent may be unavailable or have no seeders"
+          hint: "The torrent may be unavailable or have no seeders",
         });
       }
     }
@@ -61,7 +268,16 @@ export function createStreamingRouter(torrentService, cacheManager) {
   /**
    * Helper function to stream a file with Range Request support
    */
-  async function streamFile(req, res, filePath, fileSize, fileName, forceDownload, torrent, fileIndex) {
+  async function streamFile(
+    req,
+    res,
+    filePath,
+    fileSize,
+    fileName,
+    forceDownload,
+    torrent,
+    fileIndex,
+  ) {
     const range = req.headers.range;
     const mimeType = getMimeType(fileName);
 
@@ -89,7 +305,8 @@ export function createStreamingRouter(torrentService, cacheManager) {
         "Content-Type": mimeType,
         "Cache-Control": "public, max-age=3600",
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length",
+        "Access-Control-Expose-Headers":
+          "Content-Range, Accept-Ranges, Content-Length",
       });
 
       if (forceDownload) {
@@ -177,11 +394,11 @@ export function createStreamingRouter(torrentService, cacheManager) {
    * Format bytes
    */
   function formatBytes(bytes) {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0) return "0 Bytes";
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   }
 
   /**
@@ -205,21 +422,29 @@ export function createStreamingRouter(torrentService, cacheManager) {
    */
   router.get("/stream/info/:infoHash", async (req, res) => {
     const { infoHash } = req.params;
+    const fileIndex = parseInt(req.query.fileIndex, 10) || 0;
 
     try {
       const inCache = cacheManager && cacheManager.has(infoHash);
-      
+
       res.json({
         success: true,
         infoHash,
+        fileIndex,
         cached: inCache,
         methods: {
-          p2p: "Will try P2P first (20s timeout)",
+          p2p: "Will try P2P first (60s timeout)",
           httpFallback: "Will download via HTTP if P2P fails",
-          cache: inCache ? "Available in cache" : "Not cached yet"
+          cache: inCache ? "Available in cache" : "Not cached yet",
         },
-        streamUrl: `/stream/proxy/${infoHash}`,
-        note: "Duplicate requests are automatically deduplicated"
+        endpoints: {
+          directStream: `/stream/proxy/${infoHash}?fileIndex=${fileIndex}`,
+          asyncPrepare: `/stream/prepare/${infoHash}?fileIndex=${fileIndex}`,
+          info: `/stream/info/${infoHash}?fileIndex=${fileIndex}`,
+        },
+        recommendation:
+          "Use /stream/prepare for slow connections or Cloudflare tunnel to avoid timeout",
+        note: "Duplicate requests are automatically deduplicated",
       });
     } catch (error) {
       logger.error("[API] Info error:", error);
@@ -238,7 +463,8 @@ export function createStreamingRouter(torrentService, cacheManager) {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, OPTIONS",
       "Access-Control-Allow-Headers": "Range, Content-Type",
-      "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length",
+      "Access-Control-Expose-Headers":
+        "Content-Range, Accept-Ranges, Content-Length",
       "Access-Control-Max-Age": "86400",
     });
     res.status(204).end();
