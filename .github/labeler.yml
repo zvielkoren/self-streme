@@ -1,0 +1,107 @@
+# Auto-labeler configuration for pull requests
+
+# Documentation changes
+documentation:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docs/**/*'
+      - 'wiki/**/*'
+      - '*.md'
+      - 'README.md'
+      - 'CONTRIBUTORS.md'
+
+# Source code changes
+code:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'src/**/*.js'
+
+# Configuration changes
+config:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.env*'
+      - 'config/**/*'
+      - 'src/config/**/*'
+      - '*.json'
+      - '*.yml'
+      - '*.yaml'
+
+# Test changes
+tests:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'test/**/*'
+      - 'tests/**/*'
+      - '**/*.test.js'
+      - '**/*.spec.js'
+
+# CI/CD changes
+ci:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/**/*'
+      - '.gitlab-ci.yml'
+      - 'Jenkinsfile'
+
+# Docker changes
+docker:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'Dockerfile*'
+      - 'docker-compose*.yml'
+      - '.dockerignore'
+      - 'docker/**/*'
+
+# Dependencies
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'npm-shrinkwrap.json'
+
+# Services
+services:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'src/services/**/*'
+
+# API changes
+api:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'src/api/**/*'
+      - 'src/routes/**/*'
+
+# Download sources
+sources:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'src/services/torrentDownloadSources.js'
+      - 'src/services/*Downloader.js'
+      - 'src/services/hybridStreamService.js'
+
+# Performance
+performance:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'src/services/multipartDownloader.js'
+      - 'src/services/streamingDownloader.js'
+      - 'src/services/progressiveStreamDownloader.js'
+
+# Security
+security:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'src/middleware/auth*.js'
+      - 'src/middleware/security*.js'
+      - '.github/workflows/security*.yml'
+
+# Breaking changes (requires manual label)
+# Add manually if PR contains breaking changes
+
+# Size labels (auto-added by GitHub)
+# small: < 10 lines changed
+# medium: 10-100 lines changed
+# large: > 100 lines changed

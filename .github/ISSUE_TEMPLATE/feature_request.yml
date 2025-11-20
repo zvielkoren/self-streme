@@ -1,0 +1,115 @@
+name: ✨ Feature Request
+description: Suggest a new feature or improvement for Self-Streme
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! Please provide as much detail as possible.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Is your feature request related to a problem? Please describe.
+      placeholder: I'm always frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like
+      placeholder: I would like to see...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or features you've considered
+      placeholder: I've also thought about...
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature Category
+      description: What area does this feature belong to?
+      options:
+        - Performance / Speed
+        - Download Sources
+        - Streaming / Playback
+        - Configuration
+        - Documentation
+        - UI / UX
+        - API
+        - Monitoring / Logging
+        - Security
+        - Integration (Stremio, Plex, etc.)
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority (Your Opinion)
+      description: How important is this feature to you?
+      options:
+        - Critical (Can't use without it)
+        - High (Would greatly improve experience)
+        - Medium (Nice to have)
+        - Low (Small improvement)
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: Describe how this feature would be used
+      placeholder: |
+        1. User does X
+        2. System responds with Y
+        3. User benefits by Z
+
+  - type: textarea
+    id: benefits
+    attributes:
+      label: Benefits
+      description: What are the benefits of implementing this feature?
+      placeholder: |
+        - Improves performance by X%
+        - Reduces user confusion
+        - Enables new use cases
+        - etc.
+
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: Contribution
+      description: Would you be willing to help implement this feature?
+      options:
+        - label: I would like to implement this feature
+        - label: I can help test this feature
+        - label: I can help with documentation
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched for existing feature requests
+          required: true
+        - label: This feature aligns with Self-Streme's goals
+          required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context, screenshots, or examples about the feature request
+      placeholder: Any additional information (mockups, examples from other tools, etc.)

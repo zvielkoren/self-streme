@@ -660,6 +660,7 @@ If you find Self-Streme useful and would like to support its development, you ca
 - 💰 **Sponsor the developer** via [GitHub Sponsors](https://github.com/sponsors/zvielkoren)
 - 🐛 **Report bugs** and suggest features through GitHub Issues
 - 📢 **Share** Self-Streme with the community
+- 🤝 **Contribute** - See [CONTRIBUTORS.md](CONTRIBUTORS.md)
 
 Your support helps maintain and improve Self-Streme for everyone!
 
@@ -673,7 +674,45 @@ This software is provided for personal use only. Redistribution, modification, o
 
 <div align="center">
 
+## 🤝 Contributing
+
+We welcome contributions! See [CONTRIBUTORS.md](CONTRIBUTORS.md) for guidelines.
+
+**Ways to Contribute:**
+- 🐛 Report bugs
+- ✨ Suggest features
+- 📝 Improve documentation
+- 💻 Submit code
+- 🌐 Add download sources
+
+**Hall of Fame:** See [CONTRIBUTORS.md](CONTRIBUTORS.md#hall-of-fame) for recognized contributors.
+
+---
+
+## 📚 Wiki & Documentation
+
+### Main Documentation
+- [📖 Documentation Index](docs/README.md) - Complete documentation
+- [📋 Summaries](docs/summaries/) - Quick reference guides
+- [📝 Updates](docs/updates/) - Version updates and changelogs
+- [🗺️ Documentation Map](docs/DOCUMENTATION_MAP.md) - Visual navigation guide
+
+### Wiki (Coming Soon)
+- [🏠 Wiki Home](wiki/Home.md) - Wiki homepage
+- [🚀 Getting Started](wiki/Getting-Started.md) - Installation guide
+- [📚 Wiki Pages](wiki/) - Community-editable documentation
+
+### Quick Links
+- [⚡ Quick Start](docs/QUICK_START.md)
+- [🎬 Instant Streaming](docs/INSTANT_STREAMING.md) - 3-5 second playback
+- [🚀 Speed Optimization](docs/summaries/SPEED_OPTIMIZATION_SUMMARY.md) - All features
+- [🆘 Troubleshooting](docs/TROUBLESHOOTING_DOWNLOAD_FAILURES.md)
+- [💎 Premium Services](docs/guides/PREMIUM_SERVICES.md) - 95%+ reliability
+
+---
+
 **Made with ❤️ for the Stremio Community**
+
 
 *Experience your media library like never before*
 
