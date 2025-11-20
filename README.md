@@ -18,12 +18,12 @@
 
 **Linux / macOS:**
 ```bash
-./start.sh
+./scripts/quick-start.sh
 ```
 
 **Windows:**
 ```cmd
-quick-start.bat
+scripts\quick-start.bat
 ```
 
 **That's it!** The script automatically:
@@ -40,7 +40,7 @@ quick-start.bat
 magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c
 ```
 
-📖 **Complete Guide:** [ONE_COMMAND_START.md](ONE_COMMAND_START.md) | [QUICK_START.md](QUICK_START.md)
+📖 **Complete Guide:** [docs/QUICK_START.md](docs/QUICK_START.md) | [docs/STARTUP_GUIDE.md](docs/STARTUP_GUIDE.md)
 
 ---
 

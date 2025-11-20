@@ -5,9 +5,9 @@
  * This script starts the torrent streaming server with proper initialization
  */
 
-import TorrentStreamingServer from './src/torrentServer.js';
-import logger from './src/utils/logger.js';
-import { config } from './src/config/index.js';
+import TorrentStreamingServer from '../src/torrentServer.js';
+import logger from '../src/utils/logger.js';
+import { config } from '../src/config/index.js';
 import fs from 'fs';
 import path from 'path';
 

@@ -24,6 +24,7 @@ import {
 } from "./utils/urlHelper.js";
 import ScalableCacheManager from "./services/scalableCacheManager.js";
 import magnetToHttpService from "./services/magnetToHttpService.js";
+import downloadSources from "./services/torrentDownloadSources.js";
 
 // File paths
 const __filename = fileURLToPath(import.meta.url);
@@ -348,6 +349,54 @@ app.get("/api/cache-stats", (req, res) => {
         stats.backend === "redis" || stats.backend === "sqlite",
     },
   });
+});
+
+// Dynamic sources statistics endpoint
+app.get("/api/sources/stats", (req, res) => {
+  const stats = downloadSources.getStats();
+  res.json({
+    ...stats,
+    message: "Available torrent download sources",
+    documentation: "/docs/DYNAMIC_SOURCES.md",
+  });
+});
+
+// Test source availability endpoint
+app.get("/api/sources/test/:infoHash/:fileName", async (req, res) => {
+  try {
+    const { infoHash, fileName } = req.params;
+
+    logger.info(`[API] Testing sources for ${fileName}`);
+    const workingSource = await downloadSources.findWorkingSource(
+      infoHash,
+      decodeURIComponent(fileName),
+    );
+
+    if (workingSource) {
+      res.json({
+        success: true,
+        source: {
+          name: workingSource.name,
+          url: workingSource.url,
+          priority: workingSource.priority,
+          supportsResume: workingSource.supportsResume,
+          note: workingSource.note,
+        },
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        error: "No working sources found",
+        tested: downloadSources.getStats().totalSources,
+      });
+    }
+  } catch (error) {
+    logger.error("[API] Source test error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
 });
 
 // iOS stream caching endpoint

@@ -4,10 +4,10 @@ import path from "path";
 import pump from "pump";
 import logger from "../utils/logger.js";
 import { createHybridStreamService } from "../services/hybridStreamService.js";
-import deduplicator from "../services/requestDeduplicator.js";
 
 /**
- * Streaming API Router with Deduplication
+ * Streaming API Router with Hybrid P2P + HTTP Download Fallback
+ * Never gets stuck - always provides a stream!
  */
 export function createStreamingRouter(torrentService, cacheManager) {
   const router = express.Router();
@@ -15,7 +15,7 @@ export function createStreamingRouter(torrentService, cacheManager) {
 
   /**
    * GET /stream/proxy/:infoHash
-   * Smart streaming with request deduplication
+   * Smart hybrid streaming with HTTP download fallback
    */
   router.get("/stream/proxy/:infoHash", async (req, res) => {
     const { infoHash } = req.params;
@@ -25,12 +25,8 @@ export function createStreamingRouter(torrentService, cacheManager) {
     try {
       logger.info(`[API] Stream request for ${infoHash}, fileIndex: ${fileIndex}`);
 
-      // Deduplicate concurrent requests for same torrent
-      const dedupKey = `stream:${infoHash}:${fileIndex}`;
-      
-      const result = await deduplicator.deduplicate(dedupKey, async () => {
-        return await hybridService.getStream(infoHash, { fileIndex });
-      });
+      // Get stream via hybrid service
+      const result = await hybridService.getStream(infoHash, { fileIndex });
 
       logger.info(`[API] Stream method: ${result.method} for ${infoHash}`);
 
@@ -186,6 +182,7 @@ export function createStreamingRouter(torrentService, cacheManager) {
 
   /**
    * GET /stream/file/:infoHash/:fileIndex
+   * Stream a specific file from a torrent by index
    */
   router.get("/stream/file/:infoHash/:fileIndex", async (req, res) => {
     const { infoHash, fileIndex } = req.params;
@@ -202,11 +199,13 @@ export function createStreamingRouter(torrentService, cacheManager) {
 
   /**
    * GET /stream/info/:infoHash
+   * Get info about available stream methods
    */
   router.get("/stream/info/:infoHash", async (req, res) => {
     const { infoHash } = req.params;
 
     try {
+      // Check if in cache
       const inCache = cacheManager && cacheManager.has(infoHash);
       
       res.json({
@@ -219,7 +218,7 @@ export function createStreamingRouter(torrentService, cacheManager) {
           cache: inCache ? "Available in cache" : "Not cached yet"
         },
         streamUrl: `/stream/proxy/${infoHash}`,
-        note: "Duplicate requests are automatically deduplicated"
+        note: "Stream will never get stuck - automatic fallback included"
       });
     } catch (error) {
       logger.error("[API] Info error:", error);
