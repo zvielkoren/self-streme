@@ -11,16 +11,77 @@ import axios from "axios";
 class TorrentDownloadSources {
   constructor() {
     this.sources = this.initializeSources();
+    this.sourceHealth = new Map(); // Track source health
+    this.lastHealthCheck = null;
   }
 
   /**
    * Initialize all available download sources
+   * Premium services (with API keys) have highest priority
    */
   initializeSources() {
-    return [
+    const sources = [];
+
+    // Premium/Debrid Services (highest reliability, requires API keys)
+    if (process.env.REAL_DEBRID_API_KEY) {
+      sources.push({
+        name: "Real-Debrid",
+        priority: 1,
+        buildUrl: async (infoHash, fileName) => {
+          return await this.getRealDebridUrl(infoHash, fileName);
+        },
+        needsMetadata: false,
+        supportsResume: true,
+        requiresAuth: true,
+        isAsync: true,
+        note: "Premium debrid service - most reliable",
+      });
+    }
+
+    if (process.env.ALLDEBRID_API_KEY) {
+      sources.push({
+        name: "AllDebrid",
+        priority: 2,
+        buildUrl: async (infoHash, fileName) => {
+          return await this.getAllDebridUrl(infoHash, fileName);
+        },
+        needsMetadata: false,
+        supportsResume: true,
+        requiresAuth: true,
+        isAsync: true,
+        note: "Premium debrid service",
+      });
+    }
+
+    if (process.env.PREMIUMIZE_API_KEY) {
+      sources.push({
+        name: "Premiumize",
+        priority: 3,
+        buildUrl: async (infoHash, fileName) => {
+          return await this.getPremiumizeUrl(infoHash, fileName);
+        },
+        needsMetadata: false,
+        supportsResume: true,
+        requiresAuth: true,
+        isAsync: true,
+        note: "Premium debrid service",
+      });
+    }
+
+    // Free/Public Services (lower reliability but no cost)
+    sources.push(
+      {
+        name: "WebTor.io",
+        priority: 10,
+        buildUrl: (infoHash, fileName) =>
+          `https://webtor.io/api/torrent/${infoHash}/stream/${encodeURIComponent(fileName)}`,
+        needsMetadata: false,
+        supportsResume: true,
+        note: "Original fallback service, moderate reliability",
+      },
       {
         name: "Instant.io",
-        priority: 1,
+        priority: 11,
         buildUrl: (infoHash, fileName) =>
           `https://instant.io/${infoHash}/${encodeURIComponent(fileName)}`,
         needsMetadata: false,
@@ -28,17 +89,8 @@ class TorrentDownloadSources {
         note: "WebTorrent-based, good for popular torrents",
       },
       {
-        name: "TorrentDrive",
-        priority: 2,
-        buildUrl: (infoHash, fileName) =>
-          `https://www.torrentdrive.com/api/download/${infoHash}/${encodeURIComponent(fileName)}`,
-        needsMetadata: false,
-        supportsResume: false,
-        note: "Alternative service",
-      },
-      {
         name: "BTCache",
-        priority: 3,
+        priority: 12,
         buildUrl: (infoHash, fileName) =>
           `https://btcache.me/torrent/${infoHash}`,
         needsMetadata: false,
@@ -47,7 +99,7 @@ class TorrentDownloadSources {
       },
       {
         name: "BTDigg Proxy",
-        priority: 4,
+        priority: 13,
         buildUrl: (infoHash, fileName) =>
           `https://api.btdig.com/download/${infoHash}/${encodeURIComponent(fileName)}`,
         needsMetadata: false,
@@ -56,7 +108,7 @@ class TorrentDownloadSources {
       },
       {
         name: "TorrentSafe",
-        priority: 5,
+        priority: 14,
         buildUrl: (infoHash, fileName) =>
           `https://torrentsafe.com/download/${infoHash}/${encodeURIComponent(fileName)}`,
         needsMetadata: false,
@@ -65,7 +117,7 @@ class TorrentDownloadSources {
       },
       {
         name: "MediaBox",
-        priority: 6,
+        priority: 15,
         buildUrl: (infoHash, fileName) =>
           `https://mediabox.io/stream/${infoHash}/${encodeURIComponent(fileName)}`,
         needsMetadata: false,
@@ -74,7 +126,7 @@ class TorrentDownloadSources {
       },
       {
         name: "TorrentStream",
-        priority: 7,
+        priority: 16,
         buildUrl: (infoHash, fileName) =>
           `https://stream.torrentproject.cc/${infoHash}/${encodeURIComponent(fileName)}`,
         needsMetadata: false,
@@ -83,7 +135,7 @@ class TorrentDownloadSources {
       },
       {
         name: "CloudTorrent",
-        priority: 8,
+        priority: 17,
         buildUrl: (infoHash, fileName) =>
           `https://cloudtorrent.io/download/${infoHash}/${encodeURIComponent(fileName)}`,
         needsMetadata: false,
@@ -92,7 +144,7 @@ class TorrentDownloadSources {
       },
       {
         name: "StreamMagnet",
-        priority: 9,
+        priority: 18,
         buildUrl: (infoHash, fileName) =>
           `https://streammagnet.com/get/${infoHash}/${encodeURIComponent(fileName)}`,
         needsMetadata: false,
@@ -101,7 +153,7 @@ class TorrentDownloadSources {
       },
       {
         name: "TorrentAPI",
-        priority: 10,
+        priority: 19,
         buildUrl: (infoHash, fileName) =>
           `https://api.torrent-streaming.net/stream/${infoHash}/${encodeURIComponent(fileName)}`,
         needsMetadata: false,
@@ -110,7 +162,7 @@ class TorrentDownloadSources {
       },
       {
         name: "Seedr.cc",
-        priority: 11,
+        priority: 20,
         buildUrl: (infoHash, fileName, torrentData) => {
           if (!torrentData) return null;
           const magnet = `magnet:?xt=urn:btih:${infoHash}&dn=${encodeURIComponent(torrentData.name)}`;
@@ -122,14 +174,16 @@ class TorrentDownloadSources {
       },
       {
         name: "Bitport.io",
-        priority: 12,
+        priority: 21,
         buildUrl: (infoHash, fileName) =>
           `https://bitport.io/api/torrent/download/${infoHash}/${encodeURIComponent(fileName)}`,
         needsMetadata: false,
         supportsResume: true,
         note: "Cloud torrent service",
       },
-    ];
+    );
+
+    return sources;
   }
 
   /**
@@ -146,17 +200,27 @@ class TorrentDownloadSources {
           continue;
         }
 
-        const url = source.buildUrl(infoHash, fileName, torrentData);
+        // For async sources, store the buildUrl function
+        if (source.isAsync) {
+          availableSources.push({
+            ...source,
+            url: null, // Will be built async later
+          });
+        } else {
+          const url = source.buildUrl(infoHash, fileName, torrentData);
 
-        if (!url) {
-          logger.debug(`[Sources] Skipping ${source.name} - URL build failed`);
-          continue;
+          if (!url) {
+            logger.debug(
+              `[Sources] Skipping ${source.name} - URL build failed`,
+            );
+            continue;
+          }
+
+          availableSources.push({
+            ...source,
+            url,
+          });
         }
-
-        availableSources.push({
-          ...source,
-          url,
-        });
       } catch (error) {
         logger.warn(
           `[Sources] Error building URL for ${source.name}: ${error.message}`,
@@ -175,7 +239,14 @@ class TorrentDownloadSources {
     try {
       logger.debug(`[Sources] Testing ${source.name}...`);
 
-      const response = await axios.head(source.url, {
+      // Build async URL if needed
+      let url = source.url;
+      if (source.isAsync && !url) {
+        logger.debug(`[Sources] Building async URL for ${source.name}...`);
+        url = await source.buildUrl();
+      }
+
+      const response = await axios.head(url, {
         timeout,
         maxRedirects: 5,
         validateStatus: (status) => status >= 200 && status < 500,
@@ -272,17 +343,254 @@ class TorrentDownloadSources {
   }
 
   /**
+   * Real-Debrid API integration
+   */
+  async getRealDebridUrl(infoHash, fileName) {
+    try {
+      const apiKey = process.env.REAL_DEBRID_API_KEY;
+      const magnetLink = `magnet:?xt=urn:btih:${infoHash}`;
+
+      // Add magnet to Real-Debrid
+      const addResponse = await axios.post(
+        "https://api.real-debrid.com/rest/1.0/torrents/addMagnet",
+        `magnet=${encodeURIComponent(magnetLink)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        },
+      );
+
+      const torrentId = addResponse.data.id;
+
+      // Select all files
+      await axios.post(
+        `https://api.real-debrid.com/rest/1.0/torrents/selectFiles/${torrentId}`,
+        "files=all",
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        },
+      );
+
+      // Get torrent info
+      const infoResponse = await axios.get(
+        `https://api.real-debrid.com/rest/1.0/torrents/info/${torrentId}`,
+        {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        },
+      );
+
+      // Find the matching file
+      const file = infoResponse.data.links.find(
+        (link) =>
+          link.includes(fileName) ||
+          infoResponse.data.files.find((f) => f.path.includes(fileName)),
+      );
+
+      if (file) {
+        // Unrestrict the link to get direct download URL
+        const unrestrictResponse = await axios.post(
+          "https://api.real-debrid.com/rest/1.0/unrestrict/link",
+          `link=${encodeURIComponent(file)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+          },
+        );
+
+        logger.info(`[Real-Debrid] Got download URL for ${fileName}`);
+        return unrestrictResponse.data.download;
+      }
+
+      throw new Error("File not found in torrent");
+    } catch (error) {
+      logger.error(`[Real-Debrid] Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * AllDebrid API integration
+   */
+  async getAllDebridUrl(infoHash, fileName) {
+    try {
+      const apiKey = process.env.ALLDEBRID_API_KEY;
+      const magnetLink = `magnet:?xt=urn:btih:${infoHash}`;
+
+      // Upload magnet to AllDebrid
+      const uploadResponse = await axios.get(
+        "https://api.alldebrid.com/v4/magnet/upload",
+        {
+          params: {
+            agent: "self-streme",
+            apikey: apiKey,
+            magnets: magnetLink,
+          },
+        },
+      );
+
+      const magnetId = uploadResponse.data.data.magnets[0].id;
+
+      // Get magnet status
+      const statusResponse = await axios.get(
+        "https://api.alldebrid.com/v4/magnet/status",
+        {
+          params: {
+            agent: "self-streme",
+            apikey: apiKey,
+            id: magnetId,
+          },
+        },
+      );
+
+      // Find the matching file
+      const file = statusResponse.data.data.magnets.links.find((link) =>
+        link.filename.includes(fileName),
+      );
+
+      if (file) {
+        logger.info(`[AllDebrid] Got download URL for ${fileName}`);
+        return file.link;
+      }
+
+      throw new Error("File not found in torrent");
+    } catch (error) {
+      logger.error(`[AllDebrid] Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Premiumize API integration
+   */
+  async getPremiumizeUrl(infoHash, fileName) {
+    try {
+      const apiKey = process.env.PREMIUMIZE_API_KEY;
+      const magnetLink = `magnet:?xt=urn:btih:${infoHash}`;
+
+      // Add magnet to Premiumize
+      const addResponse = await axios.post(
+        "https://www.premiumize.me/api/transfer/create",
+        {
+          src: magnetLink,
+          folder_id: 0,
+        },
+        {
+          params: { apikey: apiKey },
+        },
+      );
+
+      const transferId = addResponse.data.id;
+
+      // Wait for transfer to complete (poll status)
+      let attempts = 0;
+      while (attempts < 30) {
+        const statusResponse = await axios.get(
+          "https://www.premiumize.me/api/transfer/list",
+          {
+            params: { apikey: apiKey },
+          },
+        );
+
+        const transfer = statusResponse.data.transfers.find(
+          (t) => t.id === transferId,
+        );
+
+        if (transfer && transfer.status === "finished") {
+          // Get folder contents
+          const folderResponse = await axios.get(
+            "https://www.premiumize.me/api/folder/list",
+            {
+              params: {
+                apikey: apiKey,
+                id: transfer.folder_id,
+              },
+            },
+          );
+
+          // Find the matching file
+          const file = folderResponse.data.content.find(
+            (f) => f.name.includes(fileName) && f.type === "file",
+          );
+
+          if (file) {
+            logger.info(`[Premiumize] Got download URL for ${fileName}`);
+            return file.link;
+          }
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        attempts++;
+      }
+
+      throw new Error("Transfer timeout");
+    } catch (error) {
+      logger.error(`[Premiumize] Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Update source health status
+   */
+  updateSourceHealth(sourceName, success) {
+    if (!this.sourceHealth.has(sourceName)) {
+      this.sourceHealth.set(sourceName, {
+        successes: 0,
+        failures: 0,
+        lastCheck: null,
+        available: true,
+      });
+    }
+
+    const health = this.sourceHealth.get(sourceName);
+    if (success) {
+      health.successes++;
+    } else {
+      health.failures++;
+    }
+    health.lastCheck = new Date();
+    health.available = health.successes > health.failures * 2; // 2:1 ratio threshold
+
+    logger.debug(
+      `[Sources] ${sourceName} health: ${health.successes}/${health.failures + health.successes}`,
+    );
+  }
+
+  /**
    * Get source statistics
    */
   getStats() {
-    return {
+    const stats = {
       totalSources: this.sources.length,
-      sources: this.sources.map((s) => ({
-        name: s.name,
-        priority: s.priority,
-        note: s.note,
-      })),
+      premiumSources: this.sources.filter((s) => s.requiresAuth).length,
+      freeSources: this.sources.filter((s) => !s.requiresAuth).length,
+      sources: this.sources.map((s) => {
+        const health = this.sourceHealth.get(s.name);
+        return {
+          name: s.name,
+          priority: s.priority,
+          note: s.note,
+          requiresAuth: s.requiresAuth || false,
+          health: health
+            ? {
+                successes: health.successes,
+                failures: health.failures,
+                available: health.available,
+                lastCheck: health.lastCheck,
+              }
+            : null,
+        };
+      }),
     };
+
+    return stats;
   }
 }
 

@@ -340,14 +340,22 @@ class HybridStreamService {
     for (const source of sources) {
       try {
         logger.info(`[Hybrid] 📥 Trying ${source.name}...`);
-        logger.info(`[Hybrid] URL: ${source.url}`);
+
+        // Handle async URL building (for premium services)
+        let url = source.url;
+        if (source.isAsync && typeof source.buildUrl === "function") {
+          logger.info(`[Hybrid] Getting URL from ${source.name}...`);
+          url = await source.buildUrl(infoHash, fileName, torrentData);
+        }
+
+        logger.info(`[Hybrid] URL: ${url}`);
         logger.info(
           `[Hybrid] Size: ${this.formatBytes(fileSize)} - may take several minutes`,
         );
 
         const response = await axios({
           method: "GET",
-          url: source.url,
+          url: url,
           responseType: "stream",
           timeout: 600000,
           maxContentLength: fileSize + 10000000,
@@ -387,13 +395,16 @@ class HybridStreamService {
             `[Hybrid] Size mismatch (expected ${this.formatBytes(fileSize)}, got ${this.formatBytes(stats.size)})`,
           );
           fs.unlinkSync(localPath);
+          downloadSources.updateSourceHealth(source.name, false);
           continue;
         }
 
         logger.info(`[Hybrid] ✓ Successfully downloaded from ${source.name}!`);
+        downloadSources.updateSourceHealth(source.name, true);
         return localPath;
       } catch (error) {
         logger.error(`[Hybrid] ${source.name} failed: ${error.message}`);
+        downloadSources.updateSourceHealth(source.name, false);
         if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
         // Continue to next source
       }
