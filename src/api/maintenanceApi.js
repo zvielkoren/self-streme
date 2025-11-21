@@ -9,9 +9,9 @@
  * - POST /api/maintenance/disable - Disable maintenance mode (admin only)
  */
 
-import express from 'express';
-import maintenanceMode from '../utils/maintenanceMode.js';
-import logger from '../utils/logger.js';
+import express from "express";
+import maintenanceMode from "../utils/maintenanceMode.js";
+import logger from "../utils/logger.js";
 
 const router = express.Router();
 
@@ -20,10 +20,10 @@ const router = express.Router();
  * Requires ADMIN_TOKEN in header or query parameter
  */
 function requireAdmin(req, res, next) {
-  const adminToken = process.env.ADMIN_TOKEN || 'admin123'; // Change this in production!
+  const adminToken = process.env.ADMIN_TOKEN || "admin123"; // Change this in production!
 
   // Check header
-  const headerToken = req.headers['x-admin-token'];
+  const headerToken = req.headers["x-admin-token"];
   // Check query parameter
   const queryToken = req.query.admin_token;
 
@@ -33,8 +33,9 @@ function requireAdmin(req, res, next) {
 
   logger.warn(`[Maintenance API] Unauthorized access attempt from ${req.ip}`);
   return res.status(401).json({
-    error: 'Unauthorized',
-    message: 'Admin token required. Set X-Admin-Token header or admin_token query parameter.'
+    error: "Unauthorized",
+    message:
+      "Admin token required. Set X-Admin-Token header or admin_token query parameter.",
   });
 }
 
@@ -42,19 +43,19 @@ function requireAdmin(req, res, next) {
  * GET /api/maintenance/status
  * Get current maintenance status (public endpoint)
  */
-router.get('/status', (req, res) => {
+router.get("/status", (req, res) => {
   try {
     const status = maintenanceMode.getStatus();
 
     res.json({
       success: true,
-      ...status
+      ...status,
     });
   } catch (error) {
-    logger.error('[Maintenance API] Error getting status:', error);
+    logger.error("[Maintenance API] Error getting status:", error);
     res.status(500).json({
-      error: 'Internal Server Error',
-      message: 'Failed to get maintenance status'
+      error: "Internal Server Error",
+      message: "Failed to get maintenance status",
     });
   }
 });
@@ -69,7 +70,7 @@ router.get('/status', (req, res) => {
  *   "estimatedEndTime": "2025-11-21T10:00:00Z (optional)"
  * }
  */
-router.post('/enable', requireAdmin, (req, res) => {
+router.post("/enable", requireAdmin, (req, res) => {
   try {
     const { message, estimatedEndTime } = req.body || {};
 
@@ -77,18 +78,19 @@ router.post('/enable', requireAdmin, (req, res) => {
 
     logger.info(`[Maintenance API] Maintenance mode ENABLED by ${req.ip}`);
     if (message) logger.info(`[Maintenance API] Message: ${message}`);
-    if (estimatedEndTime) logger.info(`[Maintenance API] End time: ${estimatedEndTime}`);
+    if (estimatedEndTime)
+      logger.info(`[Maintenance API] End time: ${estimatedEndTime}`);
 
     res.json({
       success: true,
-      message: 'Maintenance mode enabled',
-      status: maintenanceMode.getStatus()
+      message: "Maintenance mode enabled",
+      status: maintenanceMode.getStatus(),
     });
   } catch (error) {
-    logger.error('[Maintenance API] Error enabling maintenance mode:', error);
+    logger.error("[Maintenance API] Error enabling maintenance mode:", error);
     res.status(500).json({
-      error: 'Internal Server Error',
-      message: 'Failed to enable maintenance mode'
+      error: "Internal Server Error",
+      message: "Failed to enable maintenance mode",
     });
   }
 });
@@ -97,7 +99,7 @@ router.post('/enable', requireAdmin, (req, res) => {
  * POST /api/maintenance/disable
  * Disable maintenance mode (admin only)
  */
-router.post('/disable', requireAdmin, (req, res) => {
+router.post("/disable", requireAdmin, (req, res) => {
   try {
     maintenanceMode.disable();
 
@@ -105,14 +107,14 @@ router.post('/disable', requireAdmin, (req, res) => {
 
     res.json({
       success: true,
-      message: 'Maintenance mode disabled',
-      status: maintenanceMode.getStatus()
+      message: "Maintenance mode disabled",
+      status: maintenanceMode.getStatus(),
     });
   } catch (error) {
-    logger.error('[Maintenance API] Error disabling maintenance mode:', error);
+    logger.error("[Maintenance API] Error disabling maintenance mode:", error);
     res.status(500).json({
-      error: 'Internal Server Error',
-      message: 'Failed to disable maintenance mode'
+      error: "Internal Server Error",
+      message: "Failed to disable maintenance mode",
     });
   }
 });
@@ -127,7 +129,7 @@ router.post('/disable', requireAdmin, (req, res) => {
  *   "estimatedEndTime": "2025-11-21T12:00:00Z (optional)"
  * }
  */
-router.put('/update', requireAdmin, (req, res) => {
+router.put("/update", requireAdmin, (req, res) => {
   try {
     const { message, estimatedEndTime } = req.body || {};
 
@@ -145,14 +147,17 @@ router.put('/update', requireAdmin, (req, res) => {
 
     res.json({
       success: true,
-      message: 'Maintenance settings updated',
-      status: maintenanceMode.getStatus()
+      message: "Maintenance settings updated",
+      status: maintenanceMode.getStatus(),
     });
   } catch (error) {
-    logger.error('[Maintenance API] Error updating maintenance settings:', error);
+    logger.error(
+      "[Maintenance API] Error updating maintenance settings:",
+      error,
+    );
     res.status(500).json({
-      error: 'Internal Server Error',
-      message: 'Failed to update maintenance settings'
+      error: "Internal Server Error",
+      message: "Failed to update maintenance settings",
     });
   }
 });
@@ -161,12 +166,63 @@ router.put('/update', requireAdmin, (req, res) => {
  * GET /api/maintenance/test
  * Test endpoint to verify maintenance mode is working (public)
  */
-router.get('/test', (req, res) => {
+router.get("/test", (req, res) => {
   res.json({
     success: true,
-    message: 'Maintenance API is working',
+    message: "Maintenance API is working",
     maintenanceMode: maintenanceMode.isEnabled(),
-    currentTime: new Date().toISOString()
+    currentTime: new Date().toISOString(),
+  });
+});
+
+/**
+ * GET /api/maintenance/preview/page
+ * Preview the maintenance page without enabling maintenance mode (public)
+ */
+router.get("/preview/page", (req, res) => {
+  const page = maintenanceMode.generateMaintenancePage();
+  res.type("html").send(page);
+});
+
+/**
+ * GET /api/maintenance/preview/streaming
+ * Preview the streaming placeholder without enabling maintenance mode (public)
+ */
+router.get("/preview/streaming", (req, res) => {
+  const placeholder = maintenanceMode.generateStreamingPlaceholder();
+  res.type("html").send(placeholder);
+});
+
+/**
+ * GET /api/maintenance/preview/stream-object
+ * Preview the stream object that would be returned during maintenance (public)
+ */
+router.get("/preview/stream-object", (req, res) => {
+  const status = maintenanceMode.getStatus();
+  const timeInfo = status.estimatedEndTime
+    ? `Expected completion: ${new Date(status.estimatedEndTime).toLocaleString()}`
+    : "";
+
+  const placeholderStream = {
+    name: "🔧 Service Under Maintenance",
+    title: `🔧 Service Under Maintenance - ${status.message}`,
+    url: "/static/maintenance-placeholder.html",
+    description: `Self-Streme is currently undergoing maintenance. ${timeInfo}`,
+    quality: "Maintenance",
+    size: "N/A",
+    seeders: 0,
+    source: "maintenance",
+    behaviorHints: {
+      notWebReady: false,
+      bingeGroup: "self-streme-maintenance",
+    },
+  };
+
+  res.json({
+    success: true,
+    message: "This is what Stremio would see during maintenance",
+    stream: placeholderStream,
+    note: "This is a preview only - maintenance mode is not enabled",
   });
 });
 

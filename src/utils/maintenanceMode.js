@@ -12,25 +12,31 @@
  * - Graceful responses with maintenance page
  */
 
-import fs from 'fs';
-import path from 'path';
-import logger from './logger.js';
+import fs from "fs";
+import path from "path";
+import logger from "./logger.js";
 
 class MaintenanceMode {
   constructor() {
-    this.enabled = process.env.MAINTENANCE_MODE === 'true';
-    this.message = process.env.MAINTENANCE_MESSAGE || 'Service is currently under maintenance. Please try again later.';
+    this.enabled = process.env.MAINTENANCE_MODE === "true";
+    this.message =
+      process.env.MAINTENANCE_MESSAGE ||
+      "Service is currently under maintenance. Please try again later.";
     this.estimatedEndTime = process.env.MAINTENANCE_END_TIME || null;
     this.whitelistedIPs = this.parseWhitelistedIPs();
     this.bypassToken = process.env.MAINTENANCE_BYPASS_TOKEN || null;
-    this.statusFile = path.join(process.cwd(), 'data', 'maintenance.json');
+    this.statusFile = path.join(process.cwd(), "data", "maintenance.json");
 
     // Load status from file if it exists
     this.loadStatus();
 
-    logger.info(`[Maintenance] Mode initialized: ${this.enabled ? 'ENABLED' : 'DISABLED'}`);
+    logger.info(
+      `[Maintenance] Mode initialized: ${this.enabled ? "ENABLED" : "DISABLED"}`,
+    );
     if (this.enabled) {
-      logger.warn(`[Maintenance] Service is in MAINTENANCE MODE: ${this.message}`);
+      logger.warn(
+        `[Maintenance] Service is in MAINTENANCE MODE: ${this.message}`,
+      );
     }
   }
 
@@ -38,8 +44,11 @@ class MaintenanceMode {
    * Parse whitelisted IPs from environment variable
    */
   parseWhitelistedIPs() {
-    const ips = process.env.MAINTENANCE_WHITELIST_IPS || '';
-    return ips.split(',').map(ip => ip.trim()).filter(ip => ip.length > 0);
+    const ips = process.env.MAINTENANCE_WHITELIST_IPS || "";
+    return ips
+      .split(",")
+      .map((ip) => ip.trim())
+      .filter((ip) => ip.length > 0);
   }
 
   /**
@@ -48,7 +57,7 @@ class MaintenanceMode {
   loadStatus() {
     try {
       if (fs.existsSync(this.statusFile)) {
-        const data = JSON.parse(fs.readFileSync(this.statusFile, 'utf8'));
+        const data = JSON.parse(fs.readFileSync(this.statusFile, "utf8"));
         this.enabled = data.enabled || this.enabled;
         this.message = data.message || this.message;
         this.estimatedEndTime = data.estimatedEndTime || this.estimatedEndTime;
@@ -57,13 +66,18 @@ class MaintenanceMode {
         if (this.estimatedEndTime) {
           const endTime = new Date(this.estimatedEndTime);
           if (Date.now() > endTime.getTime()) {
-            logger.info('[Maintenance] Scheduled maintenance window has passed, disabling maintenance mode');
+            logger.info(
+              "[Maintenance] Scheduled maintenance window has passed, disabling maintenance mode",
+            );
             this.disable();
           }
         }
       }
     } catch (error) {
-      logger.error('[Maintenance] Failed to load status from file:', error.message);
+      logger.error(
+        "[Maintenance] Failed to load status from file:",
+        error.message,
+      );
     }
   }
 
@@ -81,12 +95,15 @@ class MaintenanceMode {
         enabled: this.enabled,
         message: this.message,
         estimatedEndTime: this.estimatedEndTime,
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
       };
 
       fs.writeFileSync(this.statusFile, JSON.stringify(data, null, 2));
     } catch (error) {
-      logger.error('[Maintenance] Failed to save status to file:', error.message);
+      logger.error(
+        "[Maintenance] Failed to save status to file:",
+        error.message,
+      );
     }
   }
 
@@ -112,7 +129,7 @@ class MaintenanceMode {
   disable() {
     this.enabled = false;
     this.saveStatus();
-    logger.info('[Maintenance] DISABLED - Service is now available');
+    logger.info("[Maintenance] DISABLED - Service is now available");
   }
 
   /**
@@ -123,7 +140,9 @@ class MaintenanceMode {
     if (this.enabled && this.estimatedEndTime) {
       const endTime = new Date(this.estimatedEndTime);
       if (Date.now() > endTime.getTime()) {
-        logger.info('[Maintenance] Scheduled maintenance window has passed, auto-disabling');
+        logger.info(
+          "[Maintenance] Scheduled maintenance window has passed, auto-disabling",
+        );
         this.disable();
         return false;
       }
@@ -139,11 +158,14 @@ class MaintenanceMode {
     if (!ip) return false;
 
     // Clean IP (remove IPv6 prefix if present)
-    const cleanIP = ip.replace('::ffff:', '');
+    const cleanIP = ip.replace("::ffff:", "");
 
-    return this.whitelistedIPs.includes(cleanIP) ||
-           this.whitelistedIPs.includes('127.0.0.1') && cleanIP === '127.0.0.1' ||
-           this.whitelistedIPs.includes('localhost') && (cleanIP === '127.0.0.1' || cleanIP === '::1');
+    return (
+      this.whitelistedIPs.includes(cleanIP) ||
+      (this.whitelistedIPs.includes("127.0.0.1") && cleanIP === "127.0.0.1") ||
+      (this.whitelistedIPs.includes("localhost") &&
+        (cleanIP === "127.0.0.1" || cleanIP === "::1"))
+    );
   }
 
   /**
@@ -156,7 +178,8 @@ class MaintenanceMode {
     if (req.query && req.query.bypass === this.bypassToken) return true;
 
     // Check header
-    if (req.headers && req.headers['x-maintenance-bypass'] === this.bypassToken) return true;
+    if (req.headers && req.headers["x-maintenance-bypass"] === this.bypassToken)
+      return true;
 
     return false;
   }
@@ -169,7 +192,7 @@ class MaintenanceMode {
       enabled: this.enabled,
       message: this.message,
       estimatedEndTime: this.estimatedEndTime,
-      timeRemaining: this.getTimeRemaining()
+      timeRemaining: this.getTimeRemaining(),
     };
   }
 
@@ -183,15 +206,15 @@ class MaintenanceMode {
     const now = Date.now();
     const remaining = endTime.getTime() - now;
 
-    if (remaining <= 0) return 'Maintenance window has ended';
+    if (remaining <= 0) return "Maintenance window has ended";
 
     const hours = Math.floor(remaining / (1000 * 60 * 60));
     const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
 
     if (hours > 0) {
-      return `${hours} hour${hours !== 1 ? 's' : ''} ${minutes} minute${minutes !== 1 ? 's' : ''}`;
+      return `${hours} hour${hours !== 1 ? "s" : ""} ${minutes} minute${minutes !== 1 ? "s" : ""}`;
     } else {
-      return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+      return `${minutes} minute${minutes !== 1 ? "s" : ""}`;
     }
   }
 
@@ -206,48 +229,159 @@ class MaintenanceMode {
       }
 
       // Allow access to maintenance status endpoint
-      if (req.path === '/maintenance/status' || req.path === '/api/maintenance/status') {
+      if (
+        req.path === "/maintenance/status" ||
+        req.path === "/api/maintenance/status"
+      ) {
         return next();
       }
 
       // Allow access to maintenance control endpoints (for admins)
-      if (req.path.startsWith('/maintenance/') || req.path.startsWith('/api/maintenance/')) {
+      if (
+        req.path.startsWith("/maintenance/") ||
+        req.path.startsWith("/api/maintenance/")
+      ) {
         return next();
       }
 
       // Get client IP
-      const clientIP = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
+      const clientIP =
+        req.ip ||
+        req.connection.remoteAddress ||
+        req.headers["x-forwarded-for"];
 
       // Check if IP is whitelisted
       if (this.isWhitelisted(clientIP)) {
-        logger.debug(`[Maintenance] Whitelisted IP bypassing maintenance mode: ${clientIP}`);
+        logger.debug(
+          `[Maintenance] Whitelisted IP bypassing maintenance mode: ${clientIP}`,
+        );
         return next();
       }
 
       // Check for bypass token
       if (this.hasBypassToken(req)) {
-        logger.debug('[Maintenance] Valid bypass token, allowing access');
+        logger.debug("[Maintenance] Valid bypass token, allowing access");
         return next();
       }
 
       // Block access - return maintenance page
       logger.debug(`[Maintenance] Blocking access from: ${clientIP}`);
 
+      // Check if this is a streaming request
+      const isStreamRequest =
+        req.path.startsWith("/stream/") ||
+        req.path.includes("/stream") ||
+        req.path.match(/\.(mp4|mkv|avi|webm|m3u8)$/);
+
       // Return JSON for API requests
-      if (req.path.startsWith('/api/') || req.accepts('json')) {
+      if (req.path.startsWith("/api/") || req.accepts("json")) {
         return res.status(503).json({
-          error: 'Service Unavailable',
+          error: "Service Unavailable",
           message: this.message,
           estimatedEndTime: this.estimatedEndTime,
           timeRemaining: this.getTimeRemaining(),
-          maintenanceMode: true
+          maintenanceMode: true,
         });
+      }
+
+      // Return streaming placeholder for stream requests
+      if (isStreamRequest) {
+        const streamingPlaceholder = this.generateStreamingPlaceholder();
+        return res.status(503).type("html").send(streamingPlaceholder);
       }
 
       // Return HTML page for browser requests
       const maintenancePage = this.generateMaintenancePage();
-      res.status(503).type('html').send(maintenancePage);
+      res.status(503).type("html").send(maintenancePage);
     };
+  }
+
+  /**
+   * Generate HTML streaming placeholder for maintenance mode
+   */
+  generateStreamingPlaceholder() {
+    const timeInfo = this.estimatedEndTime
+      ? `<p>⏰ <strong>Estimated Completion:</strong> ${new Date(this.estimatedEndTime).toLocaleString()}</p>
+         <p>⌛ <strong>Time Remaining:</strong> ${this.getTimeRemaining()}</p>`
+      : "";
+
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Self-Streme - Streaming Unavailable</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 60px 40px;
+            max-width: 700px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .icon { font-size: 80px; margin-bottom: 20px; animation: pulse 2s ease-in-out infinite; }
+        @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.8; } }
+        h1 { color: #ffffff; font-size: 32px; margin-bottom: 15px; font-weight: 700; }
+        .subtitle { color: #4CAF50; font-size: 18px; margin-bottom: 25px; }
+        .message { color: rgba(255, 255, 255, 0.85); font-size: 17px; line-height: 1.7; margin-bottom: 30px; }
+        .time-info { background: rgba(76, 175, 80, 0.15); border: 1px solid rgba(76, 175, 80, 0.3); border-radius: 12px; padding: 20px; margin: 25px 0; }
+        .time-info p { margin: 8px 0; }
+        .time-info strong { color: #4CAF50; }
+        .btn { display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border-radius: 25px; text-decoration: none; font-weight: 600; margin: 20px 10px; transition: transform 0.2s; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4); }
+        .details { background: rgba(0, 0, 0, 0.2); border-left: 4px solid #4CAF50; padding: 20px 25px; margin-top: 30px; text-align: left; border-radius: 8px; }
+        .details ul { list-style: none; padding: 0; }
+        .details li { margin: 8px 0; padding-left: 20px; position: relative; color: rgba(255, 255, 255, 0.8); }
+        .details li:before { content: "→"; position: absolute; left: 0; color: #4CAF50; }
+    </style>
+    <script>
+        setTimeout(() => location.reload(), 30000);
+        setInterval(async () => {
+            try {
+                const res = await fetch('/api/maintenance/status');
+                const data = await res.json();
+                if (!data.enabled) location.reload();
+            } catch (e) {}
+        }, 10000);
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">🎬</div>
+        <h1>Streaming Service Unavailable</h1>
+        <p class="subtitle">Self-Streme is currently under maintenance</p>
+        <p class="message">${this.message}</p>
+        ${timeInfo ? `<div class="time-info">${timeInfo}</div>` : ""}
+        <a href="javascript:location.reload()" class="btn">🔄 Refresh Status</a>
+        <div class="details">
+            <p><strong>ℹ️ What's happening?</strong></p>
+            <ul>
+                <li>Streaming endpoints are temporarily unavailable</li>
+                <li>Torrent downloads and P2P connections are paused</li>
+                <li>The service will automatically resume when maintenance is complete</li>
+                <li>This page will auto-refresh every 30 seconds</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+    `.trim();
   }
 
   /**
@@ -257,7 +391,7 @@ class MaintenanceMode {
     const timeInfo = this.estimatedEndTime
       ? `<p class="time-remaining">Estimated completion: <strong>${new Date(this.estimatedEndTime).toLocaleString()}</strong></p>
          <p class="time-remaining">Time remaining: <strong>${this.getTimeRemaining()}</strong></p>`
-      : '';
+      : "";
 
     return `
 <!DOCTYPE html>
@@ -426,8 +560,8 @@ class MaintenanceMode {
 
       res.json({
         success: true,
-        message: 'Maintenance mode enabled',
-        status: this.getStatus()
+        message: "Maintenance mode enabled",
+        status: this.getStatus(),
       });
     };
   }
@@ -441,8 +575,8 @@ class MaintenanceMode {
 
       res.json({
         success: true,
-        message: 'Maintenance mode disabled',
-        status: this.getStatus()
+        message: "Maintenance mode disabled",
+        status: this.getStatus(),
       });
     };
   }

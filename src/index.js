@@ -191,6 +191,13 @@ app.get("/static/placeholder.mp4", (req, res) => {
   res.sendFile(path.join(__dirname, "static", "placeholder-error.html"));
 });
 
+// Maintenance placeholder endpoint for when service is under maintenance
+app.get("/static/maintenance-placeholder.html", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
+  res.sendFile(path.join(__dirname, "static", "maintenance-placeholder.html"));
+});
+
 // Status endpoints
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });

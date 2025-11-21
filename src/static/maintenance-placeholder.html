@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Self-Streme - Service Under Maintenance</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: white;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 60px 40px;
+            max-width: 700px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .icon-container {
+            margin-bottom: 30px;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .icon {
+            font-size: 80px;
+            filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.3));
+        }
+
+        .status-badge {
+            display: inline-block;
+            background: rgba(255, 193, 7, 0.2);
+            color: #ffc107;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 193, 7, 0.3);
+        }
+
+        h1 {
+            color: #ffffff;
+            font-size: 36px;
+            margin-bottom: 15px;
+            font-weight: 700;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            color: #4CAF50;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 25px;
+        }
+
+        .message {
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 17px;
+            line-height: 1.7;
+            margin-bottom: 30px;
+            padding: 0 20px;
+        }
+
+        .time-info {
+            background: rgba(76, 175, 80, 0.15);
+            border: 1px solid rgba(76, 175, 80, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+
+        .time-info p {
+            color: #ffffff;
+            font-size: 16px;
+            margin: 8px 0;
+        }
+
+        .time-info strong {
+            color: #4CAF50;
+            font-weight: 600;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 30px 0;
+        }
+
+        .info-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .info-card-icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .info-card-title {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 5px;
+        }
+
+        .info-card-value {
+            font-size: 18px;
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 28px;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 16px;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .details {
+            background: rgba(0, 0, 0, 0.2);
+            border-left: 4px solid #4CAF50;
+            padding: 20px 25px;
+            margin-top: 30px;
+            text-align: left;
+            border-radius: 8px;
+        }
+
+        .details-title {
+            color: #4CAF50;
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .details ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .details li {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            margin: 8px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .details li:before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #4CAF50;
+        }
+
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .footer p {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 13px;
+            margin: 5px 0;
+        }
+
+        .auto-refresh {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 10px;
+        }
+
+        .pulse {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #4CAF50;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 40px 20px;
+            }
+
+            h1 {
+                font-size: 28px;
+            }
+
+            .message {
+                font-size: 15px;
+            }
+
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        /* Loading animation for refresh */
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .loading {
+            animation: spin 1s linear infinite;
+        }
+    </style>
+    <script>
+        // Auto-refresh every 30 seconds
+        let refreshTimer;
+        let countdown = 30;
+
+        function startCountdown() {
+            const countdownEl = document.getElementById('countdown');
+            countdown = 30;
+
+            refreshTimer = setInterval(() => {
+                countdown--;
+                if (countdownEl) {
+                    countdownEl.textContent = countdown;
+                }
+
+                if (countdown <= 0) {
+                    location.reload();
+                }
+            }, 1000);
+        }
+
+        function refreshPage() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            const refreshIcon = refreshBtn?.querySelector('.refresh-icon');
+
+            if (refreshIcon) {
+                refreshIcon.classList.add('loading');
+            }
+
+            clearInterval(refreshTimer);
+
+            setTimeout(() => {
+                location.reload();
+            }, 300);
+        }
+
+        // Check maintenance status via API
+        async function checkStatus() {
+            try {
+                const response = await fetch('/api/maintenance/status');
+                const data = await response.json();
+
+                // If maintenance is disabled, reload to access the service
+                if (!data.enabled) {
+                    console.log('Maintenance mode disabled, reloading...');
+                    location.reload();
+                }
+            } catch (error) {
+                console.error('Failed to check maintenance status:', error);
+            }
+        }
+
+        // Start countdown when page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            startCountdown();
+
+            // Check status every 10 seconds
+            setInterval(checkStatus, 10000);
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="icon-container">
+            <div class="icon">🔧</div>
+        </div>
+
+        <div class="status-badge">⚠️ MAINTENANCE IN PROGRESS</div>
+
+        <h1>Streaming Service Unavailable</h1>
+        <p class="subtitle">🎬 Self-Streme</p>
+
+        <p class="message" id="maintenanceMessage">
+            Our streaming service is currently undergoing maintenance to improve performance and reliability.
+            We apologize for the inconvenience and appreciate your patience.
+        </p>
+
+        <div class="time-info" id="timeInfo" style="display: none;">
+            <p>⏰ <strong>Estimated Completion:</strong> <span id="endTime">-</span></p>
+            <p>⌛ <strong>Time Remaining:</strong> <span id="timeRemaining">-</span></p>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-card">
+                <div class="info-card-icon">🚫</div>
+                <div class="info-card-title">Streaming</div>
+                <div class="info-card-value">Offline</div>
+            </div>
+            <div class="info-card">
+                <div class="info-card-icon">📡</div>
+                <div class="info-card-title">Status</div>
+                <div class="info-card-value">Maintenance</div>
+            </div>
+            <div class="info-card">
+                <div class="info-card-icon">🔄</div>
+                <div class="info-card-title">Auto-Refresh</div>
+                <div class="info-card-value">30s</div>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button id="refreshBtn" class="btn btn-primary" onclick="refreshPage()">
+                <span class="refresh-icon">🔄</span>
+                <span>Refresh Status</span>
+            </button>
+            <a href="/api/maintenance/status" class="btn btn-secondary">
+                <span>📊</span>
+                <span>Check Status API</span>
+            </a>
+        </div>
+
+        <div class="details">
+            <div class="details-title">
+                <span>ℹ️</span>
+                <span>What's happening?</span>
+            </div>
+            <ul>
+                <li>Streaming endpoints are temporarily unavailable</li>
+                <li>Torrent downloads and P2P connections are paused</li>
+                <li>System updates and optimizations in progress</li>
+                <li>All content and settings are safe and will be restored</li>
+                <li>The service will automatically resume when maintenance is complete</li>
+            </ul>
+        </div>
+
+        <div class="footer">
+            <div class="auto-refresh">
+                <span class="pulse"></span>
+                <span>Auto-refreshing in <strong id="countdown">30</strong> seconds</span>
+            </div>
+            <p>This page will automatically reload when the service is back online.</p>
+            <p>Thank you for your patience! 🙏</p>
+        </div>
+    </div>
+
+    <script>
+        // Inject dynamic maintenance info if available
+        (function() {
+            // This could be populated by the server with actual maintenance data
+            const maintenanceData = {
+                message: null,
+                endTime: null,
+                timeRemaining: null
+            };
+
+            // Update message if provided
+            if (maintenanceData.message) {
+                document.getElementById('maintenanceMessage').textContent = maintenanceData.message;
+            }
+
+            // Update time info if provided
+            if (maintenanceData.endTime || maintenanceData.timeRemaining) {
+                const timeInfoEl = document.getElementById('timeInfo');
+                timeInfoEl.style.display = 'block';
+
+                if (maintenanceData.endTime) {
+                    document.getElementById('endTime').textContent = maintenanceData.endTime;
+                }
+
+                if (maintenanceData.timeRemaining) {
+                    document.getElementById('timeRemaining').textContent = maintenanceData.timeRemaining;
+                }
+            }
+        })();
+    </script>
+</body>
+</html>
