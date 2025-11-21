@@ -508,6 +508,14 @@ Visit `http://localhost:7000/test-source-selection` for a comprehensive test int
 - **Action**: Try a different source or verify the torrent is still active
 - **Details**: See [TORRENT_FIX_VERIFICATION.md](./TORRENT_FIX_VERIFICATION.md)
 
+**Maintenance Mode** 🔧 NEW
+- **Purpose**: Temporarily disable service during updates or fixes
+- **Quick Enable**: `MAINTENANCE_MODE=true` in `.env` or use API
+- **Features**: Custom messages, scheduled windows, IP whitelisting, bypass tokens
+- **API Control**: Enable/disable without restart via `/api/maintenance/enable` or `/api/maintenance/disable`
+- **Quick Guide**: See [MAINTENANCE_MODE_QUICK.md](./MAINTENANCE_MODE_QUICK.md)
+- **Full Documentation**: See [docs/MAINTENANCE_MODE.md](./docs/MAINTENANCE_MODE.md)
+
 **Most Common P2P Fix:**
 ```bash
 # Allow BitTorrent ports through firewall
@@ -720,6 +728,7 @@ We welcome contributions! See [CONTRIBUTORS.md](CONTRIBUTORS.md) for guidelines.
 - [🚀 Speed Optimization](docs/summaries/SPEED_OPTIMIZATION_SUMMARY.md) - All features
 - [🆘 Troubleshooting](docs/TROUBLESHOOTING_DOWNLOAD_FAILURES.md)
 - [💎 Premium Services](docs/guides/PREMIUM_SERVICES.md) - 95%+ reliability
+- [🔧 Maintenance Mode](docs/MAINTENANCE_MODE.md) - Service maintenance control
 - [📚 Documentation Index](docs/DOCUMENTATION_INDEX.md) - Complete navigation guide
 - [🗂️ Project Organization](docs/PROJECT_ORGANIZATION.md) - File structure reference
 

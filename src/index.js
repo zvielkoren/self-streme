@@ -25,6 +25,8 @@ import {
 import ScalableCacheManager from "./services/scalableCacheManager.js";
 import magnetToHttpService from "./services/magnetToHttpService.js";
 import downloadSources from "./services/torrentDownloadSources.js";
+import maintenanceMode from "./utils/maintenanceMode.js";
+import maintenanceApiRouter from "./api/maintenanceApi.js";
 
 // File paths
 const __filename = fileURLToPath(import.meta.url);
@@ -99,6 +101,16 @@ app.use(
     maxAge: 86400, // Cache preflight requests for 24 hours
   }),
 );
+
+// Apply maintenance mode middleware BEFORE other routes
+// This will block all requests when maintenance mode is enabled
+// except for maintenance status/control endpoints
+app.use(maintenanceMode.middleware());
+logger.info("Maintenance mode middleware initialized");
+
+// Mount maintenance API routes (must be before maintenance middleware blocks other routes)
+app.use("/api/maintenance", maintenanceApiRouter);
+logger.info("Maintenance API routes mounted");
 
 // Serve installation page at root
 app.get("/", (req, res) => {
