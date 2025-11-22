@@ -3,7 +3,6 @@ import searchService from "../providers/index.js";
 import torrentService from "./torrentService.js";
 import streamHandler from "../services/streamHandler.js";
 import subtitleService from "../services/subtitleService.js";
-import debridService from "../services/debridService.js";
 import { config } from "../config/index.js";
 import { getMaintenanceMode } from "../utils/maintenanceMode.js";
 
@@ -140,12 +139,6 @@ class StreamService {
         ); // Filter out invalid streams and nulls
 
       logger.info(`Processed ${streams.length} valid streams for ${cacheKey}`);
-
-      // Intercept torrent streams and resolve via debrid services if available
-      if (streams.length > 0 && debridService.enabled) {
-        logger.info(`[Debrid] Attempting to resolve ${streams.length} streams via debrid services`);
-        streams = await this.resolveStreamsViaDebrid(streams, baseUrl);
-      }
 
       // For series content or when directStreamOnly is enabled, add HTTP streaming options
       if (
@@ -430,79 +423,6 @@ class StreamService {
       `Failed to extract infoHash from: ${magnetUri.substring(0, 100)}...`,
     );
     return null;
-  }
-
-  /**
-   * Resolve torrent streams via debrid services
-   * Intercepts magnet links and converts them to direct HTTP URLs
-   * 
-   * @param {Array} streams - Array of stream objects
-   * @param {string} baseUrl - Base URL for fallback proxy URLs
-   * @returns {Promise<Array>} Streams with debrid URLs where available
-   */
-  async resolveStreamsViaDebrid(streams, baseUrl) {
-    if (!streams || streams.length === 0) {
-      return streams;
-    }
-
-    const resolvedStreams = [];
-
-    for (const stream of streams) {
-      // Skip streams that already have direct URLs or YouTube IDs
-      if (stream.url || stream.ytId) {
-        resolvedStreams.push(stream);
-        continue;
-      }
-
-      // Only try debrid resolution for torrent streams
-      if (!stream.infoHash) {
-        resolvedStreams.push(stream);
-        continue;
-      }
-
-      try {
-        // Try to resolve via debrid service
-        const fileName = stream.title || stream.name || 'video.mp4';
-        const debridUrl = await debridService.resolveToDirectUrl(stream.infoHash, fileName);
-
-        if (debridUrl) {
-          // Success! Convert to direct HTTP stream
-          logger.info(`[Debrid] ✓ Resolved ${stream.infoHash} to direct URL`);
-          
-          const resolvedStream = {
-            ...stream,
-            url: debridUrl,
-            name: `${stream.name || stream.title} [Debrid]`,
-            title: `${stream.title || stream.name} [Debrid]`,
-            // Remove torrent-specific fields since we now have direct URL
-            infoHash: undefined,
-            sources: undefined,
-            fileIdx: undefined,
-            behaviorHints: {
-              notWebReady: false, // Direct URLs are web-ready
-              bingeGroup: `self-streme-debrid-${stream.quality || "default"}`,
-            },
-          };
-          
-          resolvedStreams.push(resolvedStream);
-        } else {
-          // Debrid resolution failed, keep original torrent stream
-          logger.debug(`[Debrid] Could not resolve ${stream.infoHash}, keeping original torrent stream`);
-          resolvedStreams.push(stream);
-        }
-      } catch (error) {
-        logger.warn(`[Debrid] Error resolving ${stream.infoHash}: ${error.message}`);
-        // Keep original stream on error
-        resolvedStreams.push(stream);
-      }
-    }
-
-    const debridCount = resolvedStreams.filter(s => s.name && s.name.includes('[Debrid]')).length;
-    if (debridCount > 0) {
-      logger.info(`[Debrid] Successfully resolved ${debridCount}/${streams.length} streams`);
-    }
-
-    return resolvedStreams;
   }
 
   /**
