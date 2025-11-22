@@ -37,7 +37,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install --save-dev @octokit/rest
+          npm ci
 
       - name: Update sponsors list
         env:
@@ -68,7 +68,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install --save-dev @octokit/rest
+          npm ci
 
       - name: Send welcome message
         env:
@@ -95,7 +95,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install --save-dev @octokit/rest
+          npm ci
 
       - name: Handle tier change
         env:
@@ -122,7 +122,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install --save-dev @octokit/rest
+          npm ci
 
       - name: Thank departed sponsor
         env:
@@ -148,7 +148,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install --save-dev @octokit/rest
+          npm ci
 
       - name: Check if first day of month
         id: check-date
@@ -182,7 +182,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install --save-dev @octokit/rest
+          npm ci
 
       - name: Generate metrics
         env:
