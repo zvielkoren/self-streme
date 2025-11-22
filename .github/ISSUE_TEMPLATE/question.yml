@@ -1,0 +1,135 @@
+name: ❓ Question / Support
+description: Ask a question or get help using Self-Streme
+title: "[Question]: "
+labels: ["question", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reaching out! Please provide as much detail as possible so we can help you effectively.
+        
+        **Note:** For general discussions, consider using [GitHub Discussions](https://github.com/zvielkoren/self-streme/discussions) instead.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Question Category
+      description: What is your question about?
+      options:
+        - Installation / Setup
+        - Configuration
+        - Streaming / Playback
+        - Stremio Integration
+        - Docker Deployment
+        - Cloudflare Tunnel
+        - Performance / Optimization
+        - Troubleshooting
+        - Features / Capabilities
+        - API Usage
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What would you like to know?
+      placeholder: Please be as specific as possible...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Provide relevant context about your setup and what you're trying to achieve
+      placeholder: |
+        - What are you trying to accomplish?
+        - What have you already tried?
+        - Any relevant setup details?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: version
+    attributes:
+      label: Self-Streme Version
+      description: What version are you running?
+      options:
+        - 2.0 (latest)
+        - 1.x (older)
+        - main branch (git)
+        - Unknown
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment Method
+      description: How are you running Self-Streme?
+      options:
+        - Docker
+        - Docker Compose
+        - Native (npm start)
+        - Pterodactyl Panel
+        - Render.com
+        - Heroku
+        - Railway
+        - Other Cloud Platform
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: nodejs
+    attributes:
+      label: Node.js Version
+      description: Output of `node --version` (if applicable)
+      placeholder: v18.0.0
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      description: What OS are you running?
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Docker
+        - Other
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant Configuration
+      description: Share relevant parts of your .env file (DO NOT include API keys or tokens!)
+      placeholder: |
+        PORT=7000
+        ENABLE_INSTANT_STREAMING=true
+        # etc
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      description: Please confirm you have done the following
+      options:
+        - label: I have searched for existing questions/issues
+          required: true
+        - label: I have checked the documentation
+          required: true
+        - label: I have removed all API keys and sensitive information
+          required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Information
+      description: Any other details that might be helpful
+      placeholder: Logs, error messages, screenshots, etc.

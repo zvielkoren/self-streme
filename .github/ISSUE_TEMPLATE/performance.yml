@@ -1,0 +1,194 @@
+name: ⚡ Performance Issue
+description: Report slow performance, high resource usage, or optimization concerns
+title: "[Performance]: "
+labels: ["performance", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a performance issue! Please provide detailed information to help us investigate.
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Performance Issue Type
+      description: What kind of performance problem are you experiencing?
+      options:
+        - Slow streaming / buffering
+        - High CPU usage
+        - High memory usage
+        - High disk I/O
+        - Slow startup time
+        - Slow source search
+        - High network usage
+        - Database / cache performance
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Issue Description
+      description: Describe the performance problem in detail
+      placeholder: What is slow or resource-intensive?
+    validations:
+      required: true
+
+  - type: textarea
+    id: metrics
+    attributes:
+      label: Performance Metrics
+      description: Provide specific metrics if available
+      placeholder: |
+        - CPU usage: 80% constant
+        - Memory usage: 4GB / 8GB
+        - Response time: 5+ seconds
+        - Buffering: Every 10 seconds
+        - etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Performance
+      description: What performance did you expect?
+      placeholder: |
+        - Expected CPU usage: <20%
+        - Expected response time: <1 second
+        - Expected smooth streaming with no buffering
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this performance issue?
+      placeholder: |
+        1. Start server with X configuration
+        2. Open Y number of streams
+        3. Observe Z behavior
+    validations:
+      required: true
+
+  - type: dropdown
+    id: version
+    attributes:
+      label: Self-Streme Version
+      description: What version are you running?
+      options:
+        - 2.0 (latest)
+        - 1.x (older)
+        - main branch (git)
+        - Unknown
+    validations:
+      required: true
+
+  - type: input
+    id: nodejs
+    attributes:
+      label: Node.js Version
+      description: Output of `node --version`
+      placeholder: v18.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      description: What OS are you running?
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Docker
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware Specifications
+      description: Provide details about your hardware
+      placeholder: |
+        CPU: Intel i5-9400 / AMD Ryzen 5 3600 / etc.
+        RAM: 8GB / 16GB / etc.
+        Disk: SSD / HDD / etc.
+        Network: 100Mbps / 1Gbps / etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: Relevant parts of your .env file (DO NOT include API keys!)
+      placeholder: |
+        CACHE_BACKEND=memory
+        CACHE_MAX_SIZE=1000
+        TORRENT_TIMEOUT=60000
+        # etc
+      render: shell
+
+  - type: dropdown
+    id: load
+    attributes:
+      label: Load Level
+      description: How many users/streams when the issue occurs?
+      options:
+        - Single user / stream
+        - 2-5 concurrent streams
+        - 6-10 concurrent streams
+        - 10+ concurrent streams
+        - Unknown
+
+  - type: textarea
+    id: monitoring
+    attributes:
+      label: Monitoring Data
+      description: Include output from monitoring tools if available
+      placeholder: |
+        - htop/top output
+        - docker stats
+        - Application logs with LOG_LEVEL=debug
+        - Network monitoring
+      render: shell
+
+  - type: checkboxes
+    id: optimization
+    attributes:
+      label: Optimization Attempted
+      description: What have you already tried to improve performance?
+      options:
+        - label: Increased memory allocation
+        - label: Changed cache configuration
+        - label: Upgraded hardware
+        - label: Adjusted timeout values
+        - label: Tried different Node.js versions
+        - label: Enabled/disabled specific features
+        - label: Other (described in additional context)
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched for existing performance issues
+          required: true
+        - label: I am using the latest version
+          required: false
+        - label: I have included relevant metrics and measurements
+          required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context about the performance issue
+      placeholder: Logs, screenshots of resource usage, timing data, etc.
