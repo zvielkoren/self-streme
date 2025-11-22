@@ -25,6 +25,7 @@ import {
 import ScalableCacheManager from "./services/scalableCacheManager.js";
 import magnetToHttpService from "./services/magnetToHttpService.js";
 import downloadSources from "./services/torrentDownloadSources.js";
+import debridService from "./services/debridService.js";
 import maintenanceMode from "./utils/maintenanceMode.js";
 import maintenanceApiRouter from "./api/maintenanceApi.js";
 
@@ -277,6 +278,49 @@ app.get("/debug/torrent-status", (req, res) => {
     logger.error("Error getting torrent status:", error);
     res.status(500).json({
       error: "Failed to get torrent status",
+      message: error.message,
+    });
+  }
+});
+
+// Debug endpoint - shows debrid service status
+app.get("/debug/debrid-status", (req, res) => {
+  try {
+    const stats = debridService.getStats();
+    
+    res.json({
+      status: "ok",
+      debrid: {
+        enabled: stats.enabled,
+        cacheSize: stats.cacheSize,
+        cacheTTL: `${stats.cacheTTL / 1000 / 60} minutes`,
+        sources: {
+          total: stats.sources.totalSources,
+          premium: stats.sources.premiumSources,
+          free: stats.sources.freeSources,
+          verified: stats.sources.verifiedSources,
+        },
+        availableProviders: stats.sources.sources
+          .filter(s => s.requiresAuth)
+          .map(s => ({
+            name: s.name,
+            priority: s.priority,
+            verified: s.verified,
+            supportsResume: s.supportsResume,
+            health: s.health,
+          })),
+      },
+      environment: {
+        REAL_DEBRID_API_KEY: process.env.REAL_DEBRID_API_KEY ? '***configured***' : 'not set',
+        ALLDEBRID_API_KEY: process.env.ALLDEBRID_API_KEY ? '***configured***' : 'not set',
+        PREMIUMIZE_API_KEY: process.env.PREMIUMIZE_API_KEY ? '***configured***' : 'not set',
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Error getting debrid status:", error);
+    res.status(500).json({
+      error: "Failed to get debrid status",
       message: error.message,
     });
   }
