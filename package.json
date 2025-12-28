@@ -1,6 +1,6 @@
 {
   "name": "self-streme",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Self-hosted streaming server with Stremio addon support",
   "type": "module",
   "main": "src/index.js",

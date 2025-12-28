@@ -35,7 +35,7 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY . .
 
 # Create necessary directories and set permissions
-RUN mkdir -p logs media temp && \
+RUN mkdir -p logs media temp temp/downloads && \
     chown -R nodejs:nodejs /app
 
 # Switch to non-root user

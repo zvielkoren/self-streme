@@ -25,8 +25,12 @@ class TorrentService {
     this.headSize = 20 * 1024 * 1024; // 20MB protected head
 
     // Ensure download directory exists
-    if (!fs.existsSync(this.downloadPath)) {
-      fs.mkdirSync(this.downloadPath, { recursive: true });
+    try {
+      if (!fs.existsSync(this.downloadPath)) {
+        fs.mkdirSync(this.downloadPath, { recursive: true });
+      }
+    } catch (error) {
+      console.warn(`[Torrent] Could not create download directory ${this.downloadPath}: ${error.message}`);
     }
 
     this.initialize();

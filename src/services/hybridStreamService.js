@@ -59,8 +59,12 @@ class HybridStreamService {
       initialBufferSize: this.initialBufferSize,
     });
 
-    if (!fs.existsSync(this.downloadPath)) {
-      fs.mkdirSync(this.downloadPath, { recursive: true });
+    try {
+      if (!fs.existsSync(this.downloadPath)) {
+        fs.mkdirSync(this.downloadPath, { recursive: true });
+      }
+    } catch (error) {
+      logger.error(`[Hybrid] Failed to create download directory ${this.downloadPath}: ${error.message}`);
     }
 
     logger.info("[Hybrid] Service initialized");
