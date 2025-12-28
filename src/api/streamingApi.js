@@ -266,6 +266,51 @@ export function createStreamingRouter(torrentService, cacheManager) {
   });
 
   /**
+   * GET /:infoHash/:fileIndex
+   * Compatibility endpoint for internal/legacy stream URLs (e.g. from stremio-addon-sdk)
+   */
+  router.get("/:infoHash/:fileIndex", async (req, res) => {
+    const { infoHash, fileIndex } = req.params;
+    
+    // Check if infoHash is valid (40 char hex)
+    if (!/^[a-f0-9]{40}$/i.test(infoHash)) {
+      return res.status(404).end();
+    }
+
+    const index = parseInt(fileIndex, 10) || 0;
+    const tr = req.query.tr; // Tracker/Magnet parameter
+
+    logger.info(`[API] Compatibility stream request: ${infoHash}, index: ${index}`);
+
+    try {
+      const dedupKey = `stream:${infoHash}:${index}`;
+      const identifier = tr || infoHash;
+
+      const result = await deduplicator.deduplicate(dedupKey, async () => {
+        return await hybridService.getStream(identifier, { fileIndex: index });
+      });
+
+      const filePath = result.filePath;
+      const fileSize = result.fileSize || fs.statSync(filePath).size;
+      const fileName = result.fileName || path.basename(filePath);
+
+      return await streamFile(
+        req,
+        res,
+        filePath,
+        fileSize,
+        fileName,
+        false,
+        result.torrent,
+        index,
+      );
+    } catch (error) {
+      logger.error(`[API] Compatibility stream error:`, error);
+      if (!res.headersSent) res.status(500).send("Streaming failed");
+    }
+  });
+
+  /**
    * Helper function to stream a file with Range Request support
    */
   async function streamFile(
