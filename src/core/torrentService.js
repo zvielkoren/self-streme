@@ -5,6 +5,7 @@ import { config } from "../config/index.js";
 import { addTrackersToMagnet, createMagnetUri } from "../config/trackers.js";
 import logger from "../utils/logger.js";
 import diskManager from "../utils/diskManager.js";
+import P2PCoordinator from "../services/p2pCoordinator.js";
 
 /**
  * Advanced Singleton Torrent Service
@@ -18,6 +19,7 @@ class TorrentService {
     }
 
     this.client = null;
+    this.p2pCoordinator = null;
     this.activeTorrents = new Map(); // infoHash -> torrent object + metadata
     this.downloadPath = config.torrent.downloadPath || "./temp";
     this.headSize = 20 * 1024 * 1024; // 20MB protected head
@@ -31,13 +33,14 @@ class TorrentService {
     TorrentService.instance = this;
   }
 
-  initialize() {
+  async initialize() {
     // Determine the port for WebTorrent to listen on.
     // We try to use the same port as the server if explicitly requested,
     // though this usually causes a conflict unless handled by a proxy.
     // For Pterodactyl, we often bind to the SERVER_PORT or SERVER_PORT + 1.
     const torrentPort = parseInt(process.env.TORRENT_PORT, 10) || 0; // 0 = random by default
 
+    // 1. Initialize WebTorrent Client immediately (Synchronous)
     this.client = new WebTorrent({
       maxConnections: config.torrent.maxConnections || 25,
       torrentPort: torrentPort,
@@ -59,10 +62,32 @@ class TorrentService {
     this.client.on("error", (err) => logger.error("WebTorrent client error:", err));
     this.client.on("warning", (err) => logger.warn("WebTorrent client warning:", err));
 
+    // 2. Initialize P2P Coordinator for Hole Punching (Async background)
+    try {
+      this.p2pCoordinator = new P2PCoordinator({
+        localPort: torrentPort, // Try to coordinate ports
+        enableDetailedLogging: config.logging.level === 'debug'
+      });
+      
+      await this.p2pCoordinator.initialize();
+      logger.info("P2P Coordinator initialized for Hole Punching");
+
+      // Register our peer with the coordinator
+      if (this.client && this.client.peerId) {
+        this.p2pCoordinator.registerPeer(this.client.peerId, { 
+          client: 'self-streme',
+          version: config.addon.version
+        });
+      }
+    } catch (err) {
+      logger.error("Failed to initialize P2P Coordinator:", err);
+    }
+
     logger.info("Advanced TorrentService initialized", {
       utp: true,
       torrentPort: torrentPort || "random",
       maxConnections: config.torrent.maxConnections,
+      holePunching: !!this.p2pCoordinator
     });
   }
 
