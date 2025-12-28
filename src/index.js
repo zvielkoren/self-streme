@@ -39,7 +39,11 @@ const childProcesses = [];
 
 // Temporary cache for downloaded files
 const TEMP_DIR = path.join(os.tmpdir(), "self-streme");
-if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+try {
+  if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+} catch (error) {
+  console.warn(`[Index] Could not create temp directory ${TEMP_DIR}: ${error.message}`);
+}
 
 // Scalable cache manager with configurable backend and limits
 const cacheManager = new ScalableCacheManager({

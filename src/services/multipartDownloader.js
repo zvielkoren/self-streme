@@ -49,8 +49,12 @@ class MultipartDownloader {
 
     // Create temp directory for chunks
     const tempDir = `${outputPath}.parts`;
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
+    try {
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+    } catch (error) {
+      logger.error(`[MultiPart] Failed to create temp directory ${tempDir}: ${error.message}`);
     }
 
     // Download chunks in parallel

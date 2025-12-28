@@ -9,7 +9,7 @@ let fileLoggingEnabled = true;
 
 try {
   if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir);
+    fs.mkdirSync(logDir, { recursive: true });
   }
 } catch (error) {
   console.warn(`[Logger] Could not create logs directory: ${error.message}. File logging will be disabled.`);
