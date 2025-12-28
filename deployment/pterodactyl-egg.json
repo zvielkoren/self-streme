@@ -1,10 +1,10 @@
 {
-    "_comment": "Self-Streme Egg, v2",
+    "_comment": "Self-Streme Egg, v3",
     "meta": {
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2025-12-28T20:30:00+02:00",
+    "exported_at": "2025-12-28T20:45:00+02:00",
     "name": "Self-Streme",
     "author": "zvielkoren@github.com",
     "description": "A powerful self-hosted streaming server with Stremio integration. Uses the project's pre-built Docker image for fast and reliable setup.",
@@ -21,10 +21,9 @@
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/ash\n# Self-Streme Installation Script\n# This script ensures that if the server files are missing, they are copied from the image.\n\ncd /mnt/server\n\nif [ ! -f package.json ]; then\n    echo \"No files found, copying from Docker image's /app directory...\"\n    cp -r /app/.
-fi\n\necho \"Installation check complete.\"",
-            "container": "alpine:latest",
-            "entrypoint": "ash"
+            "script": "#!/bin/bash\n\ncd /mnt/server/\n\napt update\napt install -y git curl\n\nGITHUB_REPO=\"https://github.com/zvielkoren/self-streme.git\"\nBRANCH=\"main\"\n\nif [ ! -d .git ]; then\n    echo \"Cloning repository...\"\n    git clone --single-branch --branch ${BRANCH} ${GITHUB_REPO} .\nelse\n    echo \"Updating repository...\"\n    git fetch origin\n    git reset --hard origin/${BRANCH}\nfi\n\necho \"Installing dependencies...\"\nnpm ci --only=production\n\nmkdir -p media temp\n\necho \"Installation complete!\"",
+            "container": "ghcr.io/parkervcp/yolks:nodejs_20",
+            "entrypoint": "bash"
         }
     },
     "variables": [
