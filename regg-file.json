@@ -14,7 +14,7 @@
     "file_denylist": [],
     "startup": "./run.sh",
     "config": {
-        "files": "{\".env\":{\"parser\":\"properties\",\"find\":{\"PORT\":\"{{server.build.default.port}}\",\"TORRENT_PORT\":\"{{server.build.env.TORRENT_PORT}}\",\"BASE_URL\":\"{{server.build.env.BASE_URL}}\",\"TUNNEL_TOKEN\":\"{{server.build.env.TUNNEL_TOKEN}}\",\"OMDB_API_KEY\":\"{{server.build.env.OMDB_API_KEY}}\"}}}",
+        "files": "{\".env\":{\"parser\":\"properties\",\"find\":{\"PORT\":\"{{server.build.default.port}}\",\"ADDON_PORT\":\"{{server.build.env.ADDON_PORT}}\",\"TORRENT_PORT\":\"{{server.build.env.TORRENT_PORT}}\",\"BASE_URL\":\"{{server.build.env.BASE_URL}}\",\"TUNNEL_TOKEN\":\"{{server.build.env.TUNNEL_TOKEN}}\",\"OMDB_API_KEY\":\"{{server.build.env.OMDB_API_KEY}}\",\"JACKETT_URL\":\"{{server.build.env.JACKETT_URL}}\",\"JACKETT_API_KEY\":\"{{server.build.env.JACKETT_API_KEY}}\",\"MEDIA_PATH\":\"{{server.build.env.MEDIA_PATH}}\",\"LOG_LEVEL\":\"{{server.build.env.LOG_LEVEL}}\",\"CACHE_BACKEND\":\"{{server.build.env.CACHE_BACKEND}}\",\"CACHE_TTL\":\"{{server.build.env.CACHE_TTL}}\",\"CACHE_MAX_SIZE\":\"{{server.build.env.CACHE_MAX_SIZE}}\",\"CACHE_MAX_DISK_MB\":\"{{server.build.env.CACHE_MAX_DISK_MB}}\",\"CACHE_CLEANUP_INTERVAL\":\"{{server.build.env.CACHE_CLEANUP_INTERVAL}}\",\"CACHE_PERSISTENT\":\"{{server.build.env.CACHE_PERSISTENT}}\",\"TORRENT_TIMEOUT\":\"{{server.build.env.TORRENT_TIMEOUT}}\",\"TORRENT_MAX_RETRIES\":\"{{server.build.env.TORRENT_MAX_RETRIES}}\",\"CACHE_ONLY_MODE\":\"{{server.build.env.CACHE_ONLY_MODE}}\",\"DIRECT_STREAM_ONLY\":\"{{server.build.env.DIRECT_STREAM_ONLY}}\",\"MAINTENANCE_MODE\":\"{{server.build.env.MAINTENANCE_MODE}}\",\"MAINTENANCE_MESSAGE\":\"{{server.build.env.MAINTENANCE_MESSAGE}}\",\"MAINTENANCE_END_TIME\":\"{{server.build.env.MAINTENANCE_END_TIME}}\",\"MAINTENANCE_WHITELIST_IPS\":\"{{server.build.env.MAINTENANCE_WHITELIST_IPS}}\",\"MAINTENANCE_BYPASS_TOKEN\":\"{{server.build.env.MAINTENANCE_BYPASS_TOKEN}}\",\"ADMIN_TOKEN\":\"{{server.build.env.ADMIN_TOKEN}}\"}}}",
         "startup": "{\"done\": \"Server running on port\"}",
         "logs": "{}",
         "stop": "^C"
@@ -65,6 +65,216 @@
             "user_viewable": true,
             "user_editable": true,
             "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Addon Port",
+            "description": "Port for the Stremio Addon interface.",
+            "env_variable": "ADDON_PORT",
+            "default_value": "7001",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|numeric|between:1024,65535",
+            "field_type": "text"
+        },
+        {
+            "name": "Jackett URL",
+            "description": "The URL of your Jackett server.",
+            "env_variable": "JACKETT_URL",
+            "default_value": "http://localhost:9117",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Jackett API Key",
+            "description": "Your Jackett API key.",
+            "env_variable": "JACKETT_API_KEY",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Media Path",
+            "description": "Path to your local media files.",
+            "env_variable": "MEDIA_PATH",
+            "default_value": "./media",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Log Level",
+            "description": "The logging level (error, warn, info, debug).",
+            "env_variable": "LOG_LEVEL",
+            "default_value": "info",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:error,warn,info,debug",
+            "field_type": "text"
+        },
+        {
+            "name": "Cache Backend",
+            "description": "The cache storage backend (memory, sqlite, redis).",
+            "env_variable": "CACHE_BACKEND",
+            "default_value": "memory",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:memory,sqlite,redis",
+            "field_type": "text"
+        },
+        {
+            "name": "Cache TTL",
+            "description": "Cache time-to-live in seconds.",
+            "env_variable": "CACHE_TTL",
+            "default_value": "3600",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|numeric",
+            "field_type": "text"
+        },
+        {
+            "name": "Cache Max Size",
+            "description": "Maximum number of items in cache.",
+            "env_variable": "CACHE_MAX_SIZE",
+            "default_value": "1000",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|numeric",
+            "field_type": "text"
+        },
+        {
+            "name": "Cache Max Disk MB",
+            "description": "Maximum disk usage for cache in MB.",
+            "env_variable": "CACHE_MAX_DISK_MB",
+            "default_value": "5000",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|numeric",
+            "field_type": "text"
+        },
+        {
+            "name": "Cache Cleanup Interval",
+            "description": "Interval for cache cleanup in seconds.",
+            "env_variable": "CACHE_CLEANUP_INTERVAL",
+            "default_value": "300",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|numeric",
+            "field_type": "text"
+        },
+        {
+            "name": "Cache Persistent",
+            "description": "Enable persistent cache storage.",
+            "env_variable": "CACHE_PERSISTENT",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:true,false",
+            "field_type": "text"
+        },
+        {
+            "name": "Torrent Timeout",
+            "description": "Torrent connection timeout in milliseconds.",
+            "env_variable": "TORRENT_TIMEOUT",
+            "default_value": "60000",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|numeric",
+            "field_type": "text"
+        },
+        {
+            "name": "Torrent Max Retries",
+            "description": "Maximum number of retry attempts for failed torrents.",
+            "env_variable": "TORRENT_MAX_RETRIES",
+            "default_value": "3",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|numeric",
+            "field_type": "text"
+        },
+        {
+            "name": "Cache-Only Mode",
+            "description": "Disable P2P fallback and only stream cached content.",
+            "env_variable": "CACHE_ONLY_MODE",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:true,false",
+            "field_type": "text"
+        },
+        {
+            "name": "Direct Stream Only",
+            "description": "Force direct HTTP streaming via external services (bypasses P2P).",
+            "env_variable": "DIRECT_STREAM_ONLY",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:true,false",
+            "field_type": "text"
+        },
+        {
+            "name": "Maintenance Mode",
+            "description": "Enable maintenance mode.",
+            "env_variable": "MAINTENANCE_MODE",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:true,false",
+            "field_type": "text"
+        },
+        {
+            "name": "Maintenance Message",
+            "description": "Custom maintenance message shown to users.",
+            "env_variable": "MAINTENANCE_MESSAGE",
+            "default_value": "Service is currently under maintenance. Please try again later.",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Maintenance End Time",
+            "description": "Estimated end time for maintenance (ISO 8601).",
+            "env_variable": "MAINTENANCE_END_TIME",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Maintenance Whitelist IPs",
+            "description": "Comma-separated IPs that can bypass maintenance mode.",
+            "env_variable": "MAINTENANCE_WHITELIST_IPS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Maintenance Bypass Token",
+            "description": "Token for accessing service during maintenance.",
+            "env_variable": "MAINTENANCE_BYPASS_TOKEN",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Admin Token",
+            "description": "Admin token for maintenance control API.",
+            "env_variable": "ADMIN_TOKEN",
+            "default_value": "admin123",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string",
             "field_type": "text"
         }
     ]
