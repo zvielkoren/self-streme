@@ -13,7 +13,7 @@
         "Self-Streme (Latest)": "ghcr.io/zvielkoren/self-streme:latest"
     },
     "file_denylist": [],
-    "startup": "echo \"#!/bin/bash\nif [ ! -f .env ]; then\n    echo \"PORT=${SERVER_PORT:-7000}\" > .env\n    echo \"TORRENT_PORT=${TORRENT_PORT:-6881}\" >> .env\nfi\nnode src/index.js\" > run.sh && chmod +x run.sh && ./run.sh",
+    "startup": "if [ ! -f .env ]; then echo \"PORT={{SERVER_PORT:-7000}}\" > .env; echo \"TORRENT_PORT={{TORRENT_PORT:-6881}}\" >> .env; fi; node src/index.js",
     "config": {
         "files": "{\r\n    \".env\": {\r\n        \"parser\": \"properties\",\r\n        \"find\": {\r\n            \"PORT\": \"{{server.build.default.port}}\",\r\n            \"TORRENT_PORT\": \"{{server.build.env.TORRENT_PORT}}\",\r\n            \"BASE_URL\": \"{{server.build.env.BASE_URL}}\",\r\n            \"TUNNEL_TOKEN\": \"{{server.build.env.TUNNEL_TOKEN}}\"\r\n        }\r\n    }\r\n}",
         "startup": "{\r\n    \"done\": \"Server running\"\r\n}",
