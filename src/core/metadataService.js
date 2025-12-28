@@ -1,5 +1,6 @@
 import logger from "../utils/logger.js";
 import axios from "axios";
+import { config } from "../config/index.js";
 
 class MetadataService {
   constructor() {
@@ -25,7 +26,7 @@ class MetadataService {
 
     try {
       // דוגמה ל-fetch מ-OMDb API או מקור אחר
-      const apiKey = process.env.OMDB_API_KEY || '';
+      const apiKey = config.apiKeys.omdb || '';
       
       if (!apiKey) {
         // Fallback metadata using IMDb ID parsing when no API key is available

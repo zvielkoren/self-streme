@@ -14,7 +14,7 @@
     "file_denylist": [],
     "startup": "node src/index.js",
     "config": {
-        "files": "{\".env\":{\"parser\":\"properties\",\"find\":{\"PORT\":\"{{server.build.default.port}}\",\"TORRENT_PORT\":\"{{server.build.env.TORRENT_PORT}}\",\"BASE_URL\":\"{{server.build.env.BASE_URL}}\",\"TUNNEL_TOKEN\":\"{{server.build.env.TUNNEL_TOKEN}}\"}}}",
+        "files": "{\".env\":{\"parser\":\"properties\",\"find\":{\"PORT\":\"{{server.build.default.port}}\",\"TORRENT_PORT\":\"{{server.build.env.TORRENT_PORT}}\",\"BASE_URL\":\"{{server.build.env.BASE_URL}}\",\"TUNNEL_TOKEN\":\"{{server.build.env.TUNNEL_TOKEN}}\",\"OMDB_API_KEY\":\"{{server.build.env.OMDB_API_KEY}}\"}}}",
         "startup": "{\"done\": \"Server running on port\"}",
         "logs": "{}",
         "stop": "^C"
@@ -51,6 +51,16 @@
             "name": "Cloudflare Tunnel Token",
             "description": "Optional Cloudflare Tunnel token for exposing the server.",
             "env_variable": "TUNNEL_TOKEN",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "OMDB API Key",
+            "description": "Optional OMDB API key for fetching high-quality metadata.",
+            "env_variable": "OMDB_API_KEY",
             "default_value": "",
             "user_viewable": true,
             "user_editable": true,
