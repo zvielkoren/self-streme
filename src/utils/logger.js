@@ -4,7 +4,7 @@ import path from "path";
 import { config } from "../config/index.js";
 
 // Ensure logs directory exists
-const logDir = "logs";
+const logDir = config.paths.logs;
 let fileLoggingEnabled = true;
 
 try {

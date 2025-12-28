@@ -38,7 +38,7 @@ const TUNNEL_TOKEN = process.env.TUNNEL_TOKEN;
 const childProcesses = [];
 
 // Temporary cache for downloaded files
-const TEMP_DIR = path.join(os.tmpdir(), "self-streme");
+const TEMP_DIR = config.paths.temp;
 try {
   if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 } catch (error) {
