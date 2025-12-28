@@ -150,15 +150,15 @@ class P2PCoordinator extends EventEmitter {
     });
 
     // Detect NAT type and public endpoint
-    await this.holePunchingService.detectNAT();
+    await this.holePunchingService.detectNATType();
 
-    this.natInfo = this.holePunchingService.getNATInfo();
-    this.publicEndpoint = this.holePunchingService.getPublicEndpoint();
+    this.natInfo = this.holePunchingService.natInfo; // Direct property access instead of getter if needed, or check if getter exists
+    this.publicEndpoint = this.holePunchingService.publicAddress; // Changed from getPublicEndpoint() to property access based on HolePunchingService implementation
 
     logger.info(`[P2P] ✓ Hole punching initialized`);
-    logger.info(`[P2P]   NAT Type: ${this.natInfo.type}`);
+    logger.info(`[P2P]   NAT Type: ${this.natInfo?.type}`);
     logger.info(
-      `[P2P]   Public Endpoint: ${this.publicEndpoint.ip}:${this.publicEndpoint.port}`,
+      `[P2P]   Public Endpoint: ${this.publicEndpoint?.address}:${this.publicEndpoint?.port}`,
     );
   }
 
