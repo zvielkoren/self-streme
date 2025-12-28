@@ -21,7 +21,7 @@ class TorrentService {
     this.client = null;
     this.p2pCoordinator = null;
     this.activeTorrents = new Map(); // infoHash -> torrent object + metadata
-    this.downloadPath = config.torrent.downloadPath || "./temp";
+    this.downloadPath = config.paths.temp;
     this.headSize = 20 * 1024 * 1024; // 20MB protected head
 
     // Ensure download directory exists

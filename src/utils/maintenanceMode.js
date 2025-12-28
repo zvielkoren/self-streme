@@ -15,6 +15,7 @@
 import fs from "fs";
 import path from "path";
 import logger from "./logger.js";
+import { config } from "../config/index.js";
 
 class MaintenanceMode {
   constructor() {
@@ -25,7 +26,7 @@ class MaintenanceMode {
     this.estimatedEndTime = process.env.MAINTENANCE_END_TIME || null;
     this.whitelistedIPs = this.parseWhitelistedIPs();
     this.bypassToken = process.env.MAINTENANCE_BYPASS_TOKEN || null;
-    this.statusFile = path.join(process.cwd(), "data", "maintenance.json");
+    this.statusFile = path.join(config.paths.data, "maintenance.json");
 
     // Load status from file if it exists
     this.loadStatus();

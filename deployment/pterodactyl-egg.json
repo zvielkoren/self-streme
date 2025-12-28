@@ -14,15 +14,14 @@
     "file_denylist": [],
     "startup": "node src/index.js",
     "config": {
-        "files": "{\".env\":{\"parser\":\"properties\",\"find\":{\"PORT\":\"{{server.build.default.port}}\",\"NODE_ENV\":\"{{server.build.env.NODE_ENV}}\",\"ADDON_PORT\":\"{{server.build.env.ADDON_PORT}}\",\"TORRENT_PORT\":\"{{server.build.env.TORRENT_PORT}}\",\"BASE_URL\":\"{{server.build.env.BASE_URL}}\",\"TUNNEL_TOKEN\":\"{{server.build.env.TUNNEL_TOKEN}}\",\"OMDB_API_KEY\":\"{{server.build.env.OMDB_API_KEY}}\",\"JACKETT_URL\":\"{{server.build.env.JACKETT_URL}}\",\"JACKETT_API_KEY\":\"{{server.build.env.JACKETT_API_KEY}}\",\"MEDIA_PATH\":\"{{server.build.env.MEDIA_PATH}}\",\"LOG_LEVEL\":\"{{server.build.env.LOG_LEVEL}}\",\"CACHE_BACKEND\":\"{{server.build.env.CACHE_BACKEND}}\",\"CACHE_TTL\":\"{{server.build.env.CACHE_TTL}}\",\"CACHE_MAX_SIZE\":\"{{server.build.env.CACHE_MAX_SIZE}}\",\"CACHE_MAX_DISK_MB\":\"{{server.build.env.CACHE_MAX_DISK_MB}}\",\"CACHE_CLEANUP_INTERVAL\":\"{{server.build.env.CACHE_CLEANUP_INTERVAL}}\",\"CACHE_PERSISTENT\":\"{{server.build.env.CACHE_PERSISTENT}}\",\"TORRENT_TIMEOUT\":\"{{server.build.env.TORRENT_TIMEOUT}}\",\"TORRENT_MAX_RETRIES\":\"{{server.build.env.TORRENT_MAX_RETRIES}}\",\"CACHE_ONLY_MODE\":\"{{server.build.env.CACHE_ONLY_MODE}}\",\"DIRECT_STREAM_ONLY\":\"{{server.build.env.DIRECT_STREAM_ONLY}}\",\"MAINTENANCE_MODE\":\"{{server.build.env.MAINTENANCE_MODE}}\",\"MAINTENANCE_MESSAGE\":\"{{server.build.env.MAINTENANCE_MESSAGE}}\",\"MAINTENANCE_END_TIME\":\"{{server.build.env.MAINTENANCE_END_TIME}}\",\"MAINTENANCE_WHITELIST_IPS\":\"{{server.build.env.MAINTENANCE_WHITELIST_IPS}}\",\"MAINTENANCE_BYPASS_TOKEN\":\"{{server.build.env.MAINTENANCE_BYPASS_TOKEN}}\",\"ADMIN_TOKEN\":\"{{server.build.env.ADMIN_TOKEN}}\"}}}",
+        "files": "{\".env\":{\"parser\":\"properties\",\"find\":{\"PORT\":\"{{server.build.default.port}}\",\"NODE_ENV\":\"{{server.build.env.NODE_ENV}}\",\"ADDON_PORT\":\"{{server.build.env.ADDON_PORT}}\",\"TORRENT_PORT\":\"{{server.build.env.TORRENT_PORT}}\",\"BASE_URL\":\"{{server.build.env.BASE_URL}}\",\"TUNNEL_TOKEN\":\"{{server.build.env.TUNNEL_TOKEN}}\",\"OMDB_API_KEY\":\"{{server.build.env.OMDB_API_KEY}}\",\"JACKETT_URL\":\"{{server.build.env.JACKETT_URL}}\",\"JACKETT_API_KEY\":\"{{server.build.env.JACKETT_API_KEY}}\",\"MEDIA_PATH\":\"{{server.build.env.MEDIA_PATH}}\",\"DATA_PATH\":\"{{server.build.env.DATA_PATH}}\",\"LOGS_PATH\":\"{{server.build.env.LOGS_PATH}}\",\"TEMP_PATH\":\"{{server.build.env.TEMP_PATH}}\",\"LOG_LEVEL\":\"{{server.build.env.LOG_LEVEL}}\",\"CACHE_BACKEND\":\"{{server.build.env.CACHE_BACKEND}}\",\"CACHE_TTL\":\"{{server.build.env.CACHE_TTL}}\",\"CACHE_MAX_SIZE\":\"{{server.build.env.CACHE_MAX_SIZE}}\",\"CACHE_MAX_DISK_MB\":\"{{server.build.env.CACHE_MAX_DISK_MB}}\",\"CACHE_CLEANUP_INTERVAL\":\"{{server.build.env.CACHE_CLEANUP_INTERVAL}}\",\"CACHE_PERSISTENT\":\"{{server.build.env.CACHE_PERSISTENT}}\",\"TORRENT_TIMEOUT\":\"{{server.build.env.TORRENT_TIMEOUT}}\",\"TORRENT_MAX_RETRIES\":\"{{server.build.env.TORRENT_MAX_RETRIES}}\",\"CACHE_ONLY_MODE\":\"{{server.build.env.CACHE_ONLY_MODE}}\",\"DIRECT_STREAM_ONLY\":\"{{server.build.env.DIRECT_STREAM_ONLY}}\",\"MAINTENANCE_MODE\":\"{{server.build.env.MAINTENANCE_MODE}}\",\"MAINTENANCE_MESSAGE\":\"{{server.build.env.MAINTENANCE_MESSAGE}}\",\"MAINTENANCE_END_TIME\":\"{{server.build.env.MAINTENANCE_END_TIME}}\",\"MAINTENANCE_WHITELIST_IPS\":\"{{server.build.env.MAINTENANCE_WHITELIST_IPS}}\",\"MAINTENANCE_BYPASS_TOKEN\":\"{{server.build.env.MAINTENANCE_BYPASS_TOKEN}}\",\"ADMIN_TOKEN\":\"{{server.build.env.ADMIN_TOKEN}}\"}}}",
         "startup": "{\"done\": \"Server running on port\"}",
         "logs": "{}",
         "stop": "^C"
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/sh\n\n# Ensure we are in the server's working directory\ncd /mnt/server\n\n# Check if the directory is empty (no package.json)\nif [ ! -f package.json ]; then\n    echo \"Server directory empty. Copying application files from Docker image's /app directory...\"\n    # Copy files from the image to /mnt/server\n    # Using /app since that's where files are in our Dockerfile\n    cp -rp /app/. /mnt/server/\n    echo \"Files copied from Docker image to /mnt/server.\"\nelse\n    echo \"Server directory already contains files. Skipping copy from Docker image.\"\nfi\n\n# Ensure media, temp, logs and data directories exist
-mkdir -p media temp logs data\n\necho \"Installation check complete. Server is ready to start.\"",
+            "script": "#!/bin/sh\n\n# Ensure we are in the server's working directory\ncd /mnt/server\n\n# Check if the directory is empty (no package.json)\nif [ ! -f package.json ]; then\n    echo \"Server directory empty. Copying application files from Docker image's /app directory...\"\n    # Copy files from the image to /mnt/server\n    # Using /app since that's where files are in our Dockerfile\n    cp -rp /app/. /mnt/server/\n    echo \"Files copied from Docker image to /mnt/server.\"\nelse\n    echo \"Server directory already contains files. Skipping copy from Docker image.\"\nfi\n\n# Ensure media, temp, logs and data directories exist mkdir -p media temp logs data\n\necho \"Installation check complete. Server is ready to start.\"",
             "container": "node:20-alpine",
             "entrypoint": "sh"
         }
@@ -113,6 +112,36 @@ mkdir -p media temp logs data\n\necho \"Installation check complete. Server is r
             "description": "Path to your local media files.",
             "env_variable": "MEDIA_PATH",
             "default_value": "./media",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Data Path",
+            "description": "Path for persistent application data (e.g., maintenance status). Use a writable directory.",
+            "env_variable": "DATA_PATH",
+            "default_value": "./data",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Logs Path",
+            "description": "Path for application logs. Use a writable directory.",
+            "env_variable": "LOGS_PATH",
+            "default_value": "./logs",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Temp Path",
+            "description": "Path for temporary files and downloads. Use a writable directory.",
+            "env_variable": "TEMP_PATH",
+            "default_value": "./temp",
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|string",

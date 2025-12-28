@@ -23,7 +23,7 @@ class HybridStreamService {
     this.cacheManager = cacheManager;
     this.p2pTimeout = parseInt(process.env.P2P_TIMEOUT, 10) || 60000; // Increased to 60s for better P2P success
     this.enableHttpFallback = process.env.ENABLE_HTTP_FALLBACK !== "false";
-    this.downloadPath = path.join(process.cwd(), "temp", "downloads");
+    this.downloadPath = path.join(config.paths.temp, "downloads");
     this.maxRetries = parseInt(process.env.HTTP_MAX_RETRIES, 10) || 2; // Retry failed sources
     this.excludedSources = process.env.EXCLUDE_DOWNLOAD_SOURCES
       ? process.env.EXCLUDE_DOWNLOAD_SOURCES.split(",").map((s) => s.trim())

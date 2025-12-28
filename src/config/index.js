@@ -44,6 +44,11 @@ const config = {
   logging: {
     level: process.env.LOG_LEVEL || "info",
   },
+  paths: {
+    data: process.env.DATA_PATH || path.join(process.cwd(), "data"),
+    logs: process.env.LOGS_PATH || path.join(process.cwd(), "logs"),
+    temp: process.env.TEMP_PATH || path.join(process.cwd(), "temp"),
+  },
   torrent: {
     enabled: true,
     cacheOnlyMode: process.env.CACHE_ONLY_MODE === 'true', // Disable P2P fallback when true
