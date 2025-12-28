@@ -13,7 +13,7 @@
         "Self-Streme (Latest)": "ghcr.io/zvielkoren/self-streme:latest"
     },
     "file_denylist": [],
-    "startup": ".\/run.sh",
+    "startup": "echo \"#!/bin/bash\nif [ ! -f .env ]; then\n    echo \"PORT=${SERVER_PORT:-7000}\" > .env\n    echo \"TORRENT_PORT=${TORRENT_PORT:-6881}\" >> .env\nfi\nnode src/index.js\" > run.sh && chmod +x run.sh && ./run.sh",
     "config": {
         "files": "{\r\n    \".env\": {\r\n        \"parser\": \"properties\",\r\n        \"find\": {\r\n            \"PORT\": \"{{server.build.default.port}}\",\r\n            \"TORRENT_PORT\": \"{{server.build.env.TORRENT_PORT}}\",\r\n            \"BASE_URL\": \"{{server.build.env.BASE_URL}}\",\r\n            \"TUNNEL_TOKEN\": \"{{server.build.env.TUNNEL_TOKEN}}\"\r\n        }\r\n    }\r\n}",
         "startup": "{\r\n    \"done\": \"Server running\"\r\n}",
@@ -22,7 +22,7 @@
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/bash\r\n\r\ncd /mnt/server/\r\n\r\napt update\r\napt install -y git curl\r\n\r\nGITHUB_REPO=\"https:\/\/github.com\/zvielkoren\/self-streme.git\"\r\nBRANCH=\"main\"\r\n\r\nif [ ! -d .git ]; then\r\n    echo \"Cloning repository...\"\r\n    git clone --single-branch --branch ${BRANCH} ${GITHUB_REPO} .\r\nelse\r\n    echo \"Updating repository...\"\r\n    git fetch origin\r\n    git reset --hard origin\/${BRANCH}\r\nfi\r\n\r\necho \"Installing dependencies...\"\r\nnpm ci --only=production\r\n\r\nmkdir -p media temp\r\n\r\necho \"Creating run script...\"\r\ncat > run.sh << 'EOF'\r\n#!/bin/bash\r\nif [ ! -f .env ]; then\r\n    echo \"PORT=${SERVER_PORT:-7000}\" > .env\r\n    echo \"TORRENT_PORT=${TORRENT_PORT:-6881}\" >> .env\r\nfi\r\nnode src\/index.js\r\nEOF\r\nchmod +x run.sh\r\n\r\necho \"Installation complete!\"",
+            "script": "#!/bin/bash\r\n\r\ncd /mnt/server/\r\n\r\napt update\r\napt install -y git curl\r\n\r\nGITHUB_REPO=\"https:\/\/github.com\/zvielkoren\/self-streme.git\"\r\nBRANCH=\"main\"\r\n\r\nif [ ! -d .git ]; then\r\n    echo \"Cloning repository...\"\r\n    git clone --single-branch --branch ${BRANCH} ${GITHUB_REPO} .\r\nelse\r\n    echo \"Updating repository...\"\r\n    git fetch origin\r\n    git reset --hard origin\/${BRANCH}\r\nfi\r\n\r\necho \"Installing dependencies...\"\r\nnpm ci --only=production\r\n\r\nmkdir -p media temp\r\n\r\necho \"Installation complete!\"",
             "container": "ghcr.io/zvielkoren/self-streme:latest",
             "entrypoint": "bash"
         }
