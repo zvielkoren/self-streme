@@ -88,7 +88,15 @@ class MaintenanceMode {
     try {
       const dataDir = path.dirname(this.statusFile);
       if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
+        try {
+          fs.mkdirSync(dataDir, { recursive: true });
+        } catch (dirError) {
+          if (!this._saveErrorLogged) {
+            logger.warn(`[Maintenance] Could not create data directory ${dataDir}: ${dirError.message}. Status will not be persisted.`);
+            this._saveErrorLogged = true;
+          }
+          return;
+        }
       }
 
       const data = {
@@ -99,11 +107,14 @@ class MaintenanceMode {
       };
 
       fs.writeFileSync(this.statusFile, JSON.stringify(data, null, 2));
+      this._saveErrorLogged = false; // Reset if successful
     } catch (error) {
-      logger.error(
-        "[Maintenance] Failed to save status to file:",
-        error.message,
-      );
+      if (!this._saveErrorLogged) {
+        logger.warn(
+          `[Maintenance] Failed to save status to file: ${error.message}. Maintenance mode will work in memory only.`,
+        );
+        this._saveErrorLogged = true;
+      }
     }
   }
 
