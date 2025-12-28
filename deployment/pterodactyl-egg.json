@@ -1,15 +1,15 @@
 {
-    "_comment": "Self-Streme Egg, v5 - Standard Installation Flow (single-line script)",
+    "_comment": "Self-Streme Egg, v6 - Simplified Installation for Docker Image",
     "meta": {
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2025-12-28T21:10:00+02:00",
+    "exported_at": "2025-12-28T21:20:00+02:00",
     "name": "Self-Streme",
     "author": "zvielkoren@github.com",
-    "description": "A powerful self-hosted streaming server with Stremio integration. This egg clones the repository and installs dependencies before starting.",
+    "description": "A powerful self-hosted streaming server with Stremio integration. This egg efficiently copies files from the pre-built Docker image.",
     "docker_images": {
-        "Node.js 20": "ghcr.io/parkervcp/yolks:nodejs_20"
+        "Self-Streme (Latest)": "ghcr.io/zvielkoren/self-streme:latest"
     },
     "file_denylist": [],
     "startup": "node src/index.js",
@@ -21,7 +21,7 @@
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/bash\n\ncd /mnt/server/\n\napt update\napt install -y git curl\n\nGITHUB_REPO=\"https://github.com/zvielkoren/self-streme.git\"\nBRANCH=\"main\"\n\nif [ ! -d .git ]; then\n    echo \"Cloning repository...\"\n    git clone --single-branch --branch ${BRANCH} ${GITHUB_REPO} .\nelse\n    echo \"Repository exists, updating...\"\n    git fetch origin\n    git reset --hard origin/${BRANCH}\nfi\n\necho \"Installing dependencies...\"\nnpm ci --only=production\n\nmkdir -p media temp\n\necho \"Installation complete! Server is ready to start.\"",
+            "script": "#!/bin/bash\n\ncd /mnt/server\n\nif [ ! -f package.json ]; then\n    echo \"Server directory empty. Copying files from Docker image...\"\n    cp -r /app/. /mnt/server/\n    echo \"Files copied from /app to /mnt/server.\"\nelse\n    echo \"Server directory not empty. Skipping file copy.\"\nfi\n\necho \"Installation complete! Server is ready to start.\"",
             "container": "ghcr.io/parkervcp/yolks:nodejs_20",
             "entrypoint": "bash"
         }
