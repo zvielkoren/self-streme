@@ -6,7 +6,9 @@ RUN apk add --no-cache \
     ca-certificates \
     curl \
     wget \
-    util-linux
+    util-linux \
+    bash \
+    git
 
 # Install cloudflared
 RUN wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /usr/local/bin/cloudflared && \
