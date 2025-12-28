@@ -1,0 +1,61 @@
+{
+    "_comment": "Self-Streme Egg, v8 - Re-introducing run.sh for startup based on best practices",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2025-12-28T21:45:00+02:00",
+    "name": "Self-Streme",
+    "author": "zvielkoren@github.com",
+    "description": "A powerful self-hosted streaming server with Stremio integration. This egg efficiently copies files from the pre-built Docker image during installation, and uses a standard run.sh script for startup.",
+    "docker_images": {
+        "Self-Streme (Latest)": "ghcr.io/zvielkoren/self-streme:latest"
+    },
+    "file_denylist": [],
+    "startup": "./run.sh",
+    "config": {
+        "files": "{\".env\":{\"parser\":\"properties\",\"find\":{\"PORT\":\"{{server.build.default.port}}\",\"TORRENT_PORT\":\"{{server.build.env.TORRENT_PORT}}\",\"BASE_URL\":\"{{server.build.env.BASE_URL}}\",\"TUNNEL_TOKEN\":\"{{server.build.env.TUNNEL_TOKEN}}\"}}}",
+        "startup": "{\"done\": \"Server running on port\"}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n\ncd /mnt/server\n\n# Check if the directory is empty (no package.json). If so, copy files from Docker image.\nif [ ! -f package.json ]; then\n    echo \"Server directory empty. Copying application files from Docker image's /app directory...\"\n    cp -r /app/. /mnt/server/\n    echo \"Files copied from Docker image to /mnt/server.\"\nelse\n    echo \"Server directory already contains files. Skipping copy from Docker image.\"\nfi\n\n# Ensure media and temp directories exist\nmkdir -p media temp\n\n# Create the run.sh script\ncat > run.sh << 'EOF'\n#!/bin/bash\nif [ ! -f .env ]; then\n    echo \"PORT=${SERVER_PORT:-7000}\" > .env\n    echo \"TORRENT_PORT=${TORRENT_PORT:-6881}\" >> .env\n    # Add other environment variables as needed here if they are not directly passed to the Docker image\nfi\nnode src/index.js\nEOF\nchmod +x run.sh\n\necho \"Installation complete! Server is ready to start.\"",
+            "container": "alpine:latest",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Torrent Port",
+            "description": "Port for incoming P2P connections (TCP/UDP). Must be allocated as an additional port in the panel.",
+            "env_variable": "TORRENT_PORT",
+            "default_value": "6881",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|numeric|between:1024,65535",
+            "field_type": "text"
+        },
+        {
+            "name": "Base URL",
+            "description": "The public URL for accessing Self-Streme (e.g., https://your-domain.com). Leave empty for auto-detection.",
+            "env_variable": "BASE_URL",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Cloudflare Tunnel Token",
+            "description": "Optional Cloudflare Tunnel token for exposing the server.",
+            "env_variable": "TUNNEL_TOKEN",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        }
+    ]
+}
