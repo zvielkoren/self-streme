@@ -106,22 +106,26 @@ class TorrentService {
       ? addTrackersToMagnet(magnetOrHash) 
       : createMagnetUri(infoHash);
 
+    let torrent = this.client.get(infoHash);
+    if (!torrent) {
+      // In WebTorrent 2.x, client.add returns a Promise
+      torrent = await this.client.add(magnetUri, { path: this.downloadPath });
+    }
+
+    if (torrent.ready) {
+      return this.prepareStreamObject(torrent, fileIdx);
+    }
+
     return new Promise((resolve, reject) => {
-      let torrent = this.client.get(infoHash);
-
-      if (torrent) {
-        if (torrent.ready) {
-          return resolve(this.prepareStreamObject(torrent, fileIdx));
-        }
-      } else {
-        torrent = this.client.add(magnetUri, { path: this.downloadPath });
-      }
-
       const timeoutDuration = (config.torrent.timeoutProgression && config.torrent.timeoutProgression[retryCount]) || 60000;
-      const timeout = setTimeout(() => {
+      const timeout = setTimeout(async () => {
         if (!torrent.ready) {
           logger.error(`Torrent timeout for ${infoHash} after ${timeoutDuration}ms`);
-          torrent.destroy();
+          try {
+            await torrent.destroy();
+          } catch (err) {
+            logger.error(`Error destroying timed out torrent: ${err.message}`);
+          }
           reject(new Error("Torrent discovery timeout"));
         }
       }, timeoutDuration);
@@ -131,12 +135,12 @@ class TorrentService {
         this.applyHeadStrategy(torrent);
       });
 
-      torrent.on("ready", () => {
+      torrent.once("ready", () => {
         clearTimeout(timeout);
         resolve(this.prepareStreamObject(torrent, fileIdx));
       });
 
-      torrent.on("error", (err) => {
+      torrent.once("error", (err) => {
         clearTimeout(timeout);
         reject(err);
       });
@@ -195,7 +199,7 @@ class TorrentService {
         torrent.pause();
         // If really old, destroy
         if (now - lastAccessed > TTL * 4) {
-          torrent.destroy();
+          await torrent.destroy().catch(err => logger.error(`Error destroying old torrent: ${err.message}`));
         }
       }
     }
@@ -215,20 +219,35 @@ class TorrentService {
       ? addTrackersToMagnet(magnetOrHash) 
       : createMagnetUri(infoHash);
 
-    return new Promise((resolve, reject) => {
-      let torrent = this.client.get(infoHash);
-      if (!torrent) {
-        torrent = this.client.add(magnetUri, { path: this.downloadPath, ...options });
-      }
+    let torrent = this.client.get(infoHash);
+    if (!torrent) {
+      torrent = await this.client.add(magnetUri, { path: this.downloadPath, ...options });
+    }
 
-      const timeout = setTimeout(() => {
+    if (torrent.ready) {
+      this.applyHeadStrategy(torrent);
+      return {
+        infoHash: torrent.infoHash,
+        name: torrent.name,
+        files: torrent.files.map(f => ({ name: f.name, path: f.path, length: f.length })),
+        torrent: torrent,
+        cached: false
+      };
+    }
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(async () => {
         if (!torrent.ready) {
-          torrent.destroy();
+          try {
+            await torrent.destroy();
+          } catch (err) {
+            logger.error(`Error destroying timed out torrent: ${err.message}`);
+          }
           reject(new Error("Timeout waiting for torrent metadata"));
         }
       }, 30000);
 
-      torrent.on("ready", () => {
+      torrent.once("ready", () => {
         clearTimeout(timeout);
         this.applyHeadStrategy(torrent);
         resolve({
@@ -240,7 +259,7 @@ class TorrentService {
         });
       });
 
-      torrent.on("error", (err) => {
+      torrent.once("error", (err) => {
         clearTimeout(timeout);
         reject(err);
       });
@@ -300,11 +319,13 @@ class TorrentService {
     const torrent = this.client.get(infoHash);
     if (!torrent) return false;
 
-    return new Promise((resolve) => {
-      torrent.destroy({ destroyStore: deleteFiles }, () => {
-        resolve(true);
-      });
-    });
+    try {
+      await torrent.destroy({ destroyStore: deleteFiles });
+      return true;
+    } catch (error) {
+      logger.error(`Error removing torrent ${infoHash}:`, error);
+      return false;
+    }
   }
 
   getClientStats() {
@@ -395,6 +416,30 @@ class TorrentService {
     } catch (error) {
       logger.error(`Streaming error for ${infoHash}:`, error);
       if (!res.headersSent) res.status(500).send("Streaming failed");
+    }
+  }
+
+  /**
+   * Gracefully shutdown the service
+   */
+  async shutdown() {
+    logger.info("Shutting down TorrentService...");
+    
+    if (this.p2pCoordinator) {
+      try {
+        await this.p2pCoordinator.shutdown();
+      } catch (err) {
+        logger.error("Error shutting down P2P Coordinator:", err);
+      }
+    }
+
+    if (this.client) {
+      try {
+        await this.client.destroy();
+        logger.info("WebTorrent client destroyed");
+      } catch (err) {
+        logger.error("Error destroying WebTorrent client:", err);
+      }
     }
   }
 }

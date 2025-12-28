@@ -228,71 +228,47 @@ class MaintenanceMode {
         return next();
       }
 
-      // Allow access to maintenance status endpoint
-      if (
-        req.path === "/maintenance/status" ||
-        req.path === "/api/maintenance/status"
-      ) {
+      // 1. ALLOW all /api/ routes (including maintenance control)
+      if (req.path.startsWith("/api/")) {
         return next();
       }
 
-      // Allow access to maintenance control endpoints (for admins)
-      if (
-        req.path.startsWith("/maintenance/") ||
-        req.path.startsWith("/api/maintenance/")
-      ) {
+      // 2. ALLOW system status and health endpoints
+      const systemEndpoints = ["/health", "/status", "/debug/url", "/manifest.json", "/logo.png"];
+      if (systemEndpoints.includes(req.path) || req.path.endsWith("/manifest.json")) {
         return next();
       }
 
-      // Get client IP
-      const clientIP =
-        req.ip ||
-        req.connection.remoteAddress ||
-        req.headers["x-forwarded-for"];
+      // 3. ALLOW static files so the maintenance page works
+      if (req.path.startsWith("/static/")) {
+        return next();
+      }
 
-      // Check if IP is whitelisted
+      // 4. ALLOW whitelisted IPs
+      const clientIP = req.ip || req.get("x-forwarded-for") || req.socket.remoteAddress;
       if (this.isWhitelisted(clientIP)) {
-        logger.debug(
-          `[Maintenance] Whitelisted IP bypassing maintenance mode: ${clientIP}`,
-        );
         return next();
       }
 
-      // Check for bypass token
+      // 5. ALLOW bypass token
       if (this.hasBypassToken(req)) {
-        logger.debug("[Maintenance] Valid bypass token, allowing access");
         return next();
       }
 
-      // Block access - return maintenance page
-      logger.debug(`[Maintenance] Blocking access from: ${clientIP}`);
+      // 6. BLOCK all other routes - return maintenance page
+      const maintenancePagePath = path.join(process.cwd(), "src", "static", "maintenance-placeholder.html");
+      
+      // Set headers to prevent caching of the maintenance page
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
 
-      // Check if this is a streaming request
-      const isStreamRequest =
-        req.path.startsWith("/stream/") ||
-        req.path.includes("/stream") ||
-        req.path.match(/\.(mp4|mkv|avi|webm|m3u8)$/);
-
-      // Return JSON for API requests
-      if (req.path.startsWith("/api/") || req.accepts("json")) {
-        return res.status(503).json({
-          error: "Service Unavailable",
-          message: this.message,
-          estimatedEndTime: this.estimatedEndTime,
-          timeRemaining: this.getTimeRemaining(),
-          maintenanceMode: true,
-        });
+      if (fs.existsSync(maintenancePagePath)) {
+        return res.status(503).sendFile(maintenancePagePath);
       }
 
-      // Return streaming placeholder for stream requests
-      if (isStreamRequest) {
-        const streamingPlaceholder = this.generateStreamingPlaceholder();
-        return res.status(503).type("html").send(streamingPlaceholder);
-      }
-
-      // Return HTML page for browser requests
-      const maintenancePage = this.generateMaintenancePage();
-      res.status(503).type("html").send(maintenancePage);
+      // Fallback if file doesn't exist
+      res.status(503).type("html").send(this.generateMaintenancePage());
     };
   }
 
