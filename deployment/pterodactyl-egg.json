@@ -1,28 +1,29 @@
 {
-    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+    "_comment": "Self-Streme Egg, based on https://github.com/pelican-eggs/eggs/blob/master/generic/nodejs/egg-node-js-generic.json",
     "meta": {
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2025-12-28T20:00:00+02:00",
+    "exported_at": "2025-12-28T20:15:00+02:00",
     "name": "Self-Streme",
     "author": "zvielkoren@github.com",
-    "description": "A powerful self-hosted streaming server with Stremio integration.\r\nSee: https:\/\/github.com\/zvielkoren\/self-streme",
+    "description": "A powerful self-hosted streaming server with Stremio integration. Uses the project's pre-built Docker image for fast and reliable setup.",
     "features": null,
     "docker_images": {
         "Self-Streme (Latest)": "ghcr.io/zvielkoren/self-streme:latest"
     },
     "file_denylist": [],
-    "startup": "if [ ! -f .env ]; then echo \"PORT={{SERVER_PORT:-7000}}\" > .env; echo \"TORRENT_PORT={{TORRENT_PORT:-6881}}\" >> .env; fi; node src/index.js",
+    "startup": "node src/index.js",
     "config": {
-        "files": "{\r\n    \".env\": {\r\n        \"parser\": \"properties\",\r\n        \"find\": {\r\n            \"PORT\": \"{{server.build.default.port}}\",\r\n            \"TORRENT_PORT\": \"{{server.build.env.TORRENT_PORT}}\",\r\n            \"BASE_URL\": \"{{server.build.env.BASE_URL}}\",\r\n            \"TUNNEL_TOKEN\": \"{{server.build.env.TUNNEL_TOKEN}}\"\r\n        }\r\n    }\r\n}",
-        "startup": "{\r\n    \"done\": \"Server running\"\r\n}",
+        "files": "{\r\n    \.env": {\r\n        \"parser\": \"properties\",\r\n        \"find\": {\r\n            \"PORT\": \"{{server.build.default.port}}\",\r\n            \"TORRENT_PORT\": \"{{server.build.env.TORRENT_PORT}}\",\r\n            \"BASE_URL\": \"{{server.build.env.BASE_URL}}\",\r\n            \"TUNNEL_TOKEN\": \"{{server.build.env.TUNNEL_TOKEN}}\"\r\n        }\r\n    }\r\n}",
+        "startup": "{\r\n    \"done\": \"Server running on port\"\r\n}",
         "logs": "{}",
-        "stop": "exit"
+        "stop": "^C"
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/bash\necho \"Installation is not required for this Docker image.\"",
+            "script": "#!/bin/ash\n# Self-Streme Installation Script\n# Since we use a pre-built Docker image, this script only needs to copy files if the server directory is empty.\n\ncd /mnt/server\n\n# Pterodactyl's image mount can hide the /app contents.\n# If /mnt/server is empty, copy the app files from the image's /app directory.\nif [ ! -f package.json ]; then\n    echo \"No files found, copying from Docker image...\"\n    cp -r /app/.
+fi\n\necho \"Installation check complete. Using pre-built image.\"",
             "container": "alpine:latest",
             "entrypoint": "ash"
         }
