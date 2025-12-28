@@ -1,13 +1,13 @@
 {
-    "_comment": "Self-Streme Egg, v9 - Fix EROFS (logs directory creation)",
+    "_comment": "Self-Streme Egg, v10 - Robust Installation with P2P Hole Punching Support",
     "meta": {
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2025-12-28T22:00:00+02:00",
+    "exported_at": "2025-12-28T22:30:00+02:00",
     "name": "Self-Streme",
     "author": "zvielkoren@github.com",
-    "description": "A powerful self-hosted streaming server with Stremio integration. This egg efficiently copies files from the pre-built Docker image during installation, and ensures writable directories are created.",
+    "description": "A powerful self-hosted streaming server with Stremio integration and P2P Hole Punching. This egg efficiently copies files from the pre-built Docker image during installation.",
     "docker_images": {
         "Node.js 20": "ghcr.io/parkervcp/yolks:nodejs_20"
     },
@@ -21,7 +21,7 @@
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/bash\n\ncd /mnt/server\n\n# Check if the directory is empty (no package.json). If so, copy files from Docker image.\nif [ ! -f package.json ]; then\n    echo \"Server directory empty. Copying application files from Docker image's /app directory...\"\n    cp -r /app/. /mnt/server/\n    echo \"Files copied from Docker image to /mnt/server.\"\nelse\n    echo \"Server directory already contains files. Skipping copy from Docker image.\"\nfi\n\n# Ensure media, temp, and logs directories exist\nmkdir -p media temp logs\n\n# Create the run.sh script\ncat > run.sh << 'EOF'\n#!/bin/bash\nif [ ! -f .env ]; then\n    echo \"PORT=${SERVER_PORT:-7000}\" > .env\n    echo \"TORRENT_PORT=${TORRENT_PORT:-6881}\" >> .env\n    # Add other environment variables as needed here if they are not directly passed to the Docker image\nfi\nnode src/index.js\nEOF\nchmod +x run.sh\n\necho \"Installation complete! Server is ready to start.\"",
+            "script": "#!/bin/bash\n\ncd /mnt/server\n\n# Check if the directory is empty (no package.json). If so, copy files from Docker image.\nif [ ! -f package.json ]; then\n    echo \"Server directory empty. Copying application files from Docker image's /app directory...\"\n    cp -r /app/. /mnt/server/\n    echo \"Files copied from Docker image to /mnt/server.\"\nelse\n    echo \"Server directory already contains files. Skipping copy from Docker image.\"\nfi\n\n# Ensure media, temp, logs and temp/downloads directories exist\nmkdir -p media temp logs temp/downloads\n\n# Create the run.sh script\ncat > run.sh << 'EOF'\n#!/bin/bash\nif [ ! -f .env ]; then\n    echo \"PORT=${SERVER_PORT:-7000}\" > .env\n    echo \"TORRENT_PORT=${TORRENT_PORT:-6881}\" >> .env\n    # Add other environment variables as needed here if they are not directly passed to the Docker image\nfi\nnode src/index.js\nEOF\nchmod +x run.sh\n\necho \"Installation complete! Server is ready to start.\"",
             "container": "ghcr.io/parkervcp/yolks:nodejs_20",
             "entrypoint": "bash"
         }
