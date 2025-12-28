@@ -8,22 +8,23 @@ services:
     container_name: self-streme
     restart: unless-stopped
 
-    # Network mode for P2P connectivity
-    # Use 'host' for better peer discovery (recommended for torrents)
-    # Comment out and use 'ports' instead if you need network isolation
-    network_mode: "host"
-
-    # Port mapping (only works when network_mode is commented out)
-    # ports:
-    #   - "3000:3000"
+    # Network configuration for Windows/Mac compatibility
+    # network_mode: "host" does NOT work on Docker Desktop for Windows/Mac
+    # We use standard bridge networking with port mapping instead.
+    ports:
+      - "7000:7000" # Main API & Streaming
+      - "7001:7001" # Stremio Addon Interface
+      # Map BitTorrent ports if you want incoming connections (optional but recommended for speed)
+      # - "6881:6881" 
+      # - "6881:6881/udp"
 
     # Environment variables
     environment:
-      # Application settings
-      # NOTE: When using network_mode: host, the app binds to the host's ports directly
-      # Make sure PORT 7000 (or your configured port) is available on the host
       - NODE_ENV=production
-      - PORT=7000 # Changed from 3000 to match your app's default
+      - PORT=7000
+      - ADDON_PORT=7001
+      # Explicitly set the torrent port if you map it above
+      # - TORRENT_PORT=6881 
 
       # Cloudflare Tunnel Token (optional)
       # Get your token from: https://one.dash.cloudflare.com/

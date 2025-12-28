@@ -6,22 +6,25 @@
 import { config } from './config/index.js';
 
 const manifest = {
-  id: "com.zvicraft.selfstreme",
-  version: "0.0.2-beta",
+  id: "com.zviel.self-streme",
+  version: "1.0.0",
   name: "Self-Streme",
   description:
     "Stream movies, series, and anime from multiple sources including local files and torrents",
   url: "", // Dynamically set in the manifest endpoint
+  configurationURL: "", // Dynamically set in the manifest endpoint
   types: ["movie", "series"],
   resources: ["stream", "meta"],
   catalogs: [],
   idPrefixes: ["tt"],
   behaviorHints: {
+    configurable: true,
+    configurationRequired: false,
     p2p: !config.torrent.cacheOnlyMode, // Disable P2P hint when cache-only mode is enabled
     adult: false,
   },
   logo: "", // Dynamically set in the manifest endpoint
-  contactEmail: "self-streme@zvicraft.com",
+  contactEmail: "self-streme@zviel.com",
 };
 
 export default manifest;

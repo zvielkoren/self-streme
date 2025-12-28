@@ -13,7 +13,6 @@ import streamService from "./core/streamService.js";
 import torrentService from "./core/torrentService.js";
 import subtitleService from "./services/subtitleService.js";
 import manifest from "./manifest.js";
-import TorrentService from "./services/torrentService.js";
 import { createTorrentRouter } from "./api/torrentApi.js";
 import { createStreamingRouter } from "./api/streamingApi.js";
 import {
@@ -51,8 +50,7 @@ const cacheManager = new ScalableCacheManager({
   tempDir: TEMP_DIR,
 });
 
-// Initialize Torrent Streaming Service
-const torrentStreamingService = new TorrentService(cacheManager);
+// Initialize Torrent Streaming Service - Now using the unified singleton torrentService
 logger.info("Torrent Streaming Service initialized");
 
 // Legacy compatibility - maintain old constants for existing code
@@ -117,17 +115,70 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "install.html"));
 });
 
+// Serve configuration page
+app.get("/configure", (req, res) => {
+  res.sendFile(path.join(__dirname, "configure.html"));
+});
+
+// Helper to handle manifest with dynamic base URL and optional config
+const handleManifest = (req, res) => {
+  const { baseUrl } = getBaseUrlFromRequest(req);
+  const { config: encodedConfig } = req.params;
+
+  const manifestResponse = {
+    ...manifest,
+    url: baseUrl,
+    logo: `${baseUrl}/logo.png`,
+    configurationURL: `${baseUrl}/configure`,
+  };
+
+  // If config is present, adjust resource URLs or add behavior hints
+  if (encodedConfig) {
+    try {
+      const userConfig = JSON.parse(Buffer.from(encodedConfig, 'base64').toString());
+      logger.info(`Serving manifest with user config: ${JSON.stringify(userConfig)}`);
+      // You can modify behaviorHints or resources based on userConfig here
+    } catch (e) {
+      logger.warn(`Failed to parse user config: ${encodedConfig}`);
+    }
+  }
+
+  res.setHeader("Content-Type", "application/json");
+  res.json(manifestResponse);
+};
+
+// Explicit manifest endpoints
+app.get("/manifest.json", handleManifest);
+app.get("/:config/manifest.json", (req, res, next) => {
+  if (['api', 'static', 'debug', 'health', 'status', 'configure', 'test-source-selection', 'test-ios-fix', 'test-torrent-streaming', 'test-magnet-converter'].includes(req.params.config)) {
+    return next();
+  }
+  handleManifest(req, res);
+});
+
 // Mount Torrent Streaming API routes
 const torrentApiRouter = createTorrentRouter(
-  torrentStreamingService,
+  torrentService,
   cacheManager,
 );
 const streamingApiRouter = createStreamingRouter(
-  torrentStreamingService,
+  torrentService,
   cacheManager,
 );
+
 app.use("/api", torrentApiRouter);
-app.use("/", streamingApiRouter);
+
+// Support both /stream/... and /:config/stream/...
+app.use("/:config?", (req, res, next) => {
+  // If config is one of our reserved routes, skip to next middleware
+  if (req.params.config && ['api', 'static', 'debug', 'health', 'status', 'configure', 'manifest.json'].includes(req.params.config)) {
+    return next();
+  }
+  // If it's a resource request (starts with stream, meta, etc), let streaming router handle it
+  // The streaming router will see the URL without the config prefix if we mount it correctly
+  next();
+}, streamingApiRouter);
+
 logger.info("Torrent Streaming API routes mounted");
 
 // Serve iOS fix test page
@@ -280,22 +331,6 @@ app.get("/debug/torrent-status", (req, res) => {
       message: error.message,
     });
   }
-});
-
-// Explicit manifest endpoint
-app.get("/manifest.json", (req, res) => {
-  // Get proxy-aware URL information
-  const { protocol, host, baseUrl } = getBaseUrlFromRequest(req);
-
-  // Create a copy of the manifest with the correct URL
-  const manifestResponse = {
-    ...manifest,
-    url: baseUrl,
-    logo: `${baseUrl}/logo.png`,
-  };
-
-  res.setHeader("Content-Type", "application/json");
-  res.json(manifestResponse);
 });
 
 app.get("/status", (req, res) => {

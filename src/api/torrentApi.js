@@ -1,5 +1,4 @@
 import express from 'express';
-import TorrentService from '../services/torrentService.js';
 import logger from '../utils/logger.js';
 
 /**

@@ -1,51 +1,31 @@
-import express from 'express';
-import cors from 'cors';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
-import TorrentService from './services/torrentService.js';
-import ScalableCacheManager from './services/scalableCacheManager.js';
-import { createTorrentRouter } from './api/torrentApi.js';
-import { createStreamingRouter } from './api/streamingApi.js';
-import logger from './utils/logger.js';
-import { config } from './config/index.js';
-
-// Load environment variables
-dotenv.config();
+import express from "express";
+import cors from "cors";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+import { config } from "./config/index.js";
+import logger from "./utils/logger.js";
+import torrentService from "./core/torrentService.js";
+import ScalableCacheManager from "./services/scalableCacheManager.js";
+import { createTorrentRouter } from "./api/torrentApi.js";
+import { createStreamingRouter } from "./api/streamingApi.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Ensure temp directory exists
-const TEMP_DIR = config.torrent.downloadPath || './temp';
-if (!fs.existsSync(TEMP_DIR)) {
-  fs.mkdirSync(TEMP_DIR, { recursive: true });
-}
-
-/**
- * Torrent Streaming Server
- * Full-featured torrent streaming service with HTTP Range Request support
- */
-class TorrentStreamingServer {
-  constructor(options = {}) {
-    this.port = options.port || config.server.port || 7000;
+class TorrentServer {
+  constructor() {
     this.app = express();
-
-    // Initialize services
+    this.port = config.server.port || 7000;
     this.cacheManager = new ScalableCacheManager({
       backend: config.cache.backend,
       maxSize: config.cache.maxSize,
       maxDiskUsage: config.cache.maxDiskUsage,
       cleanupInterval: config.cache.cleanupInterval,
-      tempDir: TEMP_DIR,
     });
-
-    this.torrentService = new TorrentService(this.cacheManager);
-
+    this.torrentService = torrentService;
     this.setupMiddleware();
     this.setupRoutes();
-    this.setupErrorHandling();
   }
 
   setupMiddleware() {

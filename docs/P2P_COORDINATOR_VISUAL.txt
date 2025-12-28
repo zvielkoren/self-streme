@@ -1,0 +1,510 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                     P2P COORDINATOR - VISUAL GUIDE                           ║
+║                     What Does p2pCoordinator.js Do?                          ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ WHAT IT IS                                                                   │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+    The P2P Coordinator is the "brain" that manages peer-to-peer connections.
+
+    Think of it like a smart matchmaker that:
+    • Knows about your network setup (NAT type)
+    • Finds other peers
+    • Chooses the best way to connect
+    • Creates direct connections through firewalls
+    • Keeps connections alive
+    • Falls back to relay if needed
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ HOW IT WORKS                                                                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │                       P2P COORDINATOR                               │
+    │                    (The Smart Matchmaker)                           │
+    │                                                                     │
+    │   1. DETECTS YOUR NETWORK                                           │
+    │      "What kind of firewall/NAT do I have?"                        │
+    │      → Runs STUN test                                              │
+    │      → Discovers: "Full Cone NAT" + Public IP: 1.2.3.4:8080       │
+    │                                                                     │
+    │   2. STARTS SIGNALING SERVER                                        │
+    │      "Where can peers find me?"                                    │
+    │      → WebSocket server on port 8080                               │
+    │      → Peers can register and discover each other                  │
+    │                                                                     │
+    │   3. CHOOSES CONNECTION STRATEGY                                    │
+    │      "What's the best way to connect to this peer?"                │
+    │      → Analyzes both NAT types                                     │
+    │      → Picks: Direct, UDP punch, TCP punch, or TURN relay         │
+    │                                                                     │
+    │   4. CREATES CONNECTION                                             │
+    │      "Let me punch through that firewall..."                       │
+    │      → Uses hole punching service                                  │
+    │      → Establishes direct peer connection                          │
+    │                                                                     │
+    │   5. MAINTAINS CONNECTIONS                                          │
+    │      "Keep this connection alive..."                               │
+    │      → Sends periodic keep-alive packets                           │
+    │      → Monitors connection health                                  │
+    │      → Tracks statistics                                           │
+    └─────────────────────────────────────────────────────────────────────┘
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ARCHITECTURE                                                                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+         Your App (src/index.js)
+                 │
+                 │ p2p.initialize()
+                 ↓
+    ┌────────────────────────────────────┐
+    │      P2P COORDINATOR               │
+    │    (p2pCoordinator.js)             │
+    ├────────────────────────────────────┤
+    │                                    │
+    │  Manages:                          │
+    │  • Peer registry                   │
+    │  • Connection strategy             │
+    │  • Statistics                      │
+    │  • Health monitoring               │
+    │                                    │
+    └─────────┬──────────────────┬───────┘
+              │                  │
+              ↓                  ↓
+    ┌─────────────────┐  ┌──────────────────┐
+    │ Hole Punching   │  │ Signaling Server │
+    │    Service      │  │                  │
+    ├─────────────────┤  ├──────────────────┤
+    │ • NAT detection │  │ • WebSocket      │
+    │ • STUN support  │  │ • Peer discovery │
+    │ • UDP punching  │  │ • ICE exchange   │
+    │ • TCP punching  │  │ • SDP relay      │
+    │ • TURN relay    │  │ • Room mgmt      │
+    └─────────────────┘  └──────────────────┘
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ CONNECTION FLOW                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+    You: "Connect me to Peer B"
+         │
+         ↓
+    ┌────────────────────────────────────────────────────────────────┐
+    │ [1] COORDINATOR: "Let me check what kind of NAT you have..."   │
+    │     → Contacts STUN server                                     │
+    │     → Result: "Full Cone NAT"                                  │
+    └────────────────────────────────────────────────────────────────┘
+         │
+         ↓
+    ┌────────────────────────────────────────────────────────────────┐
+    │ [2] COORDINATOR: "Let me find Peer B..."                       │
+    │     → Queries signaling server                                 │
+    │     → Result: "Peer B is at 5.6.7.8:9000, Port-Restricted NAT" │
+    └────────────────────────────────────────────────────────────────┘
+         │
+         ↓
+    ┌────────────────────────────────────────────────────────────────┐
+    │ [3] COORDINATOR: "Best strategy is UDP hole punching"          │
+    │     → Full Cone + Port-Restricted = UDP punch works            │
+    │     → Success rate: ~85%                                       │
+    └────────────────────────────────────────────────────────────────┘
+         │
+         ↓
+    ┌────────────────────────────────────────────────────────────────┐
+    │ [4] COORDINATOR: "Punching holes in firewalls..."              │
+    │     → Coordinates simultaneous packet exchange                 │
+    │     → Both peers send UDP packets at the same time             │
+    │     → Firewalls allow return traffic                           │
+    └────────────────────────────────────────────────────────────────┘
+         │
+         ↓
+    ┌────────────────────────────────────────────────────────────────┐
+    │ [5] COORDINATOR: "✓ Direct connection established!"            │
+    │     → You ←──────────────────────→ Peer B                     │
+    │     → Setting up keep-alive...                                 │
+    │     → Monitoring connection health...                          │
+    └────────────────────────────────────────────────────────────────┘
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ NAT TYPES & STRATEGIES                                                       │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+    ╔══════════════════════════════════════════════════════════════╗
+    ║ OPEN NAT                                                     ║
+    ╚══════════════════════════════════════════════════════════════╝
+
+    You ←───────────────→ Peer
+
+    Strategy: DIRECT CONNECTION
+    Success:  95%
+    Details:  No firewall restrictions, easy peasy!
+
+
+    ╔══════════════════════════════════════════════════════════════╗
+    ║ FULL CONE / RESTRICTED NAT                                   ║
+    ╚══════════════════════════════════════════════════════════════╝
+
+    You ←──[Firewall]──→ Peer
+         Punch hole!
+
+    Strategy: UDP HOLE PUNCHING
+    Success:  85%
+    Details:  Coordinator times packet exchange perfectly
+
+
+    ╔══════════════════════════════════════════════════════════════╗
+    ║ PORT-RESTRICTED NAT                                          ║
+    ╚══════════════════════════════════════════════════════════════╝
+
+    You ←──[Strict FW]──→ Peer
+         TCP punch!
+
+    Strategy: TCP HOLE PUNCHING
+    Success:  70%
+    Details:  Needs simultaneous TCP connection attempts
+
+
+    ╔══════════════════════════════════════════════════════════════╗
+    ║ SYMMETRIC NAT (Both sides)                                   ║
+    ╚══════════════════════════════════════════════════════════════╝
+
+    You ←──[FW]──→ TURN ←──[FW]──→ Peer
+                  Relay
+
+    Strategy: TURN RELAY
+    Success:  99%
+    Details:  Traffic relayed through TURN server
+    Note:     Requires TURN server configuration
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ WHAT HAPPENS AUTOMATICALLY                                                   │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+    After you call p2p.initialize(), the coordinator automatically:
+
+    ✓ Detects your NAT type
+    ✓ Finds your public IP address
+    ✓ Starts signaling server (WebSocket on port 8080)
+    ✓ Registers you as a peer
+    ✓ Makes you discoverable to other peers
+    ✓ Monitors connection health
+    ✓ Keeps connections alive with periodic pings
+    ✓ Tracks statistics (success rate, active peers, etc.)
+    ✓ Chooses best connection strategy for each peer
+    ✓ Falls back to relay if direct connection fails
+    ✓ Cleans up dead connections
+    ✓ Provides health checks and stats
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ SIMPLE USAGE EXAMPLE                                                         │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+    import P2PCoordinator from './services/p2pCoordinator.js';
+
+    // 1. Create
+    const p2p = new P2PCoordinator({
+        signalingPort: 8080,
+        stunServers: ['stun:stun.l.google.com:19302']
+    });
+
+    // 2. Initialize (everything happens automatically here!)
+    await p2p.initialize();
+
+    // 3. Check what was detected
+    const nat = p2p.getNATInfo();
+    console.log(`My NAT: ${nat.type}`);
+    console.log(`My public IP: ${nat.publicIP}:${nat.publicPort}`);
+
+    // 4. Get recommended strategy
+    const strategy = p2p.getRecommendedStrategy();
+    console.log(`Best method: ${strategy.method}`);
+
+    // 5. Register yourself
+    p2p.registerPeer('my-peer-id', { name: 'My Server' });
+
+    // 6. Connect to another peer (automatic strategy selection!)
+    const connection = await p2p.connectToPeer('other-peer-id');
+    console.log(`✓ Connected to peer!`);
+
+    // 7. Check stats
+    const stats = p2p.getStats();
+    console.log(`Success rate: ${stats.performance.successRate}%`);
+
+    // 8. Health check
+    const health = p2p.healthCheck();
+    console.log(`Healthy: ${health.healthy}`);
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STATS & MONITORING                                                           │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+    const stats = p2p.getStats();
+
+    Example output:
+    {
+      registeredPeers: 5,              ← How many peers registered
+      activePeers: 3,                  ← How many currently connected
+      totalConnections: 12,            ← Total connection attempts
+      successfulPunches: 10,           ← How many succeeded
+      failedAttempts: 2,               ← How many failed
+      uptime: 3600,                    ← Seconds running
+      peers: {
+        registered: 5,
+        active: 3,
+        connections: 8
+      },
+      performance: {
+        successRate: '83.33',          ← 83.33% success rate
+        failureRate: '16.67'           ← 16.67% failure rate
+      }
+    }
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ HEALTH CHECK                                                                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+    const health = p2p.healthCheck();
+
+    Example output:
+    {
+      healthy: true,                   ← Overall health
+      services: {
+        holePunching: {
+          status: 'healthy',
+          natType: 'Full Cone'
+        },
+        signaling: {
+          status: 'healthy',
+          port: 8080,
+          peers: 5
+        }
+      },
+      issues: []                       ← Any problems detected
+    }
+
+    If Symmetric NAT without TURN:
+    {
+      healthy: true,
+      services: { ... },
+      issues: [
+        'Symmetric NAT detected but no TURN servers configured'
+      ]
+    }
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ CONFIGURATION OPTIONS                                                        │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+    new P2PCoordinator({
+        // Required
+        signalingPort: 8080,                    // WebSocket port
+
+        // STUN servers (for NAT detection)
+        stunServers: [
+            'stun:stun.l.google.com:19302',
+            'stun:stun1.l.google.com:19302'
+        ],
+
+        // Optional: TURN servers (for Symmetric NAT)
+        turnServers: [{
+            urls: 'turn:turn.example.com:3478',
+            username: 'user',
+            credential: 'pass'
+        }],
+
+        // Advanced options
+        localPort: 0,                           // 0 = random port
+        keepAliveInterval: 25000,               // 25 seconds
+        connectionTimeout: 30000,               // 30 seconds
+        maxRetries: 3,                          // Retry attempts
+        enableDetailedLogging: false            // Verbose logs
+    })
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ INTEGRATION WITH SELF-STREME                                                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+    In src/index.js:
+
+    // Import
+    import P2PCoordinator from './services/p2pCoordinator.js';
+
+    let p2p = null;
+
+    // Initialize during startup
+    async function startServer() {
+        // Initialize P2P first
+        try {
+            p2p = new P2PCoordinator({
+                signalingPort: 8080,
+                stunServers: ['stun:stun.l.google.com:19302'],
+                enableDetailedLogging: true
+            });
+
+            await p2p.initialize();
+
+            const nat = p2p.getNATInfo();
+            console.log(`✓ P2P ready - NAT: ${nat.type}`);
+
+        } catch (error) {
+            console.error('P2P failed:', error.message);
+            console.log('Continuing without P2P...');
+        }
+
+        // Start your server
+        app.listen(3000, () => {
+            console.log('Server running');
+        });
+    }
+
+    // Cleanup on shutdown
+    process.on('SIGTERM', async () => {
+        if (p2p) await p2p.shutdown();
+        process.exit(0);
+    });
+
+    startServer();
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ WHY USE P2P COORDINATOR?                                                     │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+    WITHOUT P2P Coordinator:
+
+    You ──×──[Firewall]──×── Peer
+         Connection blocked!
+
+    • Can't connect through firewalls
+    • Limited to same network only
+    • Poor connectivity in restrictive networks
+    • Relies only on DHT/trackers
+
+
+    WITH P2P Coordinator:
+
+    You ←──[Punched Hole]──→ Peer
+        Direct connection!
+
+    • Connects through firewalls
+    • Works across different networks
+    • Better connectivity (85%+ success)
+    • More peer connections = faster downloads
+    • Automatic strategy selection
+    • Statistics and monitoring
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ WHEN DO YOU NEED IT?                                                         │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+    ✓ Your server is behind a firewall/NAT
+    ✓ You want better peer connectivity
+    ✓ Users have trouble finding peers
+    ✓ You're in a restrictive network
+    ✓ You want to maximize download speeds
+
+    ✗ You have Open NAT and good connectivity already
+    ✗ You only stream from public trackers
+    ✗ Your network is simple (no firewall)
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ TROUBLESHOOTING                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+    Problem: "P2P initialization failed"
+    ├─ Check STUN servers are accessible
+    ├─ Verify UDP traffic is allowed
+    └─ Look at logs for specific error
+
+    Problem: "Symmetric NAT detected"
+    ├─ This is informational, not an error
+    ├─ Add TURN server for best results
+    └─ Or: accept 70-85% success rate without TURN
+
+    Problem: "Peer not found"
+    ├─ Peer hasn't registered
+    ├─ Check signaling server is running (port 8080)
+    └─ Verify peer is online
+
+    Problem: "Connection timeout"
+    ├─ Normal for unreachable peers
+    ├─ Check firewall settings
+    └─ Verify both peers have compatible NATs
+
+    Problem: "Port 8080 already in use"
+    ├─ Change signalingPort in options
+    └─ Or stop process using port 8080
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ SUMMARY                                                                      │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+    The P2P Coordinator is like a smart assistant that:
+
+    1. Understands your network (NAT detection)
+    2. Finds other peers (signaling)
+    3. Chooses the best connection method (strategy)
+    4. Creates connections through firewalls (hole punching)
+    5. Keeps everything running smoothly (monitoring)
+
+    YOU DO:                          COORDINATOR DOES:
+    • Initialize once                • Detect NAT type
+    • Register peers                 • Start signaling server
+    • Request connections            • Choose best strategy
+                                     • Punch holes in firewalls
+                                     • Maintain connections
+                                     • Track statistics
+                                     • Monitor health
+                                     • Handle fallbacks
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ QUICK REFERENCE                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+    Create:        const p2p = new P2PCoordinator({ ... })
+    Initialize:    await p2p.initialize()
+    Register:      p2p.registerPeer('my-id', { ... })
+    Connect:       await p2p.connectToPeer('peer-id')
+    NAT Info:      p2p.getNATInfo()
+    Stats:         p2p.getStats()
+    Strategy:      p2p.getRecommendedStrategy()
+    Health:        p2p.healthCheck()
+    Shutdown:      await p2p.shutdown()
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ FILES & DOCS                                                                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+    Main File:           src/services/p2pCoordinator.js
+    Dependencies:        holePunchingService.js, signalingServer.js
+    Examples:            examples/p2p-integration.js
+    Quick Guide:         SIMPLE_P2P_INTEGRATION.js
+    Detailed Docs:       docs/P2P_HOLE_PUNCHING.md
+    This Explanation:    P2P_COORDINATOR_EXPLAINED.md
+
+
+═══════════════════════════════════════════════════════════════════════════════
+
+                       P2P Coordinator = Better Connectivity!
+                    It just works automatically once initialized.
+
+═══════════════════════════════════════════════════════════════════════════════

@@ -39,7 +39,8 @@
     "stremio-addon-sdk": "^1.6.10",
     "subsrt": "^1.1.1",
     "webtorrent": "^2.1.37",
-    "winston": "^3.11.0"
+    "winston": "^3.11.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@octokit/rest": "^20.1.2",

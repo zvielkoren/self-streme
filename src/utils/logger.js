@@ -1,5 +1,13 @@
 import winston from "winston";
+import fs from "fs";
+import path from "path";
 import { config } from "../config/index.js";
+
+// Ensure logs directory exists
+const logDir = "logs";
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir);
+}
 
 const logger = winston.createLogger({
   level: config.logging.level,
@@ -17,12 +25,12 @@ const logger = winston.createLogger({
       ),
     }),
     new winston.transports.File({
-      filename: "error.log",
+      filename: path.join(logDir, "error.log"),
       level: "error",
       options: { flags: "w" },
     }),
     new winston.transports.File({
-      filename: "combined.log",
+      filename: path.join(logDir, "combined.log"),
       options: { flags: "w" },
     }),
   ],

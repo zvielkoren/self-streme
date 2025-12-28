@@ -5,7 +5,8 @@ FROM node:20-alpine AS base
 RUN apk add --no-cache \
     ca-certificates \
     curl \
-    wget
+    wget \
+    util-linux
 
 # Install cloudflared
 RUN wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /usr/local/bin/cloudflared && \
@@ -35,8 +36,9 @@ RUN addgroup -g 1001 -S nodejs && \
 # Switch to non-root user
 USER nodejs
 
-# Expose the port (default 3000, can be overridden)
-EXPOSE 3000
+# Expose the ports (default 7000 for API, 7001 for Addon)
+EXPOSE 7000
+EXPOSE 7001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
