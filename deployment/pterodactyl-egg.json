@@ -4,7 +4,7 @@
     "version": "PTDL_v2",
     "update_url": null
   },
-  "exported_at": "2025-11-15T11:50:00+00:00",
+  "exported_at": "2025-01-12T12:00:00+00:00",
   "name": "Self-Streme",
   "author": "zvielkoren@github.com",
   "description": "A powerful self-hosted streaming server with Stremio integration. Stream your media library and torrent content with automatic quality detection and cross-device support.",
@@ -15,21 +15,20 @@
   ],
   "docker_images": {
     "Node 18": "ghcr.io/parkervcp/yolks:nodejs_18",
-    "Node 20": "ghcr.io/parkervcp/yolks:nodejs_20",
-    "Node 21": "ghcr.io/parkervcp/yolks:nodejs_21"
+    "Node 20": "ghcr.io/parkervcp/yolks:nodejs_20"
   },
   "file_denylist": [],
-  "startup": "if [[ -d .git ]] && [[ {{AUTO_UPDATE}} == \"1\" ]]; then git pull; fi; if [[ ! -f .env ]]; then echo \"PORT={{SERVER_PORT}}\" > .env; echo \"BASE_URL={{BASE_URL}}\" >> .env; echo \"TUNNEL_TOKEN={{TUNNEL_TOKEN}}\" >> .env; fi; if [[ -f ./cloudflared ]] && [[ ! -x /usr/local/bin/cloudflared ]]; then export PATH=\"$PWD:$PATH\"; fi; npm install --production && npm start",
+  "startup": "if [[ -d .git ]] && [[ {{AUTO_UPDATE}} == \"1\" ]]; then git pull; fi; if [[ ! -f .env ]]; then echo \"PORT={{SERVER_PORT}}\" > .env; echo \"TORRENT_PORT={{TORRENT_PORT}}\" >> .env; echo \"BASE_URL={{BASE_URL}}\" >> .env; echo \"TUNNEL_TOKEN={{TUNNEL_TOKEN}}\" >> .env; fi; if [[ -f ./cloudflared ]] && [[ ! -x /usr/local/bin/cloudflared ]]; then export PATH=\"$PWD:$PATH\"; fi; npm install --production && npm start",
   "config": {
-    "files": "{\r\n    \".env\": {\r\n        \"parser\": \"file\",\r\n        \"find\": {\r\n            \"PORT\": \"PORT={{server.build.default.port}}\",\r\n            \"BASE_URL\": \"BASE_URL={{server.build.env.BASE_URL}}\",\r\n            \"TUNNEL_TOKEN\": \"TUNNEL_TOKEN={{server.build.env.TUNNEL_TOKEN}}\"\r\n        }\r\n    }\r\n}",
+    "files": "{\r\n    \".env\": {\r\n        \"parser\": \"file\",\r\n        \"find\": {\r\n            \"PORT\": \"PORT={{server.build.default.port}}\",\r\n            \"TORRENT_PORT\": \"TORRENT_PORT={{server.build.env.TORRENT_PORT}}\",\r\n            \"BASE_URL\": \"BASE_URL={{server.build.env.BASE_URL}}\",\r\n            \"TUNNEL_TOKEN\": \"TUNNEL_TOKEN={{server.build.env.TUNNEL_TOKEN}}\"\r\n        }\r\n    }\r\n}",
     "startup": "{\r\n    \"done\": \"Server running on port\"\r\n}",
     "logs": "{}",
     "stop": "^C"
   },
   "scripts": {
     "installation": {
-      "script": "#!/bin/bash\n# Self-Streme Installation Script for Pterodactyl\nset -e\n\ncd /mnt/server\n\necho \"===================================\"\necho \"Self-Streme Installation\"\necho \"===================================\"\n\n# Update packages\napt update\napt install -y git curl wget\n\n# Clone repository if not exists\nif [ -z \"${GITHUB_REPO}\" ]; then\n    GITHUB_REPO=\"https://github.com/zvielkoren/self-streme.git\"\nfi\n\nif [ -z \"${BRANCH}\" ]; then\n    BRANCH=\"main\"\nfi\n\nif [ -d .git ]; then\n    echo \"Repository already exists, updating...\"\n    git fetch origin\n    git reset --hard origin/${BRANCH}\nelse\n    echo \"Cloning repository...\"\n    git clone --single-branch --branch ${BRANCH} ${GITHUB_REPO} .\nfi\n\n# Install Node.js dependencies\necho \"Installing dependencies...\"\nnpm install --production\n\n# Create necessary directories\nmkdir -p media temp\n\n# Install cloudflared for Cloudflare Tunnel support\necho \"===================================\"\necho \"Installing Cloudflare Tunnel (cloudflared)...\"\necho \"===================================\"\n\n# Detect architecture\nARCH=$(uname -m)\ncase $ARCH in\n    x86_64)\n        CLOUDFLARED_ARCH=\"amd64\"\n        ;;\n    aarch64|arm64)\n        CLOUDFLARED_ARCH=\"arm64\"\n        ;;\n    armv7l|armhf)\n        CLOUDFLARED_ARCH=\"arm\"\n        ;;\n    *)\n        echo \"Warning: Unsupported architecture: $ARCH\"\n        echo \"Cloudflare Tunnel will not be available\"\n        CLOUDFLARED_ARCH=\"\"\n        ;;\nesac\n\nif [ -n \"$CLOUDFLARED_ARCH\" ]; then\n    CLOUDFLARED_URL=\"https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CLOUDFLARED_ARCH}\"\n    echo \"Downloading cloudflared for ${CLOUDFLARED_ARCH}...\"\n    \n    if wget -q \"$CLOUDFLARED_URL\" -O cloudflared; then\n        chmod +x cloudflared\n        \n        # Try to move to /usr/local/bin, fallback to current directory\n        if mv cloudflared /usr/local/bin/cloudflared 2>/dev/null; then\n            echo \"✓ cloudflared installed to /usr/local/bin\"\n        else\n            echo \"✓ cloudflared installed to current directory\"\n            echo \"Note: /usr/local/bin not writable, cloudflared will be used from current directory\"\n        fi\n        \n        # Verify installation\n        if command -v cloudflared >/dev/null 2>&1; then\n            CLOUDFLARED_VERSION=$(cloudflared --version 2>&1 | head -1)\n            echo \"✓ cloudflared version: $CLOUDFLARED_VERSION\"\n        elif [ -f ./cloudflared ]; then\n            CLOUDFLARED_VERSION=$(./cloudflared --version 2>&1 | head -1)\n            echo \"✓ cloudflared version: $CLOUDFLARED_VERSION\"\n        fi\n    else\n        echo \"Failed to download cloudflared\"\n        echo \"Cloudflare Tunnel will not be available\"\n    fi\nfi\n\n# Create .env file\necho \"===================================\"\necho \"Creating .env file...\"\ncat > .env << EOF\nPORT=\\${SERVER_PORT}\nBASE_URL=\\${BASE_URL}\nTUNNEL_TOKEN=\\${TUNNEL_TOKEN}\nMEDIA_PATH=./media\nCACHE_BACKEND=memory\nCACHE_MAX_SIZE=1000\nCACHE_MAX_DISK_MB=5000\nTORRENT_TIMEOUT=60000\nTORRENT_MAX_RETRIES=3\nEOF\n\necho \"===================================\"\necho \"Installation Complete!\"\necho \"===================================\"\necho \"Configure your BASE_URL in the environment variables\"\necho \"Default port: 7000\"\necho \"Access your addon at: http://YOUR_IP:PORT/manifest.json\"\n\nif [ -n \"\\${TUNNEL_TOKEN}\" ]; then\n    echo \"\"\n    echo \"Cloudflare Tunnel Configuration:\"\n    if command -v cloudflared >/dev/null 2>&1 || [ -f ./cloudflared ]; then\n        echo \"✓ cloudflared is installed\"\n        echo \"✓ Cloudflare Tunnel will be enabled on startup\"\n        echo \"Check server logs after startup for your tunnel URL\"\n    else\n        echo \"⚠ cloudflared is not available\"\n        echo \"Cloudflare Tunnel will not work\"\n    fi\nfi",
-      "container": "node:18-bullseye-slim",
+      "script": "#!/bin/bash\n# Self-Streme Installation Script for Pterodactyl\nset -e\n\ncd /mnt/server\n\necho \"===================================\"\necho \"Self-Streme Installation\"\necho \"===================================\"\n\n# Update packages\napt update\napt install -y git curl wget\n\n# Clone repository if not exists\nif [ -z \"${GITHUB_REPO}\" ]; then\n    GITHUB_REPO=\"https://github.com/zvielkoren/self-streme.git\"\nfi\n\nif [ -z \"${BRANCH}\" ]; then\n    BRANCH=\"main\"\nfi\n\nif [ -d .git ]; then\n    echo \"Repository already exists, updating...\"\n    git fetch origin\n    git reset --hard origin/${BRANCH}\nelse\n    echo \"Cloning repository...\"\n    git clone --single-branch --branch ${BRANCH} ${GITHUB_REPO} .\nfi\n\n# Install Node.js dependencies\necho \"Installing dependencies...\"\nnpm install --production\n\n# Create necessary directories\nmkdir -p media temp\n\n# Install cloudflared for Cloudflare Tunnel support\necho \"===================================\"\necho \"Installing Cloudflare Tunnel (cloudflared)...\"\necho \"===================================\"\n\n# Detect architecture\nARCH=$(uname -m)\ncase $ARCH in\n    x86_64)\n        CLOUDFLARED_ARCH=\"amd64\"\n        ;;\n    aarch64|arm64)\n        CLOUDFLARED_ARCH=\"arm64\"\n        ;;\n    armv7l|armhf)\n        CLOUDFLARED_ARCH=\"arm\"\n        ;;\n    *)\n        echo \"Warning: Unsupported architecture: $ARCH\"\n        echo \"Cloudflare Tunnel will not be available\"\n        CLOUDFLARED_ARCH=\"\"\n        ;;\nesac\n\nif [ -n \"$CLOUDFLARED_ARCH\" ]; then\n    CLOUDFLARED_URL=\"https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CLOUDFLARED_ARCH}\"\n    echo \"Downloading cloudflared for ${CLOUDFLARED_ARCH}...\"\n    \n    if wget -q \"$CLOUDFLARED_URL\" -O cloudflared; then\n        chmod +x cloudflared\n        \n        # Try to move to /usr/local/bin, fallback to current directory\n        if mv cloudflared /usr/local/bin/cloudflared 2>/dev/null; then\n             echo \"Installed to /usr/local/bin\"\n        else\n             echo \"Could not move to /usr/local/bin, keeping in current dir\"\n        fi\n        \n        echo \"Cloudflare Tunnel installed successfully\"\n    else\n        echo \"Failed to download cloudflared\"\n    fi\nfi\n\necho \"===================================\"\necho \"Installation Complete!\"\necho \"===================================\"",
+      "container": "node:20-bullseye-slim",
       "entrypoint": "bash"
     }
   },
@@ -39,6 +38,16 @@
       "description": "The port that Self-Streme will listen on",
       "env_variable": "SERVER_PORT",
       "default_value": "7000",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric|between:1024,65535",
+      "field_type": "text"
+    },
+    {
+      "name": "Torrent Port",
+      "description": "Port for incoming P2P connections (TCP/UDP). Must be forwarded in the panel.",
+      "env_variable": "TORRENT_PORT",
+      "default_value": "6881",
       "user_viewable": true,
       "user_editable": true,
       "rules": "required|numeric|between:1024,65535",
