@@ -295,37 +295,44 @@ class HybridStreamService {
    * Get metadata via DHT (fallback method)
    */
   async getTorrentViaDHT(infoHash) {
+    let client;
     try {
       const WebTorrent = (await import("webtorrent")).default;
-      const client = new WebTorrent({ dht: true, tracker: false });
+      client = new WebTorrent({ dht: true, tracker: false });
 
-      return new Promise((resolve, reject) => {
+      return new Promise(async (resolve, reject) => {
         const magnet = `magnet:?xt=urn:btih:${infoHash}`;
-        const timeout = setTimeout(() => {
-          client.destroy();
+        const timeout = setTimeout(async () => {
+          if (client) await client.destroy();
           reject(new Error("DHT timeout"));
         }, 30000);
 
-        const torrent = client.add(magnet);
+        try {
+          const torrent = await client.add(magnet);
 
-        torrent.on("metadata", async () => {
-          clearTimeout(timeout);
+          torrent.on("metadata", async () => {
+            clearTimeout(timeout);
 
-          try {
-            const torrentFile = await parseTorrent.toTorrentFile(torrent);
-            client.destroy();
-            resolve(torrentFile);
-          } catch (err) {
-            client.destroy();
+            try {
+              const torrentFile = parseTorrent.toTorrentFile(torrent);
+              await client.destroy();
+              resolve(torrentFile);
+            } catch (err) {
+              await client.destroy();
+              reject(err);
+            }
+          });
+
+          torrent.on("error", async (err) => {
+            clearTimeout(timeout);
+            await client.destroy();
             reject(err);
-          }
-        });
-
-        torrent.on("error", (err) => {
+          });
+        } catch (err) {
           clearTimeout(timeout);
-          client.destroy();
+          if (client) await client.destroy();
           reject(err);
-        });
+        }
       });
     } catch (error) {
       logger.warn(`[Hybrid] DHT failed: ${error.message}`);

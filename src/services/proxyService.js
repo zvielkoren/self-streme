@@ -12,12 +12,16 @@ class ProxyService {
     async streamTorrent(req, res, infoHash) {
         try {
             // Get or create torrent
-            let torrent = this.client.get(infoHash) || 
-                         await this.addTorrent(infoHash);
+            let torrent = this.client.get(infoHash);
+            if (!torrent) {
+                torrent = await this.addTorrent(infoHash);
+            }
 
             // Wait for torrent metadata
             if (!torrent.files || !torrent.files.length) {
-                await new Promise(resolve => torrent.once('metadata', resolve));
+                if (!torrent.ready) {
+                    await new Promise(resolve => torrent.once('ready', resolve));
+                }
             }
 
             // Get the largest file
@@ -52,44 +56,55 @@ class ProxyService {
 
         } catch (error) {
             logger.error('Streaming error:', error);
-            res.status(500).send('Streaming error');
+            if (!res.headersSent) res.status(500).send('Streaming error');
         }
     }
 
     async addTorrent(infoHash) {
-        return new Promise((resolve, reject) => {
-            // Check if torrent already exists in WebTorrent client
-            let torrent = this.client.get(infoHash);
-            if (torrent) {
-                logger.debug(`Found existing torrent in client for ${infoHash}`);
-                return resolve(torrent);
-            }
+        // Check if torrent already exists in WebTorrent client
+        let torrent = this.client.get(infoHash);
+        if (torrent) {
+            logger.debug(`Found existing torrent in client for ${infoHash}`);
+            return torrent;
+        }
 
-            const magnet = `magnet:?xt=urn:btih:${infoHash}`;
-            torrent = this.client.add(magnet, {
-                announce: [
-                    "wss://tracker.openwebtorrent.com",
-                    "wss://tracker.btorrent.xyz"
-                ]
-            });
-
-            torrent.once('ready', () => resolve(torrent));
-            torrent.once('error', reject);
+        const magnet = `magnet:?xt=urn:btih:${infoHash}`;
+        // In WebTorrent 2.x, client.add returns a Promise
+        torrent = await this.client.add(magnet, {
+            announce: [
+                "wss://tracker.openwebtorrent.com",
+                "wss://tracker.btorrent.xyz"
+            ]
         });
+
+        if (!torrent.ready) {
+            await new Promise((resolve, reject) => {
+                torrent.once('ready', () => resolve(torrent));
+                torrent.once('error', reject);
+            });
+        }
+        
+        return torrent;
     }
 
-    cleanup() {
+    async cleanup() {
         const now = Date.now();
         for (const [infoHash, stream] of this.activeStreams) {
             if (now - stream.lastAccessed > 3600000) { // 1 hour
-                stream.torrent.destroy();
+                try {
+                    await stream.torrent.destroy();
+                } catch (err) {
+                    logger.error(`Error destroying torrent ${infoHash} during cleanup:`, err);
+                }
                 this.activeStreams.delete(infoHash);
             }
         }
     }
 
-    destroy() {
-        this.client.destroy();
+    async destroy() {
+        if (this.client) {
+            await this.client.destroy();
+        }
     }
 }
 
