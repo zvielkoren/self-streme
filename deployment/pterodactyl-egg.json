@@ -21,7 +21,8 @@
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/sh\n\n# Ensure we are in the server's working directory\ncd /mnt/server\n\n# Check if the directory is empty (no package.json)\nif [ ! -f package.json ]; then\n    echo \"Server directory empty. Copying application files from Docker image's /app directory...\"\n    # Copy files from the image to /mnt/server\n    # Using /app since that's where files are in our Dockerfile\n    cp -rp /app/. /mnt/server/\n    echo \"Files copied from Docker image to /mnt/server.\"\nelse\n    echo \"Server directory already contains files. Skipping copy from Docker image.\"\nfi\n\n# Ensure media, temp and logs directories exist\nmkdir -p media temp logs\n\necho \"Installation check complete. Server is ready to start.\"",
+            "script": "#!/bin/sh\n\n# Ensure we are in the server's working directory\ncd /mnt/server\n\n# Check if the directory is empty (no package.json)\nif [ ! -f package.json ]; then\n    echo \"Server directory empty. Copying application files from Docker image's /app directory...\"\n    # Copy files from the image to /mnt/server\n    # Using /app since that's where files are in our Dockerfile\n    cp -rp /app/. /mnt/server/\n    echo \"Files copied from Docker image to /mnt/server.\"\nelse\n    echo \"Server directory already contains files. Skipping copy from Docker image.\"\nfi\n\n# Ensure media, temp, logs and data directories exist
+mkdir -p media temp logs data\n\necho \"Installation check complete. Server is ready to start.\"",
             "container": "node:20-alpine",
             "entrypoint": "sh"
         }
