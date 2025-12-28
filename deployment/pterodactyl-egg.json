@@ -1,14 +1,13 @@
 {
-    "_comment": "Self-Streme Egg, based on https://github.com/pelican-eggs/eggs/blob/master/generic/nodejs/egg-node-js-generic.json",
+    "_comment": "Self-Streme Egg, v2",
     "meta": {
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2025-12-28T20:15:00+02:00",
+    "exported_at": "2025-12-28T20:30:00+02:00",
     "name": "Self-Streme",
     "author": "zvielkoren@github.com",
     "description": "A powerful self-hosted streaming server with Stremio integration. Uses the project's pre-built Docker image for fast and reliable setup.",
-    "features": null,
     "docker_images": {
         "Self-Streme (Latest)": "ghcr.io/zvielkoren/self-streme:latest"
     },
@@ -22,7 +21,8 @@
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/ash\n# Self-Streme Installation Script\n# Since we use a pre-built Docker image, this script only needs to copy files if the server directory is empty.\n\ncd /mnt/server\n\n# Pterodactyl's image mount can hide the /app contents.\n# If /mnt/server is empty, copy the app files from the image's /app directory.\nif [ ! -f package.json ]; then\n    echo \"No files found, copying from Docker image...\"\n    cp -r /app/.\nfi\n\necho \"Installation check complete. Using pre-built image.\"",
+            "script": "#!/bin/ash\n# Self-Streme Installation Script\n# This script ensures that if the server files are missing, they are copied from the image.\n\ncd /mnt/server\n\nif [ ! -f package.json ]; then\n    echo \"No files found, copying from Docker image's /app directory...\"\n    cp -r /app/.
+fi\n\necho \"Installation check complete.\"",
             "container": "alpine:latest",
             "entrypoint": "ash"
         }
