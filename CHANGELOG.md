@@ -5,7 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2025-12-28
+
+### Added
+- **P2P Hole Punching Service** ⚡
+  - Implemented STUN-based NAT traversal and port prediction.
+  - Added support for both UDP and TCP hole punching.
+  - Integrated `P2PCoordinator` into `TorrentService` for automatic connectivity.
+  - Support for `TORRENT_PORT` override via environment variables.
+- **Robust Deployment Support** 🚀
+  - Enhanced Pterodactyl egg with automated `run.sh` creation and optimized file copying.
+  - Added support for Cloudflare Tunnel in Docker and Pterodactyl environments.
+  - Pre-created logs, media, and temp directories in Docker image to prevent `EROFS` (Read-only file system) errors.
+- **Improved Stability** 🛡️
+  - Added graceful fallbacks for directory creation failures.
+  - Implemented recursive directory creation for complex paths.
+  - Added `bash` and `git` to the Docker base image to support auto-updates and scripts.
+
+### Changed
+- **Pterodactyl Egg Optimization**: Now uses the project's own Docker image by default for faster setup.
+- **Enhanced Logging**: Integrated error tracking for directory permissions and initialization.
+
+### Fixed
+- Fixed `EROFS: read-only file system` errors in restricted Docker/Pterodactyl environments.
+- Fixed `ENOENT` errors when creating subdirectories for downloads.
+- Fixed Pterodactyl installation failures caused by missing `bash` or `git`.
+- Resolved "Permission denied" errors for setup scripts in Alpine-based environments.
+
+## [1.0.0] - 2024-01-XX
 
 ### Added
 - **Dynamic Torrent Download Sources System** 🌐
