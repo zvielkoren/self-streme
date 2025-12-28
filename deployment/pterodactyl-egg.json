@@ -1,158 +1,62 @@
 {
-  "_comment": "Self-Streme Pterodactyl Egg Configuration",
-  "meta": {
-    "version": "PTDL_v2",
-    "update_url": null
-  },
-  "exported_at": "2025-01-12T12:00:00+00:00",
-  "name": "Self-Streme",
-  "author": "zvielkoren@github.com",
-  "description": "A powerful self-hosted streaming server with Stremio integration. Stream your media library and torrent content with automatic quality detection and cross-device support.",
-  "features": [
-    "stremio_addon",
-    "torrent_streaming",
-    "media_server"
-  ],
-  "docker_images": {
-    "Self-Streme (Latest)": "ghcr.io/zvielkoren/self-streme:latest",
-    "Node 20 (Generic)": "ghcr.io/parkervcp/yolks:nodejs_20"
-  },
-  "file_denylist": [],
-  "startup": "if [[ -d .git ]] && [[ {{AUTO_UPDATE}} == \"1\" ]]; then git pull; fi; if [[ ! -f .env ]]; then echo \"PORT={{SERVER_PORT}}\" > .env; echo \"TORRENT_PORT={{TORRENT_PORT}}\" >> .env; echo \"BASE_URL={{BASE_URL}}\" >> .env; echo \"TUNNEL_TOKEN={{TUNNEL_TOKEN}}\" >> .env; fi; if [[ ! -d node_modules ]] && [[ ! -f package-lock.json ]]; then npm install --production; fi; node src/index.js",
-  "config": {
-    "files": "{\r\n    \".env\": {\r\n        \"parser\": \"file\",\r\n        \"find\": {\r\n            \"PORT\": \"PORT={{server.build.default.port}}\",\r\n            \"TORRENT_PORT\": \"TORRENT_PORT={{server.build.env.TORRENT_PORT}}\",\r\n            \"BASE_URL\": \"BASE_URL={{server.build.env.BASE_URL}}\",\r\n            \"TUNNEL_TOKEN\": \"TUNNEL_TOKEN={{server.build.env.TUNNEL_TOKEN}}\"\r\n        }\r\n    }\r\n}",
-    "startup": "{\r\n    \"done\": \"Server running on port\"\r\n}",
-    "logs": "{}",
-    "stop": "^C"
-  },
-  "scripts": {
-    "installation": {
-      "script": "#!/bin/bash\n# Self-Streme Installation Script for Pterodactyl\nset -e\n\ncd /mnt/server\n\necho \"===================================\"\necho \"Self-Streme Installation\"\necho \"===================================\"\n\n# Update packages\napt update\napt install -y git curl wget\n\n# Clone repository if not exists\nif [ -z \"${GITHUB_REPO}\" ]; then\n    GITHUB_REPO=\"https://github.com/zvielkoren/self-streme.git\"\nfi\n\nif [ -z \"${BRANCH}\" ]; then\n    BRANCH=\"main\"\nfi\n\n# If we are using the pre-built image, the files are already in /app\n# But Pterodactyl mounts /mnt/server over it. \n# We check if /mnt/server is empty and if /app exists (indicating we are in our image)\nif [ ! -d .git ] && [ -d /app ] && [ \"$(ls -A /app)\" ]; then\n    echo \"Using files from pre-built Docker image...\"\n    cp -rn /app/* ./\nfi\n\nif [ -d .git ]; then\n    echo \"Repository already exists, updating...\"\n    git fetch origin\n    git reset --hard origin/${BRANCH}\nelse\n    echo \"Cloning repository...\"\n    git clone --single-branch --branch ${BRANCH} ${GITHUB_REPO} .\nfi\n\n# Install Node.js dependencies if not copied from image\nif [ ! -d node_modules ]; then\n    echo \"Installing dependencies...\"\n    npm install --production\nfi\n\n# Create necessary directories\nmkdir -p media temp\n\n# Install cloudflared if not present\nif ! command -v cloudflared &> /dev/null; then\n    echo \"===================================\"\n    echo \"Installing Cloudflare Tunnel (cloudflared)...\"\n    echo \"===================================\"\n\n    ARCH=$(uname -m)\n    case $ARCH in\n        x86_64) CLOUDFLARED_ARCH=\"amd64\" ;;&#10;        aarch64|arm64) CLOUDFLARED_ARCH=\"arm64\" ;;&#10;        armv7l|armhf) CLOUDFLARED_ARCH=\"arm\" ;;&#10;        *) CLOUDFLARED_ARCH=\"\" ;;&#10;    esac\n\n    if [ -n \"$CLOUDFLARED_ARCH\" ]; then\n        CLOUDFLARED_URL=\"https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CLOUDFLARED_ARCH}\"\n        if wget -q \"$CLOUDFLARED_URL\" -O cloudflared; then\n            chmod +x cloudflared\n            mv cloudflared /usr/local/bin/cloudflared 2>/dev/null || mv cloudflared ./
-        fi\n    fi\nfi\n\necho \"===================================\"\necho \"Installation Complete!\"\necho \"===================================\"\n",
-      "container": "ghcr.io/zvielkoren/self-streme:latest",
-      "entrypoint": "bash"
-    }
-  },
-  "variables": [
-    {
-      "name": "Server Port",
-      "description": "The port that Self-Streme will listen on",
-      "env_variable": "SERVER_PORT",
-      "default_value": "7000",
-      "user_viewable": true,
-      "user_editable": true,
-      "rules": "required|numeric|between:1024,65535",
-      "field_type": "text"
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
     },
-    {
-      "name": "Torrent Port",
-      "description": "Port for incoming P2P connections (TCP/UDP). Must be forwarded in the panel.",
-      "env_variable": "TORRENT_PORT",
-      "default_value": "6881",
-      "user_viewable": true,
-      "user_editable": true,
-      "rules": "required|numeric|between:1024,65535",
-      "field_type": "text"
+    "exported_at": "2025-12-28T20:00:00+02:00",
+    "name": "Self-Streme",
+    "author": "zvielkoren@github.com",
+    "description": "A powerful self-hosted streaming server with Stremio integration.\r\nSee: https:\/\/github.com\/zvielkoren\/self-streme",
+    "features": null,
+    "docker_images": {
+        "Self-Streme (Latest)": "ghcr.io/zvielkoren/self-streme:latest"
     },
-    {
-      "name": "Base URL",
-      "description": "The base URL for accessing Self-Streme (e.g., https://your-domain.com or http://YOUR_IP:7000). Leave empty for auto-detection.",
-      "env_variable": "BASE_URL",
-      "default_value": "",
-      "user_viewable": true,
-      "user_editable": true,
-      "rules": "nullable|string",
-      "field_type": "text"
+    "file_denylist": [],
+    "startup": ".\/run.sh",
+    "config": {
+        "files": "{\r\n    \".env\": {\r\n        \"parser\": \"properties\",\r\n        \"find\": {\r\n            \"PORT\": \"{{server.build.default.port}}\",\r\n            \"TORRENT_PORT\": \"{{server.build.env.TORRENT_PORT}}\",\r\n            \"BASE_URL\": \"{{server.build.env.BASE_URL}}\",\r\n            \"TUNNEL_TOKEN\": \"{{server.build.env.TUNNEL_TOKEN}}\"\r\n        }\r\n    }\r\n}",
+        "startup": "{\r\n    \"done\": \"Server running\"\r\n}",
+        "logs": "{}",
+        "stop": "exit"
     },
-    {
-      "name": "Auto Update",
-      "description": "Automatically pull latest changes from GitHub on startup",
-      "env_variable": "AUTO_UPDATE",
-      "default_value": "0",
-      "user_viewable": true,
-      "user_editable": true,
-      "rules": "required|boolean",
-      "field_type": "text"
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\r\n\r\ncd /mnt/server/\r\n\r\napt update\r\napt install -y git curl\r\n\r\nGITHUB_REPO=\"https:\/\/github.com\/zvielkoren\/self-streme.git\"\r\nBRANCH=\"main\"\r\n\r\nif [ ! -d .git ]; then\r\n    echo \"Cloning repository...\"\r\n    git clone --single-branch --branch ${BRANCH} ${GITHUB_REPO} .\r\nelse\r\n    echo \"Updating repository...\"\r\n    git fetch origin\r\n    git reset --hard origin\/${BRANCH}\r\nfi\r\n\r\necho \"Installing dependencies...\"\r\nnpm ci --only=production\r\n\r\nmkdir -p media temp\r\n\r\necho \"Creating run script...\"\r\ncat > run.sh << 'EOF'\r\n#!/bin/bash\r\nif [ ! -f .env ]; then\r\n    echo \"PORT=${SERVER_PORT:-7000}\" > .env\r\n    echo \"TORRENT_PORT=${TORRENT_PORT:-6881}\" >> .env\r\nfi\r\nnode src\/index.js\r\nEOF\r\nchmod +x run.sh\r\n\r\necho \"Installation complete!\"",
+            "container": "ghcr.io/zvielkoren/self-streme:latest",
+            "entrypoint": "bash"
+        }
     },
-    {
-      "name": "GitHub Repository",
-      "description": "GitHub repository URL to clone",
-      "env_variable": "GITHUB_REPO",
-      "default_value": "https://github.com/zvielkoren/self-streme.git",
-      "user_viewable": true,
-      "user_editable": true,
-      "rules": "required|string",
-      "field_type": "text"
-    },
-    {
-      "name": "Branch",
-      "description": "Git branch to use",
-      "env_variable": "BRANCH",
-      "default_value": "main",
-      "user_viewable": true,
-      "user_editable": true,
-      "rules": "required|string",
-      "field_type": "text"
-    },
-    {
-      "name": "Cache Backend",
-      "description": "Cache backend type: memory, sqlite, or redis",
-      "env_variable": "CACHE_BACKEND",
-      "default_value": "memory",
-      "user_viewable": true,
-      "user_editable": true,
-      "rules": "required|in:memory,sqlite,redis",
-      "field_type": "text"
-    },
-    {
-      "name": "Cache Max Size",
-      "description": "Maximum number of cached files",
-      "env_variable": "CACHE_MAX_SIZE",
-      "default_value": "1000",
-      "user_viewable": true,
-      "user_editable": true,
-      "rules": "required|numeric|min:1",
-      "field_type": "text"
-    },
-    {
-      "name": "Cache Max Disk MB",
-      "description": "Maximum disk usage for cache in MB",
-      "env_variable": "CACHE_MAX_DISK_MB",
-      "default_value": "5000",
-      "user_viewable": true,
-      "user_editable": true,
-      "rules": "required|numeric|min:100",
-      "field_type": "text"
-    },
-    {
-      "name": "Jackett URL",
-      "description": "Jackett server URL (optional)",
-      "env_variable": "JACKETT_URL",
-      "default_value": "",
-      "user_viewable": true,
-      "user_editable": true,
-      "rules": "nullable|string",
-      "field_type": "text"
-    },
-    {
-      "name": "Jackett API Key",
-      "description": "Jackett API key (optional)",
-      "env_variable": "JACKETT_API_KEY",
-      "default_value": "",
-      "user_viewable": true,
-      "user_editable": true,
-      "rules": "nullable|string",
-      "field_type": "text"
-    },
-    {
-      "name": "Cloudflare Tunnel Token",
-      "description": "Cloudflare Tunnel token for exposing the server through Cloudflare. Get your token from: https://one.dash.cloudflare.com/ → Zero Trust → Access → Tunnels (optional)",
-      "env_variable": "TUNNEL_TOKEN",
-      "default_value": "",
-      "user_viewable": true,
-      "user_editable": true,
-      "rules": "nullable|string",
-      "field_type": "text"
-    }
-  ]
+    "variables": [
+        {
+            "name": "Torrent Port",
+            "description": "Port for incoming P2P connections (TCP/UDP). Must be allocated as an additional port in the panel.",
+            "env_variable": "TORRENT_PORT",
+            "default_value": "6881",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|numeric|between:1024,65535",
+            "field_type": "text"
+        },
+        {
+            "name": "Base URL",
+            "description": "The public URL for accessing Self-Streme (e.g., https://your-domain.com). Leave empty for auto-detection.",
+            "env_variable": "BASE_URL",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Cloudflare Tunnel Token",
+            "description": "Optional Cloudflare Tunnel token for exposing the server.",
+            "env_variable": "TUNNEL_TOKEN",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        }
+    ]
 }
