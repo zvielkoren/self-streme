@@ -29,7 +29,7 @@
     "variables": [
         {
             "name": "Torrent Port",
-            "description": "Port for incoming P2P connections (TCP/UDP). Must be allocated as an additional port in the panel.",
+            "description": "Port for incoming P2P connections (TCP/UDP). If you get an 'address already in use' error, use a different port (e.g., 6882) and ensure it's allocated in the Network tab.",
             "env_variable": "TORRENT_PORT",
             "default_value": "6881",
             "user_viewable": true,

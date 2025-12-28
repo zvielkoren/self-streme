@@ -154,12 +154,14 @@ sudo ufw allow 25565/tcp
 
 ### Port Already in Use
 
-**Problem**: Error "Port already in use"
+**Problem**: Error "Port already in use" or "failed to bind host port ...:6881/tcp"
 
 **Solutions**:
-1. Change the `SERVER_PORT` variable in Startup settings
-2. Ensure no other service is using the port
-3. Restart the Pterodactyl daemon:
+1. Change the `SERVER_PORT` or `TORRENT_PORT` variable in Startup settings.
+2. If port 6881 is taken, use 6882, 6883, or any other port.
+3. Ensure the new port is added to the **Network** tab in Pterodactyl.
+4. Ensure no other service on the host machine is using the port.
+5. Restart the Pterodactyl daemon:
    ```bash
    # On host machine
    sudo systemctl restart wings
