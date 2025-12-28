@@ -1,93 +1,84 @@
 # Docker Deployment Guide
 
-This project includes complete Docker support with automatic Cloudflare Tunnel integration.
+Self-Streme is optimized for Docker. We provide pre-built images via the GitHub Container Registry.
 
-## 🚀 Quick Start
+## Quick Reference
+
+| Feature | Details |
+| :--- | :--- |
+| **Image** | `ghcr.io/zvielkoren/self-streme:latest` |
+| **Ports** | `7000` (API), `7001` (Addon), `6881` (P2P) |
+| **Volumes** | `/app/data` (Config), `/app/media` (Local files) |
+
+---
+
+## 1. Running with Docker CLI
+
+Pull and run the latest stable version:
 
 ```bash
-# 1. Configure
-cp .env.docker.example .env
-nano .env  # Optional: add your settings
+docker pull ghcr.io/zvielkoren/self-streme:latest
 
-# 2. Deploy
+docker run -d \
+  --name self-streme \
+  --restart unless-stopped \
+  -p 7000:7000 \
+  -p 7001:7001 \
+  -p 6881:6881 \
+  -p 6881:6881/udp \
+  -e TORRENT_PORT=6881 \
+  -v self_streme_data:/app/data \
+  ghcr.io/zvielkoren/self-streme:latest
+```
+
+## 2. Using Docker Compose
+
+Create a `docker-compose.yml` file:
+
+```yaml
+version: "3.8"
+
+services:
+  self-streme:
+    image: ghcr.io/zvielkoren/self-streme:latest
+    container_name: self-streme
+    restart: unless-stopped
+    ports:
+      - "7000:7000"
+      - "7001:7001"
+      - "6881:6881"
+      - "6881:6881/udp"
+    environment:
+      - TORRENT_PORT=6881
+      - NODE_ENV=production
+    volumes:
+      - ./data:/app/data
+```
+
+Run it:
+```bash
 docker-compose up -d
-
-# 3. View logs
-docker-compose logs -f
-```
-
-**Access**: http://localhost:3000
-
-## 🌐 With Cloudflare Tunnel
-
-Add to your `.env` file:
-```env
-TUNNEL_TOKEN=your_cloudflare_token_here
-```
-
-Then restart:
-```bash
-docker-compose restart
-```
-
-The tunnel starts automatically! No configuration needed.
-
-## 📚 Complete Documentation
-
-All Docker documentation is located in `docs/docker/`:
-
-| Document | Purpose |
-|----------|---------|
-| **[GETTING_STARTED.md](docker/GETTING_STARTED.md)** | Quick 3-minute setup guide |
-| **[README.md](docker/README.md)** | Complete overview and features |
-| **[SETUP.md](docker/SETUP.md)** | Detailed setup with troubleshooting |
-| **[DEPLOYMENT.md](docker/DEPLOYMENT.md)** | Deployment scenarios |
-| **[QUICK_REFERENCE.md](docker/QUICK_REFERENCE.md)** | Command reference |
-| **[EXAMPLES.md](docker/EXAMPLES.md)** | 12 real-world examples |
-| **[INDEX.md](docker/INDEX.md)** | Navigation hub |
-
-## 🧪 Test Your Setup
-
-```bash
-# Run automated tests
-./scripts/test-tunnel.sh
-
-# Check health
-curl http://localhost:3000/health
-```
-
-## ✨ Key Features
-
-- ✅ **Automatic tunnel detection** - Set `TUNNEL_TOKEN` and it works
-- ✅ **Dual-mode operation** - Works with or without tunnel
-- ✅ **Production-ready** - Security hardened, health checks
-- ✅ **Color-coded logs** - `[TUNNEL]` and `[APP]` prefixes
-- ✅ **Well documented** - 6 comprehensive guides
-- ✅ **Automated testing** - Validate before deploying
-
-## 🆘 Need Help?
-
-1. **Quick setup**: [docker/GETTING_STARTED.md](docker/GETTING_STARTED.md)
-2. **Commands**: [docker/QUICK_REFERENCE.md](docker/QUICK_REFERENCE.md)
-3. **Troubleshooting**: [docker/SETUP.md](docker/SETUP.md#troubleshooting)
-4. **Examples**: [docker/EXAMPLES.md](docker/EXAMPLES.md)
-
-## 📦 What's Included
-
-```
-self-streme/
-├── src/
-│   └── index.js                # Main app with integrated tunnel support
-├── Dockerfile                  # Container build
-├── docker-compose.yml          # Production setup
-├── docker-compose.dev.yml      # Development setup
-├── .env.docker.example         # Configuration template
-├── docs/
-│   ├── DOCKER.md               # This file
-│   └── docker/                 # Complete documentation
-└── scripts/test-tunnel.sh      # Automated tests
 ```
 
 ---
 
-**Start here**: [docker/GETTING_STARTED.md](docker/GETTING_STARTED.md) 🚀
+## 3. Versioning
+
+We use semantic versioning for our Docker tags:
+
+- `latest`: Always the most recent stable release.
+- `1.0.0`: Specific version (recommended for stability).
+- `master`: Bleeding edge build from the main branch (may be unstable).
+
+Check `package.json` in the repository to see the current version number.
+
+## 4. Troubleshooting
+
+**Container is unhealthy / Unhealthy status:**
+This usually happens if the internal health check fails.
+- Check logs: `docker logs self-streme`
+- Ensure ports `7000` is not blocked.
+
+**Cannot access localhost:7000:**
+- Ensure you mapped the ports correctly (`-p 7000:7000`).
+- If running on Windows/Mac, ensure Docker Desktop is running.
