@@ -20,12 +20,13 @@ import metadataService from '../core/metadataService.js';
 
 class SearchService {
     constructor() {
+        // Updated provider priority: TPB (fast/API) -> 1337x (mirrors) -> TorrentGalaxy -> YTS
         this.torrentProviders = [
+            tpbProvider,
             x1337Provider,
-            ytsProvider,
-            rarbgProvider,
+            // rarbgProvider, // Disabled: Service shutdown
             torrentGalaxyProvider,
-            tpbProvider
+            ytsProvider
         ];
 
         this.externalProviders = [

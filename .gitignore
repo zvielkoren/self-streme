@@ -62,3 +62,5 @@ cloudflared
 
 # Cache
 .cache/
+GEMINI.md
+fix.md
