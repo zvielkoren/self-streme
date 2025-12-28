@@ -13,63 +13,25 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #000;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
             color: white;
-            overflow: hidden;
-        }
-
-        /* Video Background Overlay */
-        .video-background {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
-            overflow: hidden;
-        }
-
-        .video-background video {
-            min-width: 100%;
-            min-height: 100%;
-            width: auto;
-            height: auto;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            object-fit: cover;
-            opacity: 0.4;
-            filter: grayscale(0.5) brightness(0.5);
-        }
-
-        .overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: radial-gradient(circle, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.8) 100%);
-            z-index: 0;
         }
 
         .container {
             background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(15px);
+            backdrop-filter: blur(10px);
             border-radius: 20px;
             padding: 60px 40px;
             max-width: 700px;
             width: 100%;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
             text-align: center;
             border: 1px solid rgba(255, 255, 255, 0.1);
-            z-index: 1;
-            position: relative;
         }
 
         .icon-container {
@@ -377,26 +339,6 @@
                 if (!data.enabled) {
                     console.log('Maintenance mode disabled, reloading...');
                     location.reload();
-                    return;
-                }
-
-                // Update UI with latest data
-                if (data.message) {
-                    document.getElementById('maintenanceMessage').textContent = data.message;
-                }
-
-                if (data.estimatedEndTime || data.timeRemaining) {
-                    const timeInfoEl = document.getElementById('timeInfo');
-                    timeInfoEl.style.display = 'block';
-
-                    if (data.estimatedEndTime) {
-                        const date = new Date(data.estimatedEndTime);
-                        document.getElementById('endTime').textContent = date.toLocaleString();
-                    }
-
-                    if (data.timeRemaining) {
-                        document.getElementById('timeRemaining').textContent = data.timeRemaining;
-                    }
                 }
             } catch (error) {
                 console.error('Failed to check maintenance status:', error);
@@ -406,9 +348,6 @@
         // Start countdown when page loads
         window.addEventListener('DOMContentLoaded', () => {
             startCountdown();
-            
-            // Initial check
-            checkStatus();
 
             // Check status every 10 seconds
             setInterval(checkStatus, 10000);
@@ -416,15 +355,6 @@
     </script>
 </head>
 <body>
-    <div class="video-background">
-        <!-- Maintenance Video Overlay -Plays on Loop -->
-        <video autoplay muted loop playsinline id="maintenanceVideo">
-            <source src="https://assets.mixkit.co/videos/preview/mixkit-digital-animation-of-a-circuit-board-14030-large.mp4" type="video/mp4">
-            Your browser does not support the video tag.
-        </video>
-    </div>
-    <div class="overlay"></div>
-
     <div class="container">
         <div class="icon-container">
             <div class="icon">🔧</div>
@@ -497,5 +427,36 @@
             <p>Thank you for your patience! 🙏</p>
         </div>
     </div>
+
+    <script>
+        // Inject dynamic maintenance info if available
+        (function() {
+            // This could be populated by the server with actual maintenance data
+            const maintenanceData = {
+                message: null,
+                endTime: null,
+                timeRemaining: null
+            };
+
+            // Update message if provided
+            if (maintenanceData.message) {
+                document.getElementById('maintenanceMessage').textContent = maintenanceData.message;
+            }
+
+            // Update time info if provided
+            if (maintenanceData.endTime || maintenanceData.timeRemaining) {
+                const timeInfoEl = document.getElementById('timeInfo');
+                timeInfoEl.style.display = 'block';
+
+                if (maintenanceData.endTime) {
+                    document.getElementById('endTime').textContent = maintenanceData.endTime;
+                }
+
+                if (maintenanceData.timeRemaining) {
+                    document.getElementById('timeRemaining').textContent = maintenanceData.timeRemaining;
+                }
+            }
+        })();
+    </script>
 </body>
 </html>
