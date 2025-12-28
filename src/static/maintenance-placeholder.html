@@ -339,6 +339,26 @@
                 if (!data.enabled) {
                     console.log('Maintenance mode disabled, reloading...');
                     location.reload();
+                    return;
+                }
+
+                // Update UI with latest data
+                if (data.message) {
+                    document.getElementById('maintenanceMessage').textContent = data.message;
+                }
+
+                if (data.estimatedEndTime || data.timeRemaining) {
+                    const timeInfoEl = document.getElementById('timeInfo');
+                    timeInfoEl.style.display = 'block';
+
+                    if (data.estimatedEndTime) {
+                        const date = new Date(data.estimatedEndTime);
+                        document.getElementById('endTime').textContent = date.toLocaleString();
+                    }
+
+                    if (data.timeRemaining) {
+                        document.getElementById('timeRemaining').textContent = data.timeRemaining;
+                    }
                 }
             } catch (error) {
                 console.error('Failed to check maintenance status:', error);
@@ -348,7 +368,7 @@
         // Start countdown when page loads
         window.addEventListener('DOMContentLoaded', () => {
             startCountdown();
-
+            checkStatus();
             // Check status every 10 seconds
             setInterval(checkStatus, 10000);
         });
