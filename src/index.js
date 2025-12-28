@@ -64,6 +64,10 @@ const CLEANUP_INTERVAL = config.cache.cleanupInterval * 1000;
 // Initialize Express app
 const app = express();
 
+// Body parsers
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 // Basic error handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -364,7 +368,7 @@ app.get("/api/cache-config", (req, res) => {
   res.json(stats);
 });
 
-app.post("/api/cache-config", express.json(), (req, res) => {
+app.post("/api/cache-config", (req, res) => {
   try {
     const { forceCleanup } = req.body;
 
@@ -564,7 +568,7 @@ app.get("/stream/proxy/:infoHash", async (req, res) => {
 // This endpoint allows users to provide a magnet link and get streamable URLs
 // Uses external services that work on ANY server without P2P requirements
 // Supports both GET (magnet in query param) and POST (magnet in body)
-app.get("/stream/magnet", express.json(), async (req, res) => {
+app.get("/stream/magnet", async (req, res) => {
   try {
     const magnetLink = req.query.magnet || req.query.url;
 
@@ -672,7 +676,7 @@ app.get("/stream/magnet", express.json(), async (req, res) => {
 });
 
 // POST endpoint for magnet link conversion (accepts JSON body)
-app.post("/stream/magnet", express.json(), async (req, res) => {
+app.post("/stream/magnet", async (req, res) => {
   try {
     const magnetLink = req.body.magnet || req.body.url;
 
