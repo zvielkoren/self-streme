@@ -16,7 +16,7 @@
     "startup": "node src/index.js",
     "config": {
         "files": "{\".env\":{\"parser\":\"properties\",\"find\":{\"PORT\":\"{{server.build.default.port}}\",\"TORRENT_PORT\":\"{{server.build.env.TORRENT_PORT}}\",\"BASE_URL\":\"{{server.build.env.BASE_URL}}\",\"TUNNEL_TOKEN\":\"{{server.build.env.TUNNEL_TOKEN}}\"}}}",
-        "startup": "{\r\n    \"done\": \"Server running on port\"\r\n}",
+        "startup": "{\"done\": \"Server running on port\"}",
         "logs": "{}",
         "stop": "^C"
     },
