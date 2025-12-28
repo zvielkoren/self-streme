@@ -15,15 +15,14 @@
     "file_denylist": [],
     "startup": "node src/index.js",
     "config": {
-        "files": "{\r\n    \.env": {\r\n        \"parser\": \"properties\",\r\n        \"find\": {\r\n            \"PORT\": \"{{server.build.default.port}}\",\r\n            \"TORRENT_PORT\": \"{{server.build.env.TORRENT_PORT}}\",\r\n            \"BASE_URL\": \"{{server.build.env.BASE_URL}}\",\r\n            \"TUNNEL_TOKEN\": \"{{server.build.env.TUNNEL_TOKEN}}\"\r\n        }\r\n    }\r\n}",
+        "files": "{\".env\":{\"parser\":\"properties\",\"find\":{\"PORT\":\"{{server.build.default.port}}\",\"TORRENT_PORT\":\"{{server.build.env.TORRENT_PORT}}\",\"BASE_URL\":\"{{server.build.env.BASE_URL}}\",\"TUNNEL_TOKEN\":\"{{server.build.env.TUNNEL_TOKEN}}\"}}}",
         "startup": "{\r\n    \"done\": \"Server running on port\"\r\n}",
         "logs": "{}",
         "stop": "^C"
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/ash\n# Self-Streme Installation Script\n# Since we use a pre-built Docker image, this script only needs to copy files if the server directory is empty.\n\ncd /mnt/server\n\n# Pterodactyl's image mount can hide the /app contents.\n# If /mnt/server is empty, copy the app files from the image's /app directory.\nif [ ! -f package.json ]; then\n    echo \"No files found, copying from Docker image...\"\n    cp -r /app/.
-fi\n\necho \"Installation check complete. Using pre-built image.\"",
+            "script": "#!/bin/ash\n# Self-Streme Installation Script\n# Since we use a pre-built Docker image, this script only needs to copy files if the server directory is empty.\n\ncd /mnt/server\n\n# Pterodactyl's image mount can hide the /app contents.\n# If /mnt/server is empty, copy the app files from the image's /app directory.\nif [ ! -f package.json ]; then\n    echo \"No files found, copying from Docker image...\"\n    cp -r /app/.\nfi\n\necho \"Installation check complete. Using pre-built image.\"",
             "container": "alpine:latest",
             "entrypoint": "ash"
         }
