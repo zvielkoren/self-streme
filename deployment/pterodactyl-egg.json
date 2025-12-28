@@ -10,10 +10,10 @@
     "description": "A powerful self-hosted streaming server with Stremio integration.\r\nSee: https:\/\/github.com\/zvielkoren\/self-streme",
     "features": null,
     "docker_images": {
-        "Self-Streme (Latest)": "ghcr.io\/zvielkoren\/self-streme:latest"
+        "Self-Streme (Latest)": "ghcr.io/zvielkoren/self-streme:latest"
     },
     "file_denylist": [],
-    "startup": "if [ ! -f .env ]; then echo \"PORT={{SERVER_PORT:-7000}}\" > .env; echo \"TORRENT_PORT={{TORRENT_PORT:-6881}}\" >> .env; fi; node src\/index.js",
+    "startup": "if [ ! -f .env ]; then echo \"PORT={{SERVER_PORT:-7000}}\" > .env; echo \"TORRENT_PORT={{TORRENT_PORT:-6881}}\" >> .env; fi; node src/index.js",
     "config": {
         "files": "{\r\n    \".env\": {\r\n        \"parser\": \"properties\",\r\n        \"find\": {\r\n            \"PORT\": \"{{server.build.default.port}}\",\r\n            \"TORRENT_PORT\": \"{{server.build.env.TORRENT_PORT}}\",\r\n            \"BASE_URL\": \"{{server.build.env.BASE_URL}}\",\r\n            \"TUNNEL_TOKEN\": \"{{server.build.env.TUNNEL_TOKEN}}\"\r\n        }\r\n    }\r\n}",
         "startup": "{\r\n    \"done\": \"Server running\"\r\n}",
@@ -22,9 +22,9 @@
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/bash\r\n\r\ncd /mnt/server/\r\n\r\napt update\r\napt install -y git curl\r\n\r\nGITHUB_REPO=\"https:\/\/github.com\/zvielkoren\/self-streme.git\"\r\nBRANCH=\"main\"\r\n\r\nif [ ! -d .git ]; then\r\n    echo \"Cloning repository...\"\r\n    git clone --single-branch --branch ${BRANCH} ${GITHUB_REPO} .\r\nelse\r\n    echo \"Updating repository...\"\r\n    git fetch origin\r\n    git reset --hard origin\/${BRANCH}\r\nfi\r\n\r\necho \"Installing dependencies...\"\r\nnpm ci --only=production\r\n\r\nmkdir -p media temp\r\n\r\necho \"Installation complete!\"",
-            "container": "ghcr.io\/parkervcp\/yolks:nodejs_20",
-            "entrypoint": "bash"
+            "script": "#!/bin/bash\necho \"Installation is not required for this Docker image.\"",
+            "container": "alpine:latest",
+            "entrypoint": "ash"
         }
     },
     "variables": [
