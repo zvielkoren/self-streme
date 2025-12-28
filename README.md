@@ -1,8 +1,14 @@
-# Self-Streme 🎬
+<div align="center">
 
-**Self-Hosted Streaming Server & Stremio Addon**
+# 🎬 Self-Streme
 
-Self-Streme is a powerful, self-hosted streaming solution that bridges your local media, torrent networks, and Stremio. It provides a robust backend for streaming content directly to Stremio or any web browser, featuring advanced caching, P2P acceleration, and automated Docker deployment.
+**A Powerful Self-Hosted Streaming Server with Stremio Integration**
+
+**License:** [Private](LICENSE) | **Node.js:** [≥18.0.0](https://nodejs.org/) | **Platform:** [Stremio](https://www.stremio.com/)
+
+*Transform your media library into a professional streaming platform*
+
+</div>
 
 ---
 
