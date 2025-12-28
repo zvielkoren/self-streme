@@ -1,15 +1,15 @@
 {
-    "_comment": "Self-Streme Egg, v3",
+    "_comment": "Self-Streme Egg, v4 - Standard Installation Flow",
     "meta": {
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2025-12-28T20:45:00+02:00",
+    "exported_at": "2025-12-28T21:00:00+02:00",
     "name": "Self-Streme",
     "author": "zvielkoren@github.com",
-    "description": "A powerful self-hosted streaming server with Stremio integration. Uses the project's pre-built Docker image for fast and reliable setup.",
+    "description": "A powerful self-hosted streaming server with Stremio integration. This egg clones the repository and installs dependencies before starting.",
     "docker_images": {
-        "Self-Streme (Latest)": "ghcr.io/zvielkoren/self-streme:latest"
+        "Node.js 20": "ghcr.io/parkervcp/yolks:nodejs_20"
     },
     "file_denylist": [],
     "startup": "node src/index.js",
@@ -21,7 +21,20 @@
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/bash\n\ncd /mnt/server/\n\napt update\napt install -y git curl\n\nGITHUB_REPO=\"https://github.com/zvielkoren/self-streme.git\"\nBRANCH=\"main\"\n\nif [ ! -d .git ]; then\n    echo \"Cloning repository...\"\n    git clone --single-branch --branch ${BRANCH} ${GITHUB_REPO} .\nelse\n    echo \"Updating repository...\"\n    git fetch origin\n    git reset --hard origin/${BRANCH}\nfi\n\necho \"Installing dependencies...\"\nnpm ci --only=production\n\nmkdir -p media temp\n\necho \"Installation complete!\"",
+            "script": "#!/bin/bash\n# Self-Streme Installation Script\n\ncd /mnt/server/\n\n# Install required system packages\napt update\napt install -y git curl\n\n# Define repository details\nGITHUB_REPO=\"https://github.com/zvielkoren/self-streme.git\"
+BRANCH=\"main\"
+
+# Clone or update the repository
+if [ ! -d .git ]; then
+    echo \"Cloning repository...\"
+    git clone --single-branch --branch ${BRANCH} ${GITHUB_REPO} .
+else
+    echo \"Repository exists, updating...\"
+    git fetch origin
+    git reset --hard origin/${BRANCH}
+fi
+\n# Install Node.js dependencies\necho \"Installing dependencies...\"
+npm ci --only=production\n\n# Create necessary directories\nmkdir -p media temp\n\necho \"Installation complete! Server is ready to start.\"",
             "container": "ghcr.io/parkervcp/yolks:nodejs_20",
             "entrypoint": "bash"
         }
