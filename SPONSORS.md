@@ -1,3 +1,5 @@
+## 🏆 Current Sponsors
+
 # 💎 Sponsors & Support
 
 Thank you for considering sponsoring Self-Streme! Your support helps maintain and improve this project for everyone.
