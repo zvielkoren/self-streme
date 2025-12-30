@@ -1,5 +1,13 @@
 # Sponsors
 
-This project is supported by a dynamic network of contributors and sponsors. For details on our supporters, please refer to our [sponsors.yml](.github/workflows/sponsors.yml) file.
+This repository is supported by the generosity of our sponsors! Sponsorships ensure the project's development and maintenance.
 
-By maintaining this file, you can see the latest updates regarding sponsorship tiers and involved companies/individuals. Your consistent contributions are central to our continued success!
+## 🏆 Current Sponsors
+
+Be the first to sponsor this project! Your support will be deeply appreciated.
+
+---
+
+## Become a Sponsor
+
+If you'd like to support this project, please consider becoming a sponsor. Visit our [GitHub Sponsors page](https://github.com/sponsors/zvielkoren) to learn more.
