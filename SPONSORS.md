@@ -1,10 +1,23 @@
 ## 🏆 Current Sponsors
 
-# 💎 Sponsors & Support
+### 🌟 Platinum Sponsors
+*Be the first Platinum Sponsor!*
 
-Thank you for considering sponsoring Self-Streme! Your support helps maintain and improve this project for everyone.
+### 💎 Diamond Sponsors
+*Be the first Diamond Sponsor!*
 
----
+### 🥇 Gold Sponsors
+*Be the first Gold Sponsor!*
+
+### 🥈 Silver Sponsors
+*Be the first Silver Sponsor!*
+
+### 🥉 Bronze Sponsors
+*Be the first Bronze Sponsor!*
+
+### ☕ Coffee Sponsors
+*Be the first Coffee Sponsor!*
+
 
 ## 🌟 Why Sponsor?
 
