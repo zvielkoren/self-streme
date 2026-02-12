@@ -2,38 +2,38 @@
 # These users will automatically be requested for review when someone opens a pull request
 
 # Default owners for everything in the repo
-* @zviel
+* @zvielkoren
 
 # Core services
-/src/services/ @zviel
-/src/services/torrentDownloadSources.js @zviel
-/src/services/hybridStreamService.js @zviel
+/src/services/ @zvielkoren
+/src/services/torrentDownloadSources.js @zvielkoren
+/src/services/hybridStreamService.js @zvielkoren
 
 # API endpoints
-/src/api/ @zviel
-/src/routes/ @zviel
+/src/api/ @zvielkoren
+/src/routes/ @zvielkoren
 
 # Configuration
-/src/config/ @zviel
-.env.example @zviel
+/src/config/ @zvielkoren
+.env.example @zvielkoren
 
 # Documentation
-/docs/ @zviel
-/wiki/ @zviel
-*.md @zviel
+/docs/ @zvielkoren
+/wiki/ @zvielkoren
+*.md @zvielkoren
 
 # GitHub workflows and settings
-/.github/ @zviel
+/.github/ @zvielkoren
 
 # Package dependencies
-package.json @zviel
-package-lock.json @zviel
+package.json @zvielkoren
+package-lock.json @zvielkoren
 
 # Docker configuration
-Dockerfile @zviel
-docker-compose*.yml @zviel
+Dockerfile @zvielkoren
+docker-compose*.yml @zvielkoren
 
 # Security-sensitive files
-.env* @zviel
-/src/middleware/auth*.js @zviel
-/src/middleware/security*.js @zviel
+.env* @zvielkoren
+/src/middleware/auth*.js @zvielkoren
+/src/middleware/security*.js @zvielkoren
