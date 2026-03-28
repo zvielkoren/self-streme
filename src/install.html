@@ -526,6 +526,7 @@ h1 {
     </div>
 </div>
 
+<script src="/static/network-utils.js"></script>
 <script>
 // Generate animated background particles
 function generateParticles() {
@@ -553,8 +554,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     try {
         // Fetch the current base URL from the server (proxy-aware)
-        const response = await fetch('/api/base-url');
-        const data = await response.json();
+        const baseUrlResponse = await window.NetworkUtils.fetchJsonSafe('/api/base-url');
+        if (!baseUrlResponse.ok || !baseUrlResponse.data) {
+            throw baseUrlResponse.error || new Error('Failed to read /api/base-url response');
+        }
+        const data = baseUrlResponse.data;
         
         document.getElementById('manual-url').textContent = data.manifestUrl;
         
@@ -579,8 +583,11 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 async function updateServerStatus() {
     try {
-        const response = await fetch('/health');
-        const data = await response.json();
+        const healthResponse = await window.NetworkUtils.fetchJsonSafe('/health');
+        if (!healthResponse.ok || !healthResponse.data) {
+            throw healthResponse.error || new Error('Failed to read /health response');
+        }
+        const data = healthResponse.data;
         
         if (data.status === 'ok') {
             document.getElementById('addon-status').textContent = 'Server Active';

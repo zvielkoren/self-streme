@@ -26,7 +26,7 @@
     "docker:clean": "docker-compose down -v && docker system prune -f",
     "docker:shell": "docker-compose exec self-streme sh",
     "docker:health": "docker inspect --format='{{.State.Health.Status}}' self-streme",
-    "test": "node --test test/infoHash.test.js test/streamResultNormalizer.test.js test/hybridStreamService.test.js test/searchService.test.js",
+    "test": "node --test test/infoHash.test.js test/streamResultNormalizer.test.js test/hybridStreamService.test.js test/searchService.test.js test/networkUtils.test.js test/p2pCoordinator.test.js",
     "validate:streaming": "node scripts/validate-streaming-pipeline.js",
     "test:tunnel": "./scripts/test-tunnel.sh",
     "test:health": "curl http://localhost:3000/health",

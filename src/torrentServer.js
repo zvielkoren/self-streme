@@ -43,6 +43,31 @@ class TorrentServer {
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: true }));
 
+    this.app.use((err, req, res, next) => {
+      if (!err) return next();
+
+      if (err.type === 'entity.parse.failed') {
+        logger.warn('[HTTP] Invalid JSON request body', {
+          path: req.path,
+          method: req.method,
+          contentType: req.get('content-type') || 'unknown',
+          contentLength: req.get('content-length') || 'unknown',
+          error: err.message,
+        });
+        return res.status(400).json({
+          error: 'Invalid JSON request body',
+          message: 'Request payload is not valid JSON',
+        });
+      }
+
+      logger.error('[HTTP] Middleware error', {
+        path: req.path,
+        method: req.method,
+        error: err.message,
+      });
+      return res.status(500).json({ error: 'Internal server error' });
+    });
+
     // Request logging
     this.app.use((req, res, next) => {
       logger.info(`${req.method} ${req.path}`, {

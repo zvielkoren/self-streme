@@ -293,6 +293,7 @@
             animation: spin 1s linear infinite;
         }
     </style>
+    <script src="/static/network-utils.js"></script>
     <script>
         // Auto-refresh every 30 seconds
         let refreshTimer;
@@ -333,7 +334,13 @@
         async function checkStatus() {
             try {
                 const response = await fetch('/api/maintenance/status');
-                const data = await response.json();
+                const parsed = await window.NetworkUtils.readJsonResponseSafe(response, {
+                    requestUrl: '/api/maintenance/status'
+                });
+                if (!parsed.ok || !parsed.data) {
+                    throw parsed.error || new Error('Invalid maintenance status response');
+                }
+                const data = parsed.data;
 
                 // If maintenance is disabled, reload to access the service
                 if (!data.enabled) {

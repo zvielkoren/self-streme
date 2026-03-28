@@ -214,8 +214,20 @@
         </div>
     </div>
 
+    <script src="/static/network-utils.js"></script>
     <script>
         let currentSources = [];
+
+        async function fetchJsonOrThrow(url, options = {}) {
+            const response = await fetch(url, options);
+            const parsed = await window.NetworkUtils.readJsonResponseSafe(response, {
+                requestUrl: url
+            });
+            if (!parsed.ok) {
+                throw parsed.error || new Error(`Request failed for ${url}`);
+            }
+            return parsed.data;
+        }
         
         // Initialize page
         document.addEventListener('DOMContentLoaded', function() {
@@ -230,11 +242,10 @@
         async function loadSystemInfo() {
             const infoDiv = document.getElementById('systemInfo');
             try {
-                const healthResponse = await fetch('/health');
-                const statusResponse = await fetch('/status');
-                
-                const health = await healthResponse.json();
-                const status = await statusResponse.json();
+                const [health, status] = await Promise.all([
+                    fetchJsonOrThrow('/health'),
+                    fetchJsonOrThrow('/status')
+                ]);
                 
                 infoDiv.innerHTML = `
                     <div class="stat-card">
@@ -268,8 +279,7 @@
                     url += `/${season}/${episode}`;
                 }
                 
-                const response = await fetch(url);
-                const data = await response.json();
+                const data = await fetchJsonOrThrow(url);
                 
                 if (data.streams && data.streams.length > 0) {
                     currentSources = data.streams;
@@ -347,8 +357,7 @@
         async function loadCacheStats() {
             const statsDiv = document.getElementById('cacheStats');
             try {
-                const response = await fetch('/api/cache-stats');
-                const stats = await response.json();
+                const stats = await fetchJsonOrThrow('/api/cache-stats');
                 
                 displayCacheStats(stats, statsDiv);
             } catch (error) {
@@ -359,8 +368,7 @@
         async function loadCacheConfig() {
             const configDiv = document.getElementById('cacheConfig');
             try {
-                const response = await fetch('/api/cache-config');
-                const config = await response.json();
+                const config = await fetchJsonOrThrow('/api/cache-config');
                 
                 configDiv.innerHTML = `
                     <h5>Cache Configuration:</h5>
@@ -409,13 +417,11 @@
         async function forceCleanup() {
             const statsDiv = document.getElementById('cacheStats');
             try {
-                const response = await fetch('/api/cache-config', {
+                const result = await fetchJsonOrThrow('/api/cache-config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ forceCleanup: true })
                 });
-                
-                const result = await response.json();
                 
                 if (result.success) {
                     alert(`Cache cleanup completed. Freed ${result.freedSpace || 0} MB`);
@@ -445,8 +451,7 @@
                     url += `/${season}/${episode}`;
                 }
                 
-                const response = await fetch(url);
-                const data = await response.json();
+                const data = await fetchJsonOrThrow(url);
                 
                 resultDiv.innerHTML = `
                     <div class="status ${data.streams && data.streams.length > 0 ? 'success' : 'warning'}">

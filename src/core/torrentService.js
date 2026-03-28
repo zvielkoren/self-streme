@@ -108,9 +108,32 @@ class TorrentService {
       : createMagnetUri(infoHash);
 
     let torrent = this.client.get(infoHash);
-    if (!torrent) {
-      // In WebTorrent 2.x, client.add returns a Promise
-      torrent = await this.client.add(magnetUri, { path: this.downloadPath });
+
+    // Some runtimes may return a pending/non-torrent placeholder from get().
+    if (torrent && !this.isTorrentHandle(torrent)) {
+      logger.warn(`[Torrent] client.get returned non-torrent value for ${infoHash}`, {
+        value: this.describeRuntimeValue(torrent),
+      });
+      torrent = await this.waitForTorrentHandle(infoHash, 1500);
+    }
+
+    if (!this.isTorrentHandle(torrent)) {
+      let addResult;
+      try {
+        addResult = this.client.add(magnetUri, { path: this.downloadPath });
+      } catch (error) {
+        logger.warn(`[Torrent] client.add failed for ${infoHash}, retrying via get/wait`, {
+          error: error.message,
+        });
+      }
+      torrent = await this.resolveTorrentHandle(addResult, infoHash, 10000);
+    }
+
+    if (!this.isTorrentHandle(torrent)) {
+      logger.error(`[Torrent] Failed to acquire torrent handle for ${infoHash}`, {
+        immediateGet: this.describeRuntimeValue(this.client.get(infoHash)),
+      });
+      throw new Error("Failed to acquire torrent handle");
     }
 
     if (torrent.ready) {
@@ -221,8 +244,28 @@ class TorrentService {
       : createMagnetUri(infoHash);
 
     let torrent = this.client.get(infoHash);
-    if (!torrent) {
-      torrent = await this.client.add(magnetUri, { path: this.downloadPath, ...options });
+
+    if (torrent && !this.isTorrentHandle(torrent)) {
+      logger.warn(`[Torrent] client.get returned non-torrent value for ${infoHash} during addTorrent`, {
+        value: this.describeRuntimeValue(torrent),
+      });
+      torrent = await this.waitForTorrentHandle(infoHash, 1500);
+    }
+
+    if (!this.isTorrentHandle(torrent)) {
+      let addResult;
+      try {
+        addResult = this.client.add(magnetUri, { path: this.downloadPath, ...options });
+      } catch (error) {
+        logger.warn(`[Torrent] client.add failed for ${infoHash} during addTorrent, retrying via get/wait`, {
+          error: error.message,
+        });
+      }
+      torrent = await this.resolveTorrentHandle(addResult, infoHash, 10000);
+    }
+
+    if (!this.isTorrentHandle(torrent)) {
+      throw new Error(`Failed to add torrent: could not resolve torrent handle for ${infoHash}`);
     }
 
     if (torrent.ready) {
@@ -350,6 +393,61 @@ class TorrentService {
 
   extractInfoHash(magnetOrHash) {
     return extractInfoHash(magnetOrHash);
+  }
+
+  describeRuntimeValue(value) {
+    if (value === null) return { type: "null" };
+    if (value === undefined) return { type: "undefined" };
+
+    const valueType = typeof value;
+    if (valueType !== "object") {
+      return { type: valueType, preview: String(value).slice(0, 120) };
+    }
+
+    return {
+      type: value?.constructor?.name || "Object",
+      keys: Object.keys(value).slice(0, 10),
+      hasOn: typeof value.on === "function",
+      hasOnce: typeof value.once === "function",
+      hasDestroy: typeof value.destroy === "function",
+      hasInfoHash: typeof value.infoHash === "string",
+    };
+  }
+
+  isTorrentHandle(candidate) {
+    return (
+      candidate &&
+      typeof candidate === "object" &&
+      typeof candidate.on === "function" &&
+      typeof candidate.once === "function" &&
+      typeof candidate.destroy === "function"
+    );
+  }
+
+  async waitForTorrentHandle(infoHash, timeoutMs = 2000) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      const existing = this.client.get(infoHash);
+      if (this.isTorrentHandle(existing)) return existing;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return null;
+  }
+
+  async resolveTorrentHandle(addResult, infoHash, waitTimeoutMs = 2000) {
+    // WebTorrent versions may return a torrent object immediately or a promise-like value.
+    const resolved = await Promise.resolve(addResult);
+    if (this.isTorrentHandle(resolved)) return resolved;
+
+    const existing = this.client.get(infoHash);
+    if (this.isTorrentHandle(existing)) return existing;
+
+    logger.warn(`[Torrent] Unexpected torrent add/get result shape for ${infoHash}`, {
+      addResult: this.describeRuntimeValue(resolved),
+      getResult: this.describeRuntimeValue(existing),
+    });
+
+    return this.waitForTorrentHandle(infoHash, waitTimeoutMs);
   }
 
   isVideoFile(filename) {

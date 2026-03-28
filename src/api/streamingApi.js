@@ -291,12 +291,15 @@ export function createStreamingRouter(torrentService, cacheManager) {
    * GET /:infoHash/:fileIndex
    * Compatibility endpoint for internal/legacy stream URLs (e.g. from stremio-addon-sdk)
    */
-  router.get("/:infoHash/:fileIndex", async (req, res) => {
+  router.get("/:infoHash/:fileIndex", async (req, res, next) => {
     const { infoHash, fileIndex } = req.params;
     
     // Check if infoHash is valid (40 char hex)
     if (!/^[a-f0-9]{40}$/i.test(infoHash)) {
-      return res.status(404).end();
+      logger.debug(
+        `[API] Compatibility route bypass for non-infoHash path: ${req.originalUrl}`,
+      );
+      return next();
     }
 
     const index = parseInt(fileIndex, 10) || 0;

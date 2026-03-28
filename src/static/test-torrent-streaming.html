@@ -456,6 +456,7 @@
     </div>
   </div>
 
+  <script src="/static/network-utils.js"></script>
   <script>
     const API_BASE = window.location.origin;
     let statusPollingInterval = null;
@@ -495,6 +496,17 @@
       showOutput(elementId, `❌ Error: ${error.message || error}`, false);
     }
 
+    async function fetchJsonOrThrow(url, options = {}) {
+      const response = await fetch(url, options);
+      const parsed = await window.NetworkUtils.readJsonResponseSafe(response, {
+        requestUrl: url
+      });
+      if (!parsed.ok) {
+        throw parsed.error || new Error(`Request failed for ${url}`);
+      }
+      return parsed.data;
+    }
+
     async function addTorrent() {
       const magnet = document.getElementById('magnetInput').value.trim();
       if (!magnet) {
@@ -505,13 +517,11 @@
       showLoading('addOutput');
 
       try {
-        const response = await fetch(`${API_BASE}/api/torrents`, {
+        const data = await fetchJsonOrThrow(`${API_BASE}/api/torrents`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ magnetUri: magnet })
         });
-
-        const data = await response.json();
         showOutput('addOutput', data);
 
         if (data.success && data.data.infoHash) {
@@ -535,8 +545,7 @@
       showLoading('statusOutput');
 
       try {
-        const response = await fetch(`${API_BASE}/api/torrents/${hash}`);
-        const data = await response.json();
+        const data = await fetchJsonOrThrow(`${API_BASE}/api/torrents/${hash}`);
         showOutput('statusOutput', data);
 
         if (data.success && data.data.progress) {
@@ -600,8 +609,7 @@
       showLoading('statusOutput');
 
       try {
-        const response = await fetch(`${API_BASE}/api/torrents`);
-        const data = await response.json();
+        const data = await fetchJsonOrThrow(`${API_BASE}/api/torrents`);
         showOutput('statusOutput', data);
       } catch (error) {
         showError('statusOutput', error);
@@ -618,8 +626,7 @@
       showLoading('filesOutput');
 
       try {
-        const response = await fetch(`${API_BASE}/api/torrents/${hash}/files`);
-        const data = await response.json();
+        const data = await fetchJsonOrThrow(`${API_BASE}/api/torrents/${hash}/files`);
         showOutput('filesOutput', data);
 
         if (data.success && data.data.files) {
@@ -688,8 +695,7 @@
       showLoading('streamOutput');
 
       try {
-        const response = await fetch(`${API_BASE}/stream/info/${hash}`);
-        const data = await response.json();
+        const data = await fetchJsonOrThrow(`${API_BASE}/stream/info/${hash}`);
         showOutput('streamOutput', data);
       } catch (error) {
         showError('streamOutput', error);
@@ -700,8 +706,7 @@
       showLoading('cacheOutput');
 
       try {
-        const response = await fetch(`${API_BASE}/api/cache-stats`);
-        const data = await response.json();
+        const data = await fetchJsonOrThrow(`${API_BASE}/api/cache-stats`);
         showOutput('cacheOutput', data);
 
         if (data.success) {
@@ -739,8 +744,7 @@
       showLoading('cacheOutput');
 
       try {
-        const response = await fetch(`${API_BASE}/api/cache-config`);
-        const data = await response.json();
+        const data = await fetchJsonOrThrow(`${API_BASE}/api/cache-config`);
         showOutput('cacheOutput', data);
       } catch (error) {
         showError('cacheOutput', error);
@@ -755,13 +759,11 @@
       showLoading('cacheOutput');
 
       try {
-        const response = await fetch(`${API_BASE}/api/cache-config`, {
+        const data = await fetchJsonOrThrow(`${API_BASE}/api/cache-config`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ forceCleanup: true })
         });
-
-        const data = await response.json();
         showOutput('cacheOutput', data);
       } catch (error) {
         showError('cacheOutput', error);
@@ -772,8 +774,7 @@
       showLoading('healthOutput');
 
       try {
-        const response = await fetch(`${API_BASE}/health`);
-        const data = await response.json();
+        const data = await fetchJsonOrThrow(`${API_BASE}/health`);
         showOutput('healthOutput', data);
       } catch (error) {
         showError('healthOutput', error);
@@ -784,8 +785,7 @@
       showLoading('healthOutput');
 
       try {
-        const response = await fetch(`${API_BASE}/status`);
-        const data = await response.json();
+        const data = await fetchJsonOrThrow(`${API_BASE}/status`);
         showOutput('healthOutput', data);
       } catch (error) {
         showError('healthOutput', error);
@@ -808,11 +808,9 @@
       showLoading('removeOutput');
 
       try {
-        const response = await fetch(`${API_BASE}/api/torrents/${hash}?deleteFiles=${deleteFiles}`, {
+        const data = await fetchJsonOrThrow(`${API_BASE}/api/torrents/${hash}?deleteFiles=${deleteFiles}`, {
           method: 'DELETE'
         });
-
-        const data = await response.json();
         showOutput('removeOutput', data);
       } catch (error) {
         showError('removeOutput', error);

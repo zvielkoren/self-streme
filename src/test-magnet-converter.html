@@ -358,6 +358,7 @@
         </div>
     </div>
 
+    <script src="/static/network-utils.js"></script>
     <script>
         // Sample magnet links for testing (open source content)
         const sampleMagnets = [
@@ -389,8 +390,15 @@
             document.getElementById('loading').classList.add('show');
 
             try {
-                const response = await fetch('/stream/magnet?magnet=' + encodeURIComponent(magnetInput));
-                const data = await response.json();
+                const requestUrl = '/stream/magnet?magnet=' + encodeURIComponent(magnetInput);
+                const response = await fetch(requestUrl);
+                const parsed = await window.NetworkUtils.readJsonResponseSafe(response, {
+                    requestUrl
+                });
+                if (!parsed.ok || !parsed.data) {
+                    throw parsed.error || new Error('Invalid magnet conversion response');
+                }
+                const data = parsed.data;
 
                 document.getElementById('loading').classList.remove('show');
 

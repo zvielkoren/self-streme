@@ -3,6 +3,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import logger from '../utils/logger.js';
+import { safeParseJsonText } from "../utils/network.js";
 
 /**
  * Signaling Server for P2P Coordination
@@ -66,6 +67,34 @@ class SignalingServer extends EventEmitter {
         query: req.query,
       });
       next();
+    });
+
+    // Keep JSON parse failures explicit and machine-readable
+    this.app.use((err, req, res, next) => {
+      if (!err) return next();
+
+      if (err.type === "entity.parse.failed") {
+        logger.warn("[P2P][Signaling] Invalid JSON body", {
+          path: req.path,
+          method: req.method,
+          message: err.message,
+        });
+
+        return res.status(400).json({
+          error: "Invalid JSON body",
+          message: "Request body could not be parsed as JSON",
+        });
+      }
+
+      logger.error("[P2P][Signaling] Middleware error", {
+        path: req.path,
+        method: req.method,
+        message: err.message,
+      });
+
+      return res.status(500).json({
+        error: "Internal signaling server error",
+      });
     });
   }
 
@@ -252,7 +281,25 @@ class SignalingServer extends EventEmitter {
    */
   handleMessage(ws, data) {
     try {
-      const message = JSON.parse(data.toString());
+      const rawPayload = data?.toString?.() || "";
+      const parsed = safeParseJsonText(rawPayload, {
+        context: "signaling websocket message",
+      });
+
+      if (!parsed.ok || !parsed.data || typeof parsed.data !== "object") {
+        logger.warn("[P2P][Signaling] Received invalid websocket payload", {
+          reason: parsed.error?.details?.reason || "invalid-json",
+          snippet: parsed.rawBodySnippet || "",
+        });
+
+        this.send(ws, {
+          type: "error",
+          error: "Invalid JSON message payload",
+        });
+        return;
+      }
+
+      const message = parsed.data;
 
       logger.debug('Received message:', message.type, {
         from: message.from || 'unknown',
@@ -776,6 +823,10 @@ class SignalingServer extends EventEmitter {
         peerCount: peerSet.size,
       })),
     };
+  }
+
+  getPeerCount() {
+    return this.peers.size;
   }
 
   /**
