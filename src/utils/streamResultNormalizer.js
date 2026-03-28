@@ -36,7 +36,7 @@ export function normalizeApiStreamResult(result, { infoHash, fileIndex }) {
 
   if (fileSize == null) {
     throw new Error(
-      "Stream metadata is incomplete: missing file size from torrent metadata and local file",
+      "Stream metadata is incomplete: missing file size from torrent metadata and local file. Retry prepare or use a different source.",
     );
   }
 

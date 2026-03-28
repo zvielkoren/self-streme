@@ -93,6 +93,11 @@ export function createStreamingRouter(torrentService, cacheManager) {
         logger.info(
           `[API] Background: Stream ready via ${normalized.method} for ${jobId}`,
         );
+        if (normalized.method === "p2p" && !normalized.filePath) {
+          logger.info(
+            `[API] Job ${jobId} ready from live torrent metadata (no local file yet): ${normalized.fileName} (${formatBytes(normalized.fileSize)})`,
+          );
+        }
 
         // Mark as ready
         updateJobState(jobId, {
@@ -203,6 +208,9 @@ export function createStreamingRouter(torrentService, cacheManager) {
 
     // Stream is ready - serve it immediately
     logger.info(`[API] Streaming ready job ${jobId}: ${job.fileName}`);
+    if (!job.filePath && job.torrent) {
+      logger.info(`[API] Ready job ${jobId} using active torrent source`);
+    }
 
     try {
       await streamFile(
