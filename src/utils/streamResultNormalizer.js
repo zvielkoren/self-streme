@@ -23,6 +23,10 @@ export function normalizeApiStreamResult(result, { infoHash, fileIndex }) {
   let fileName =
     result.fileName || selectedFile?.name || (filePath ? path.basename(filePath) : null);
   let fileSize = result.fileSize ?? selectedFile?.length ?? torrentFile?.length ?? null;
+  if (typeof fileSize === "string") {
+    const parsed = Number.parseInt(fileSize, 10);
+    fileSize = Number.isFinite(parsed) ? parsed : null;
+  }
 
   if ((fileSize == null || !fileName) && filePath && fs.existsSync(filePath)) {
     const stats = fs.statSync(filePath);
@@ -34,7 +38,7 @@ export function normalizeApiStreamResult(result, { infoHash, fileIndex }) {
     fileName = `stream-${infoHash}.mp4`;
   }
 
-  if (fileSize == null) {
+  if (fileSize == null || !Number.isFinite(fileSize) || fileSize <= 0) {
     throw new Error(
       "Stream metadata is incomplete: missing file size from torrent metadata and local file. Retry prepare or use a different source.",
     );

@@ -367,6 +367,12 @@ export function createStreamingRouter(torrentService, cacheManager) {
       fileSize = fs.statSync(filePath).size;
     }
 
+    if (!Number.isFinite(fileSize) || fileSize <= 0) {
+      throw new Error(
+        `Invalid stream size for ${fileName || "unknown"} (size=${fileSize}). Source metadata is incomplete.`,
+      );
+    }
+
     const safeFileName = fileName || activeTorrentFile?.name || path.basename(filePath || "stream.bin");
     const mimeType = getMimeType(safeFileName);
 
