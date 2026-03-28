@@ -29,6 +29,16 @@ function getEnvBool(name, defaultValue = false) {
   return defaultValue;
 }
 
+function getEnvIntList(name, fallbackValues = []) {
+  const raw = process.env[name];
+  if (!raw || !String(raw).trim()) return fallbackValues;
+  const parsed = String(raw)
+    .split(",")
+    .map((entry) => Number.parseInt(entry.trim(), 10))
+    .filter((entry) => Number.isFinite(entry) && entry > 0);
+  return parsed.length > 0 ? parsed : fallbackValues;
+}
+
 function resolvePathValue(value, fallbackAbsolute) {
   const candidate = value && String(value).trim() ? String(value).trim() : fallbackAbsolute;
   return path.isAbsolute(candidate)
@@ -85,13 +95,17 @@ const { baseUrl, source: baseUrlSource } = normalizeBaseUrl(
 
 const torrentTimeout = getEnvInt("TORRENT_TIMEOUT", 120000, { min: 1000 });
 const torrentMaxRetries = getEnvInt("TORRENT_MAX_RETRIES", 5, { min: 0, max: 10 });
-const timeoutProgression = [
+const timeoutProgressionFallback = [
   getEnvInt("TORRENT_TIMEOUT_STEP_1", 60000, { min: 1000 }),
   getEnvInt("TORRENT_TIMEOUT_STEP_2", 120000, { min: 1000 }),
   getEnvInt("TORRENT_TIMEOUT_STEP_3", 180000, { min: 1000 }),
   getEnvInt("TORRENT_TIMEOUT_STEP_4", 240000, { min: 1000 }),
   getEnvInt("TORRENT_TIMEOUT_STEP_5", 300000, { min: 1000 }),
 ];
+const timeoutProgression = getEnvIntList(
+  "TORRENT_TIMEOUT_PROGRESSION",
+  timeoutProgressionFallback,
+);
 
 const config = {
   server: {
@@ -239,4 +253,11 @@ config.runtimeSummary = {
   },
 };
 
-export { config, getEnvInt, getEnvBool, resolvePathValue, normalizeBaseUrl };
+export {
+  config,
+  getEnvInt,
+  getEnvBool,
+  getEnvIntList,
+  resolvePathValue,
+  normalizeBaseUrl,
+};
