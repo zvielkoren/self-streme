@@ -137,7 +137,9 @@ input[type="checkbox"] {
             const encoded = btoa(JSON.stringify(config));
             const host = window.location.host;
             const protocol = window.location.protocol.replace(/:$/, '');
-            const installUrl = `stremio://${host}/configure/${encoded}/manifest.json`;
+            // Stremio should resolve this to /:config/manifest.json on the server.
+            // Keep this shape simple to match the main route.
+            const installUrl = `stremio://${host}/${encoded}/manifest.json`;
             
             window.location.href = installUrl;
         };

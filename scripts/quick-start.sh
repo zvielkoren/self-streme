@@ -23,14 +23,14 @@ echo ""
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then
     echo -e "${RED}✗ Node.js is not installed${NC}"
-    echo -e "${YELLOW}Please install Node.js 18+ from https://nodejs.org/${NC}"
+    echo -e "${YELLOW}Please install Node.js 22.x from https://nodejs.org/${NC}"
     exit 1
 fi
 
 NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
-if [ "$NODE_VERSION" -lt 18 ]; then
+if [ "$NODE_VERSION" -lt 22 ]; then
     echo -e "${RED}✗ Node.js version is too old (found: $(node -v))${NC}"
-    echo -e "${YELLOW}Please upgrade to Node.js 18+ from https://nodejs.org/${NC}"
+    echo -e "${YELLOW}Please upgrade to Node.js 22.x from https://nodejs.org/${NC}"
     exit 1
 fi
 
@@ -145,3 +145,4 @@ echo ""
 
 # Start the server
 npm start
+

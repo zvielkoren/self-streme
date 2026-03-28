@@ -4,6 +4,10 @@
   "description": "Self-hosted streaming server with Stremio addon support",
   "type": "module",
   "main": "src/index.js",
+  "engines": {
+    "node": ">=22 <23",
+    "npm": ">=10"
+  },
   "scripts": {
     "quick-start": "bash quick-start.sh",
     "quick-start:win": "quick-start.bat",
@@ -13,7 +17,7 @@
     "dev": "nodemon src/index.js",
     "dev:stremio": "nodemon src/index.js",
     "dev:torrent": "nodemon start-torrent-server.js",
-    "dev:docker": "docker-compose -f docker-compose.dev.yml up",
+    "dev:docker": "docker-compose -f docker/docker-compose.dev.yml up",
     "docker:build": "docker build -t self-streme .",
     "docker:run": "docker-compose up -d",
     "docker:stop": "docker-compose down",
@@ -22,6 +26,8 @@
     "docker:clean": "docker-compose down -v && docker system prune -f",
     "docker:shell": "docker-compose exec self-streme sh",
     "docker:health": "docker inspect --format='{{.State.Health.Status}}' self-streme",
+    "test": "node --test test/infoHash.test.js test/streamResultNormalizer.test.js test/hybridStreamService.test.js test/searchService.test.js test/networkUtils.test.js test/p2pCoordinator.test.js",
+    "validate:streaming": "node scripts/validate-streaming-pipeline.js",
     "test:tunnel": "./scripts/test-tunnel.sh",
     "test:health": "curl http://localhost:3000/health",
     "test:torrent": "curl http://localhost:7000/health"
@@ -32,9 +38,9 @@
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.18.3",
-    "fs": "^0.0.1-security",
     "https-proxy-agent": "^7.0.6",
     "node-cache": "^5.1.2",
+    "parse-torrent": "^11.0.19",
     "pump": "^3.0.0",
     "stremio-addon-sdk": "^1.6.10",
     "subsrt": "^1.1.1",

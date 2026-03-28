@@ -8,7 +8,8 @@ class YTSProvider {
         this.baseUrls = [
             'https://yts.mx/api/v2',
             'https://yts.lt/api/v2',
-            'https://yts.am/api/v2'
+            'https://yts.am/api/v2',
+            "https://movies-api.accel.li/api/v2/"
         ];
         this.currentUrl = this.baseUrls[0];
         this.lastRequest = 0;
@@ -21,7 +22,7 @@ class YTSProvider {
      * @returns {Promise<Array>}
      */
     async search(params) {
-        if (params.type !== 'movies') {
+        if (!["movie", "movies"].includes(params.type)) {
             return [];
         }
 
@@ -70,7 +71,7 @@ class YTSProvider {
                         magnet: magnet,
                         quality: torrent.quality,
                         provider: 'yts',
-                        type: 'movies',
+                        type: 'movie',
                         imdb: movie.imdb_code,
                         year: movie.year,
                         rating: movie.rating,

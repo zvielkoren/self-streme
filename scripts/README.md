@@ -303,7 +303,7 @@ When adding new scripts:
 
 Scripts may require:
 - `bash` 4.0+
-- `node` 18+
+- `node` 22.x
 - `npm` 9+
 - `curl` (for HTTP requests)
 - `jq` (for JSON parsing)

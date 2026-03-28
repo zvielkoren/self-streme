@@ -383,7 +383,19 @@
         </footer>
     </div>
 
+    <script src="/static/network-utils.js"></script>
     <script>
+        async function fetchJsonOrThrow(url, options = {}) {
+            const response = await fetch(url, options);
+            const parsed = await window.NetworkUtils.readJsonResponseSafe(response, {
+                requestUrl: url
+            });
+            if (!parsed.ok) {
+                throw parsed.error || new Error(`Request failed for ${url}`);
+            }
+            return { data: parsed.data, response };
+        }
+
         // Show preview in iframe
         function showInFrame(url) {
             const frame = document.getElementById('previewFrame');
@@ -395,8 +407,7 @@
         // Fetch and display JSON
         async function fetchAndDisplay(url) {
             try {
-                const response = await fetch(url);
-                const data = await response.json();
+                const { data } = await fetchJsonOrThrow(url);
 
                 const output = document.getElementById('statusOutput');
                 const text = document.getElementById('statusText');
@@ -426,7 +437,7 @@
                 const body = { message };
                 if (endTime) body.estimatedEndTime = endTime;
 
-                const response = await fetch('/api/maintenance/enable', {
+                const { data, response } = await fetchJsonOrThrow('/api/maintenance/enable', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -434,8 +445,6 @@
                     },
                     body: JSON.stringify(body)
                 });
-
-                const data = await response.json();
 
                 if (response.ok) {
                     showSuccess('Maintenance mode enabled!');
@@ -458,14 +467,12 @@
             }
 
             try {
-                const response = await fetch('/api/maintenance/disable', {
+                const { data, response } = await fetchJsonOrThrow('/api/maintenance/disable', {
                     method: 'POST',
                     headers: {
                         'X-Admin-Token': token
                     }
                 });
-
-                const data = await response.json();
 
                 if (response.ok) {
                     showSuccess('Maintenance mode disabled!');
@@ -481,8 +488,7 @@
         // Check status
         async function checkStatus() {
             try {
-                const response = await fetch('/api/maintenance/status');
-                const data = await response.json();
+                const { data } = await fetchJsonOrThrow('/api/maintenance/status');
 
                 const output = document.getElementById('statusOutput');
                 const text = document.getElementById('statusText');
@@ -545,8 +551,7 @@
         // Auto-refresh status every 10 seconds
         setInterval(async () => {
             try {
-                const response = await fetch('/api/maintenance/status');
-                const data = await response.json();
+                const { data } = await fetchJsonOrThrow('/api/maintenance/status');
                 updateStatusBadge(data.enabled);
             } catch (error) {
                 console.error('Failed to check status:', error);

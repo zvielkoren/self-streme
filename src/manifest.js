@@ -7,7 +7,7 @@ import { config } from './config/index.js';
 
 const manifest = {
   id: "com.zviel.self-streme",
-  version: "1.0.0",
+  version: "1.1.0",
   name: "Self-Streme",
   description:
     "Stream movies, series, and anime from multiple sources including local files and torrents",

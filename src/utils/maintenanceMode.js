@@ -343,9 +343,14 @@ class MaintenanceMode {
         setInterval(async () => {
             try {
                 const res = await fetch('/api/maintenance/status');
-                const data = await res.json();
+                const contentType = (res.headers.get('content-type') || '').toLowerCase();
+                const bodyText = await res.text();
+                if (!bodyText || !contentType.includes('application/json')) return;
+                const data = JSON.parse(bodyText);
                 if (!data.enabled) location.reload();
-            } catch (e) {}
+            } catch (e) {
+                console.warn('[Maintenance] Failed to poll maintenance status:', e.message);
+            }
         }, 10000);
     </script>
 </head>

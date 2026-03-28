@@ -6,6 +6,7 @@ import { addTrackersToMagnet, createMagnetUri } from "../config/trackers.js";
 import logger from "../utils/logger.js";
 import diskManager from "../utils/diskManager.js";
 import P2PCoordinator from "../services/p2pCoordinator.js";
+import { extractInfoHash } from "../utils/infoHash.js";
 
 /**
  * Advanced Singleton Torrent Service
@@ -23,6 +24,10 @@ class TorrentService {
     this.activeTorrents = new Map(); // infoHash -> torrent object + metadata
     this.downloadPath = config.paths.temp;
     this.headSize = 20 * 1024 * 1024; // 20MB protected head
+    this.handleAcquireTimeoutMs =
+      parseInt(process.env.TORRENT_HANDLE_ACQUIRE_TIMEOUT_MS, 10) || 5000;
+    this.fastMetadataTimeoutMs =
+      parseInt(process.env.TORRENT_FAST_METADATA_TIMEOUT_MS, 10) || 8000;
 
     // Ensure download directory exists
     try {
@@ -99,6 +104,7 @@ class TorrentService {
    * Get or add a torrent
    */
   async getStream(magnetOrHash, fileIdx = 0, retryCount = 0) {
+    const startedAt = Date.now();
     const infoHash = this.extractInfoHash(magnetOrHash);
     if (!infoHash) throw new Error("Invalid magnet or infoHash");
 
@@ -106,43 +112,101 @@ class TorrentService {
       ? addTrackersToMagnet(magnetOrHash) 
       : createMagnetUri(infoHash);
 
-    let torrent = this.client.get(infoHash);
-    if (!torrent) {
-      // In WebTorrent 2.x, client.add returns a Promise
-      torrent = await this.client.add(magnetUri, { path: this.downloadPath });
+    const acquireStartedAt = Date.now();
+    const torrent = await this.acquireTorrentHandle(infoHash, magnetUri);
+    const acquisitionMs = Date.now() - acquireStartedAt;
+
+    if (!this.isTorrentHandle(torrent)) {
+      const immediateGet = await this.getTorrentCandidate(infoHash, "client.get.getStream.failure");
+      logger.error(`[Torrent] Failed to acquire torrent handle for ${infoHash}`, {
+        immediateGet: this.describeRuntimeValue(immediateGet),
+        isPromiseLike: this.isPromiseLike(immediateGet),
+      });
+      throw new Error("Failed to acquire torrent handle");
     }
 
-    if (torrent.ready) {
+    logger.info(`[Torrent] Handle acquired for ${infoHash}`, {
+      acquisitionMs,
+      peers: torrent.numPeers || 0,
+      progress: Number.isFinite(torrent.progress)
+        ? Number((torrent.progress * 100).toFixed(2))
+        : 0,
+    });
+
+    if (this.canStreamFromTorrent(torrent)) {
+      logger.info(`[Torrent] Startup ready (cached metadata) for ${infoHash}`, {
+        totalStartupMs: Date.now() - startedAt,
+      });
       return this.prepareStreamObject(torrent, fileIdx);
     }
 
     return new Promise((resolve, reject) => {
-      const timeoutDuration = (config.torrent.timeoutProgression && config.torrent.timeoutProgression[retryCount]) || 60000;
+      let settled = false;
+      const configuredTimeout =
+        (config.torrent.timeoutProgression &&
+          config.torrent.timeoutProgression[retryCount]) ||
+        60000;
+      const timeoutDuration =
+        retryCount === 0
+          ? Math.min(configuredTimeout, this.fastMetadataTimeoutMs)
+          : configuredTimeout;
+
+      const resolveStream = (reason) => {
+        if (settled) return;
+        settled = true;
+        logger.info(`[Torrent] Stream source became available for ${infoHash} via ${reason}`, {
+          totalStartupMs: Date.now() - startedAt,
+          peers: torrent.numPeers || 0,
+          progress: Number.isFinite(torrent.progress) ? Number((torrent.progress * 100).toFixed(2)) : 0,
+        });
+        resolve(this.prepareStreamObject(torrent, fileIdx));
+      };
+
+      const rejectStream = (error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+
       const timeout = setTimeout(async () => {
-        if (!torrent.ready) {
-          logger.error(`Torrent timeout for ${infoHash} after ${timeoutDuration}ms`);
+        if (!settled) {
+          if (this.canStreamFromTorrent(torrent)) {
+            logger.warn(`[Torrent] Timeout reached for ${infoHash}, but metadata is available. Proceeding with stream.`, {
+              peers: torrent.numPeers || 0,
+              progress: Number.isFinite(torrent.progress) ? Number((torrent.progress * 100).toFixed(2)) : 0,
+            });
+            resolveStream("timeout-with-metadata");
+            return;
+          }
+          logger.error(`Torrent timeout for ${infoHash} after ${timeoutDuration}ms`, {
+            peers: torrent.numPeers || 0,
+            progress: Number.isFinite(torrent.progress) ? Number((torrent.progress * 100).toFixed(2)) : 0,
+          });
           try {
             await torrent.destroy();
           } catch (err) {
             logger.error(`Error destroying timed out torrent: ${err.message}`);
           }
-          reject(new Error("Torrent discovery timeout"));
+          rejectStream(new Error("Torrent discovery timeout"));
         }
       }, timeoutDuration);
 
-      torrent.on("metadata", () => {
-        logger.info(`Metadata received for ${torrent.name}`);
+      torrent.once("metadata", () => {
+        logger.info(`Metadata received for ${torrent.name || infoHash}`);
         this.applyHeadStrategy(torrent);
+        clearTimeout(timeout);
+        resolveStream("metadata");
       });
 
       torrent.once("ready", () => {
         clearTimeout(timeout);
-        resolve(this.prepareStreamObject(torrent, fileIdx));
+        this.applyHeadStrategy(torrent);
+        resolveStream("ready");
       });
 
       torrent.once("error", (err) => {
         clearTimeout(timeout);
-        reject(err);
+        rejectStream(err);
       });
     });
   }
@@ -219,12 +283,15 @@ class TorrentService {
       ? addTrackersToMagnet(magnetOrHash) 
       : createMagnetUri(infoHash);
 
-    let torrent = this.client.get(infoHash);
-    if (!torrent) {
-      torrent = await this.client.add(magnetUri, { path: this.downloadPath, ...options });
+    const torrent = await this.acquireTorrentHandle(infoHash, magnetUri, {
+      ...options,
+    });
+
+    if (!this.isTorrentHandle(torrent)) {
+      throw new Error(`Failed to add torrent: could not resolve torrent handle for ${infoHash}`);
     }
 
-    if (torrent.ready) {
+    if (this.canStreamFromTorrent(torrent)) {
       this.applyHeadStrategy(torrent);
       return {
         infoHash: torrent.infoHash,
@@ -236,19 +303,10 @@ class TorrentService {
     }
 
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(async () => {
-        if (!torrent.ready) {
-          try {
-            await torrent.destroy();
-          } catch (err) {
-            logger.error(`Error destroying timed out torrent: ${err.message}`);
-          }
-          reject(new Error("Timeout waiting for torrent metadata"));
-        }
-      }, 30000);
-
-      torrent.once("ready", () => {
-        clearTimeout(timeout);
+      let settled = false;
+      const finishResolve = () => {
+        if (settled) return;
+        settled = true;
         this.applyHeadStrategy(torrent);
         resolve({
           infoHash: torrent.infoHash,
@@ -257,11 +315,37 @@ class TorrentService {
           torrent: torrent,
           cached: false
         });
+      };
+
+      const timeout = setTimeout(async () => {
+        if (!settled && !this.canStreamFromTorrent(torrent)) {
+          try {
+            await torrent.destroy();
+          } catch (err) {
+            logger.error(`Error destroying timed out torrent: ${err.message}`);
+          }
+          reject(new Error("Timeout waiting for torrent metadata"));
+        } else if (!settled) {
+          finishResolve();
+        }
+      }, 30000);
+
+      torrent.once("metadata", () => {
+        clearTimeout(timeout);
+        finishResolve();
+      });
+
+      torrent.once("ready", () => {
+        clearTimeout(timeout);
+        finishResolve();
       });
 
       torrent.once("error", (err) => {
         clearTimeout(timeout);
-        reject(err);
+        if (!settled) {
+          settled = true;
+          reject(err);
+        }
       });
     });
   }
@@ -348,9 +432,178 @@ class TorrentService {
   }
 
   extractInfoHash(magnetOrHash) {
-    if (/^[a-f0-9]{40}$/i.test(magnetOrHash)) return magnetOrHash.toLowerCase();
-    const match = magnetOrHash.match(/btih:([a-fA-F0-9]{40})/i);
-    return match ? match[1].toLowerCase() : null;
+    return extractInfoHash(magnetOrHash);
+  }
+
+  describeRuntimeValue(value) {
+    if (value === null) return { type: "null" };
+    if (value === undefined) return { type: "undefined" };
+
+    const valueType = typeof value;
+    if (valueType !== "object") {
+      return { type: valueType, preview: String(value).slice(0, 120) };
+    }
+
+    return {
+      type: value?.constructor?.name || "Object",
+      keys: Object.keys(value).slice(0, 10),
+      hasOn: typeof value.on === "function",
+      hasOnce: typeof value.once === "function",
+      hasDestroy: typeof value.destroy === "function",
+      hasInfoHash: typeof value.infoHash === "string",
+    };
+  }
+
+  isPromiseLike(value) {
+    return (
+      value &&
+      (typeof value === "object" || typeof value === "function") &&
+      typeof value.then === "function"
+    );
+  }
+
+  async resolvePromiseLike(value, timeoutMs = 3000, source = "unknown") {
+    if (!this.isPromiseLike(value)) return value;
+
+    let timeout = null;
+    try {
+      const resolved = await Promise.race([
+        value,
+        new Promise((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error(`Promise resolution timeout (${timeoutMs}ms)`)),
+            timeoutMs,
+          );
+        }),
+      ]);
+      return resolved;
+    } catch (error) {
+      logger.warn(`[Torrent] Failed to resolve promise-like torrent value from ${source}`, {
+        source,
+        error: error.message,
+      });
+      return null;
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  }
+
+  async getTorrentCandidate(infoHash, source = "client.get") {
+    let candidate = null;
+    try {
+      candidate = this.client.get(infoHash);
+    } catch (error) {
+      logger.warn(`[Torrent] ${source} threw for ${infoHash}`, {
+        source,
+        error: error.message,
+      });
+      return null;
+    }
+
+    if (this.isPromiseLike(candidate)) {
+      logger.debug(`[Torrent] ${source} returned promise-like candidate for ${infoHash}`, {
+        source,
+        candidate: this.describeRuntimeValue(candidate),
+      });
+      candidate = await this.resolvePromiseLike(candidate, 3000, source);
+    }
+
+    return candidate;
+  }
+
+  isTorrentHandle(candidate) {
+    return (
+      candidate &&
+      typeof candidate === "object" &&
+      typeof candidate.on === "function" &&
+      typeof candidate.once === "function" &&
+      typeof candidate.destroy === "function"
+    );
+  }
+
+  async waitForTorrentHandle(infoHash, timeoutMs = 2000) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      const existing = await this.getTorrentCandidate(infoHash, "client.get.poll");
+      if (this.isTorrentHandle(existing)) return existing;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return null;
+  }
+
+  async acquireTorrentHandle(infoHash, magnetUri, options = {}) {
+    let torrent = await this.getTorrentCandidate(infoHash, "client.get.initial");
+
+    // Some runtimes may return a pending/non-torrent placeholder from get().
+    if (torrent && !this.isTorrentHandle(torrent)) {
+      logger.warn(`[Torrent] client.get returned non-torrent value for ${infoHash}`, {
+        value: this.describeRuntimeValue(torrent),
+      });
+      torrent = await this.waitForTorrentHandle(infoHash, 1500);
+    }
+
+    if (this.isTorrentHandle(torrent)) {
+      return torrent;
+    }
+
+    try {
+      const addResult = this.client.add(magnetUri, { path: this.downloadPath, ...options });
+      const resolvedAddResult = await this.resolvePromiseLike(
+        addResult,
+        5000,
+        "client.add",
+      );
+
+      if (this.isTorrentHandle(resolvedAddResult)) {
+        logger.debug(`[Torrent] Resolved torrent handle directly from client.add for ${infoHash}`, {
+          source: "client.add",
+          handle: this.describeRuntimeValue(resolvedAddResult),
+        });
+        return resolvedAddResult;
+      }
+
+      if (resolvedAddResult) {
+        logger.debug(`[Torrent] client.add returned non-handle value for ${infoHash}`, {
+          source: "client.add",
+          value: this.describeRuntimeValue(resolvedAddResult),
+        });
+      }
+    } catch (error) {
+      logger.warn(`[Torrent] client.add threw for ${infoHash}; continuing with handle polling`, {
+        error: error.message,
+      });
+    }
+
+    torrent = await this.waitForTorrentHandle(
+      infoHash,
+      this.handleAcquireTimeoutMs,
+    );
+    if (this.isTorrentHandle(torrent)) {
+      return torrent;
+    }
+
+    const existing = await this.getTorrentCandidate(infoHash, "client.get.final");
+    logger.warn(`[Torrent] Unable to resolve torrent handle after add/poll for ${infoHash}`, {
+      getResult: this.describeRuntimeValue(existing),
+    });
+
+    return null;
+  }
+
+  async resolveTorrentHandle(addResult, infoHash, waitTimeoutMs = 2000) {
+    // WebTorrent versions may return a torrent object immediately or a promise-like value.
+    const resolved = await this.resolvePromiseLike(addResult, waitTimeoutMs, "resolveTorrentHandle.addResult");
+    if (this.isTorrentHandle(resolved)) return resolved;
+
+    const existing = await this.getTorrentCandidate(infoHash, "resolveTorrentHandle.client.get");
+    if (this.isTorrentHandle(existing)) return existing;
+
+    logger.warn(`[Torrent] Unexpected torrent add/get result shape for ${infoHash}`, {
+      addResult: this.describeRuntimeValue(resolved),
+      getResult: this.describeRuntimeValue(existing),
+    });
+
+    return this.waitForTorrentHandle(infoHash, waitTimeoutMs);
   }
 
   isVideoFile(filename) {
@@ -360,6 +613,15 @@ class TorrentService {
 
   getLargestFile(torrent) {
     return torrent.files.reduce((a, b) => a.length > b.length ? a : b);
+  }
+
+  canStreamFromTorrent(torrent) {
+    return Boolean(
+      torrent &&
+      !torrent.destroyed &&
+      Array.isArray(torrent.files) &&
+      torrent.files.length > 0,
+    );
   }
 
   getVideoMimeType(filename) {

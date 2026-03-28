@@ -33,15 +33,21 @@ class P2PCoordinator extends EventEmitter {
   constructor(options = {}) {
     super();
 
-    this.options = {
-      signalingPort: options.signalingPort || 8080,
-      stunServers: this.parseStunServers(
-        options.stunServers || [
+    const stunServersInput = Array.isArray(options.stunServers)
+      ? options.stunServers
+      : [
           "stun:stun.l.google.com:19302",
           "stun:stun1.l.google.com:19302",
-        ],
-      ),
-      turnServers: options.turnServers || [],
+        ];
+
+    const turnServersInput = Array.isArray(options.turnServers)
+      ? options.turnServers
+      : [];
+
+    this.options = {
+      signalingPort: options.signalingPort || 8080,
+      stunServers: this.parseStunServers(stunServersInput),
+      turnServers: turnServersInput,
       localPort: options.localPort || 0,
       keepAliveInterval: options.keepAliveInterval || 25000,
       connectionTimeout: options.connectionTimeout || 30000,
@@ -49,7 +55,6 @@ class P2PCoordinator extends EventEmitter {
       enableDetailedLogging: options.enableDetailedLogging || false,
       aggressiveFallback: options.aggressiveFallback !== false, // Try all methods until success
       parallelAttempts: options.parallelAttempts || false, // Try multiple methods at once
-      ...options,
     };
 
     // Services
@@ -150,16 +155,24 @@ class P2PCoordinator extends EventEmitter {
     });
 
     // Detect NAT type and public endpoint
-    await this.holePunchingService.detectNATType();
+    const natResult = await this.holePunchingService.initialize();
 
-    this.natInfo = this.holePunchingService.natInfo; // Direct property access instead of getter if needed, or check if getter exists
-    this.publicEndpoint = this.holePunchingService.publicAddress; // Changed from getPublicEndpoint() to property access based on HolePunchingService implementation
+    this.natInfo = natResult || this.holePunchingService.natInfo || null;
+    this.publicEndpoint = this.normalizeEndpoint(
+      this.natInfo?.publicAddress || this.holePunchingService.publicAddress,
+    );
 
     logger.info(`[P2P] ✓ Hole punching initialized`);
-    logger.info(`[P2P]   NAT Type: ${this.natInfo?.type}`);
+    logger.info(`[P2P]   NAT Type: ${this.natInfo?.type || "unknown"}`);
     logger.info(
-      `[P2P]   Public Endpoint: ${this.publicEndpoint?.address}:${this.publicEndpoint?.port}`,
+      `[P2P]   Public Endpoint: ${this.publicEndpoint?.address || "unknown"}:${this.publicEndpoint?.port || "unknown"}`,
     );
+
+    if (this.natInfo?.status === "failed") {
+      logger.warn("[P2P] NAT detection failed; continuing in degraded mode", {
+        reason: this.natInfo.reason || "unknown",
+      });
+    }
   }
 
   /**
@@ -214,20 +227,58 @@ class P2PCoordinator extends EventEmitter {
   logConfiguration() {
     if (!this.options.enableDetailedLogging) return;
 
+    const natType = this.natInfo?.type || "Unknown";
+    const publicIp = this.publicEndpoint?.address || "unknown";
+    const publicPort = this.publicEndpoint?.port || "Unknown";
+
     logger.info("[P2P] Configuration:");
     logger.info(`[P2P]   Signaling Port: ${this.options.signalingPort}`);
     logger.info(`[P2P]   STUN Servers: ${this.options.stunServers.length}`);
     logger.info(`[P2P]   TURN Servers: ${this.options.turnServers.length}`);
-    logger.info(`[P2P]   NAT Type: ${this.natInfo.type}`);
-    logger.info(`[P2P]   Public IP: ${this.publicEndpoint.ip}`);
-    logger.info(`[P2P]   Public Port: ${this.publicEndpoint.port}`);
+    logger.info(`[P2P]   NAT Type: ${natType}`);
+    logger.info(`[P2P]   Public IP: ${publicIp}`);
+    logger.info(`[P2P]   Public Port: ${publicPort}`);
 
     // Connection strategy recommendation
     const strategy = this.getRecommendedStrategy();
     logger.info(`[P2P]   Recommended Strategy: ${strategy.method}`);
     if (strategy.requiresTurn) {
-      logger.warn(`[P2P]   ⚠️  TURN relay recommended for best results`);
+      logger.warn("[P2P] TURN relay recommended for best results");
     }
+    if (this.options.turnServers.length === 0) {
+      logger.warn(
+        "[P2P] TURN not configured - symmetric NAT peers may require relay fallback",
+      );
+    }
+  }
+
+  normalizeEndpoint(endpoint) {
+    if (!endpoint || typeof endpoint !== "object") {
+      return {
+        address: "unknown",
+        port: null,
+      };
+    }
+
+    return {
+      address: endpoint.address || endpoint.ip || "unknown",
+      port:
+        typeof endpoint.port === "number"
+          ? endpoint.port
+          : Number.parseInt(endpoint.port, 10) || null,
+    };
+  }
+
+  getPeerEndpoint(peerInfo) {
+    const endpoint = this.normalizeEndpoint(peerInfo?.publicEndpoint);
+
+    if (!endpoint.address || endpoint.address === "unknown" || !endpoint.port) {
+      throw new Error(
+        `Peer ${peerInfo?.id || peerInfo?.peerId || "unknown"} has no usable public endpoint`,
+      );
+    }
+
+    return endpoint;
   }
 
   /**
@@ -253,8 +304,14 @@ class P2PCoordinator extends EventEmitter {
     this.peers.set(peerId, peerInfo);
     this.stats.registeredPeers = this.peers.size;
 
-    // Register with signaling server
-    this.signalingServer.registerPeerInfo(peerId, peerInfo);
+    // Register with signaling server (if adapter method is available)
+    if (typeof this.signalingServer?.registerPeerInfo === "function") {
+      this.signalingServer.registerPeerInfo(peerId, peerInfo);
+    } else {
+      logger.warn(
+        "[P2P] Signaling server does not expose registerPeerInfo(); skipping registration sync",
+      );
+    }
 
     logger.info(`[P2P] Registered peer: ${peerId}`);
     this.emit("peerRegistered", peerInfo);
@@ -476,7 +533,7 @@ class P2PCoordinator extends EventEmitter {
    * @returns {Array} List of strategies to try
    */
   getAllStrategies(peerInfo) {
-    const localNAT = this.natInfo.type;
+    const localNAT = this.natInfo?.type || "Unknown";
     const remoteNAT = peerInfo.natInfo?.type || "Unknown";
     const hasTurn = this.options.turnServers.length > 0;
 
@@ -551,7 +608,7 @@ class P2PCoordinator extends EventEmitter {
    * @returns {Object} Strategy recommendation
    */
   getRecommendedStrategy() {
-    const natType = this.natInfo.type;
+    const natType = this.natInfo?.type || "Unknown";
 
     switch (natType) {
       case "Open":
@@ -593,9 +650,10 @@ class P2PCoordinator extends EventEmitter {
    * Attempt direct connection
    */
   async connectDirect(peerInfo, options) {
+    const endpoint = this.getPeerEndpoint(peerInfo);
     return this.holePunchingService.connectDirect(
-      peerInfo.publicEndpoint.ip,
-      peerInfo.publicEndpoint.port,
+      endpoint.address,
+      endpoint.port,
       options,
     );
   }
@@ -604,9 +662,10 @@ class P2PCoordinator extends EventEmitter {
    * Attempt UDP hole punch connection
    */
   async connectUDPHolePunch(peerInfo, options) {
+    const endpoint = this.getPeerEndpoint(peerInfo);
     return this.holePunchingService.punchUDP(
-      peerInfo.publicEndpoint.ip,
-      peerInfo.publicEndpoint.port,
+      endpoint.address,
+      endpoint.port,
       options,
     );
   }
@@ -615,9 +674,10 @@ class P2PCoordinator extends EventEmitter {
    * Attempt TCP hole punch connection
    */
   async connectTCPHolePunch(peerInfo, options) {
+    const endpoint = this.getPeerEndpoint(peerInfo);
     return this.holePunchingService.punchTCP(
-      peerInfo.publicEndpoint.ip,
-      peerInfo.publicEndpoint.port,
+      endpoint.address,
+      endpoint.port,
       options,
     );
   }
@@ -633,10 +693,11 @@ class P2PCoordinator extends EventEmitter {
     }
 
     logger.info(`[P2P] Using TURN relay for guaranteed connection`);
+    const endpoint = this.getPeerEndpoint(peerInfo);
 
     return this.holePunchingService.connectViaTURN(
-      peerInfo.publicEndpoint.ip,
-      peerInfo.publicEndpoint.port,
+      endpoint.address,
+      endpoint.port,
       this.options.turnServers[0],
       options,
     );
@@ -726,7 +787,9 @@ class P2PCoordinator extends EventEmitter {
   getNATInfo() {
     return {
       type: this.natInfo?.type || "Unknown",
-      publicIP: this.publicEndpoint?.ip || "Unknown",
+      status: this.natInfo?.status || "unavailable",
+      reason: this.natInfo?.reason || null,
+      publicIP: this.publicEndpoint?.address || "Unknown",
       publicPort: this.publicEndpoint?.port || 0,
       detected: !!this.natInfo,
     };
@@ -830,12 +893,12 @@ class P2PCoordinator extends EventEmitter {
 
       // Stop signaling server
       if (this.signalingServer) {
-        await this.signalingServer.stop();
+        await this.signalingServer.shutdown();
       }
 
       // Stop hole punching service
       if (this.holePunchingService) {
-        await this.holePunchingService.cleanup();
+        await this.holePunchingService.shutdown();
       }
 
       this.initialized = false;

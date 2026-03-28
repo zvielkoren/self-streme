@@ -152,7 +152,7 @@ Complete guide to deploying Self-Streme with Docker and optional Cloudflare Tunn
 
 ```
 ../../Dockerfile              - Container build instructions
-                                Installs Node.js 20, cloudflared, and deps
+                                Installs Node.js 22, cloudflared, and deps
                                 Entry point: node src/index.js
                           
 ../../docker-compose.yml      - Production orchestration
@@ -251,7 +251,7 @@ curl http://localhost:3000/health
 ## 📦 What's Included
 
 ### Complete Docker Setup
-- ✅ Production-ready Dockerfile with Node.js 20
+- ✅ Production-ready Dockerfile with Node.js 22
 - ✅ Docker Compose configuration
 - ✅ Development environment with hot-reload
 - ✅ Automatic Cloudflare Tunnel integration

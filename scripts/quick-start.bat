@@ -19,12 +19,19 @@ REM Check if Node.js is installed
 where node >nul 2>nul
 if %ERRORLEVEL% NEQ 0 (
     echo [X] Node.js is not installed
-    echo Please install Node.js 18+ from https://nodejs.org/
+    echo Please install Node.js 22.x from https://nodejs.org/
     pause
     exit /b 1
 )
 
 for /f "tokens=1" %%i in ('node -v') do set NODE_VERSION=%%i
+for /f "tokens=1 delims=." %%i in ("%NODE_VERSION:~1%") do set NODE_MAJOR=%%i
+if %NODE_MAJOR% LSS 22 (
+    echo [X] Node.js version is too old ^(found: %NODE_VERSION%^)
+    echo Please upgrade to Node.js 22.x from https://nodejs.org/
+    pause
+    exit /b 1
+)
 echo [OK] Node.js %NODE_VERSION% detected
 
 REM Check if npm is installed
@@ -146,3 +153,4 @@ echo.
 
 REM Start the server
 call npm start
+

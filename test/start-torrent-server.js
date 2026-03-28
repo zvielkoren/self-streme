@@ -29,8 +29,8 @@ console.log('\x1b[36m%s\x1b[0m', banner);
 const nodeVersion = process.version;
 const majorVersion = parseInt(nodeVersion.slice(1).split('.')[0]);
 
-if (majorVersion < 18) {
-  console.error('\x1b[31m%s\x1b[0m', `❌ Error: Node.js 18 or higher is required (current: ${nodeVersion})`);
+if (majorVersion < 22) {
+  console.error('\x1b[31m%s\x1b[0m', `❌ Error: Node.js 22 or higher is required (current: ${nodeVersion})`);
   console.error('   Please upgrade Node.js: https://nodejs.org/');
   process.exit(1);
 }

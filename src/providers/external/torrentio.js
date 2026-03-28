@@ -64,7 +64,16 @@ class TorrentioProvider {
             return streams;
 
         } catch (error) {
-            logger.error('[Torrentio] Search error:', error.message);
+            const status = error?.response?.status || null;
+            const bodySnippet = typeof error?.response?.data === "string"
+                ? error.response.data.slice(0, 180)
+                : JSON.stringify(error?.response?.data || {}).slice(0, 180);
+            logger.error('[Torrentio] Search error:', {
+                message: error.message,
+                status,
+                endpoint: `${this.baseUrl}/stream/${type}/${imdbId}.json`,
+                bodySnippet
+            });
             return [];
         }
     }

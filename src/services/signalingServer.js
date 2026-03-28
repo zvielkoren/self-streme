@@ -3,6 +3,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import logger from '../utils/logger.js';
+import { safeParseJsonText } from "../utils/network.js";
 
 /**
  * Signaling Server for P2P Coordination
@@ -34,6 +35,7 @@ class SignalingServer extends EventEmitter {
     this.server = null;
     this.wss = null;
     this.cleanupTimer = null;
+    this.isRunning = false;
 
     this.setupMiddleware();
     this.setupRoutes();
@@ -65,6 +67,34 @@ class SignalingServer extends EventEmitter {
         query: req.query,
       });
       next();
+    });
+
+    // Keep JSON parse failures explicit and machine-readable
+    this.app.use((err, req, res, next) => {
+      if (!err) return next();
+
+      if (err.type === "entity.parse.failed") {
+        logger.warn("[P2P][Signaling] Invalid JSON body", {
+          path: req.path,
+          method: req.method,
+          message: err.message,
+        });
+
+        return res.status(400).json({
+          error: "Invalid JSON body",
+          message: "Request body could not be parsed as JSON",
+        });
+      }
+
+      logger.error("[P2P][Signaling] Middleware error", {
+        path: req.path,
+        method: req.method,
+        message: err.message,
+      });
+
+      return res.status(500).json({
+        error: "Internal signaling server error",
+      });
     });
   }
 
@@ -148,6 +178,7 @@ class SignalingServer extends EventEmitter {
         // Start listening
         this.server.listen(this.port, () => {
           logger.info(`Signaling server started on port ${this.port}`);
+          this.isRunning = true;
 
           // Start cleanup interval
           this.startCleanup();
@@ -160,6 +191,59 @@ class SignalingServer extends EventEmitter {
         reject(error);
       }
     });
+  }
+
+  /**
+   * Register peer info from internal services (non-WebSocket path)
+   * This keeps compatibility with P2PCoordinator expectations.
+   */
+  registerPeerInfo(peerId, peerInfo = {}) {
+    if (!peerId) return null;
+
+    const existing = this.peers.get(peerId);
+    const merged = {
+      peerId,
+      ws: existing?.ws || null,
+      metadata: { ...(existing?.metadata || {}), ...(peerInfo.metadata || {}) },
+      rooms: existing?.rooms || new Set(),
+      joinedAt: existing?.joinedAt || peerInfo.registeredAt || Date.now(),
+      lastSeen: Date.now(),
+      natInfo: peerInfo.natInfo || existing?.natInfo || null,
+      publicEndpoint: peerInfo.publicEndpoint || existing?.publicEndpoint || null,
+    };
+
+    this.peers.set(peerId, merged);
+    this.emit("peerRegistered", { peerId, metadata: merged.metadata });
+    this.emit("peer-registered", { peerId, metadata: merged.metadata });
+    return merged;
+  }
+
+  /**
+   * Compatibility helper expected by P2PCoordinator.
+   */
+  getPeer(peerId) {
+    return this.peers.get(peerId) || null;
+  }
+
+  /**
+   * Compatibility helper expected by P2PCoordinator.
+   */
+  unregisterPeer(peerId) {
+    const peer = this.peers.get(peerId);
+    if (!peer) return false;
+
+    for (const roomId of peer.rooms || []) {
+      this.removePeerFromRoom(peerId, roomId);
+    }
+
+    if (peer.ws) {
+      this.connections.delete(peer.ws);
+    }
+
+    this.peers.delete(peerId);
+    this.emit("peerUnregistered", peerId);
+    this.emit("peer-unregistered", { peerId });
+    return true;
   }
 
   /**
@@ -197,7 +281,25 @@ class SignalingServer extends EventEmitter {
    */
   handleMessage(ws, data) {
     try {
-      const message = JSON.parse(data.toString());
+      const rawPayload = data?.toString?.() || "";
+      const parsed = safeParseJsonText(rawPayload, {
+        context: "signaling websocket message",
+      });
+
+      if (!parsed.ok || !parsed.data || typeof parsed.data !== "object") {
+        logger.warn("[P2P][Signaling] Received invalid websocket payload", {
+          reason: parsed.error?.details?.reason || "invalid-json",
+          snippet: parsed.rawBodySnippet || "",
+        });
+
+        this.send(ws, {
+          type: "error",
+          error: "Invalid JSON message payload",
+        });
+        return;
+      }
+
+      const message = parsed.data;
 
       logger.debug('Received message:', message.type, {
         from: message.from || 'unknown',
@@ -723,6 +825,10 @@ class SignalingServer extends EventEmitter {
     };
   }
 
+  getPeerCount() {
+    return this.peers.size;
+  }
+
   /**
    * Shutdown the server
    */
@@ -733,6 +839,7 @@ class SignalingServer extends EventEmitter {
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
     }
+    this.isRunning = false;
 
     // Close all WebSocket connections
     for (const [ws, peerId] of this.connections.entries()) {

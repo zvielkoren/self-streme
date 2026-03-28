@@ -2,6 +2,7 @@ import dgram from "dgram";
 import net from "net";
 import { EventEmitter } from "events";
 import logger from "../utils/logger.js";
+import { withTimeout } from "../utils/network.js";
 
 /**
  * Hole Punching Service for P2P NAT Traversal
@@ -59,23 +60,44 @@ class HolePunchingService extends EventEmitter {
    */
   async initialize() {
     try {
-      logger.info("Detecting NAT type and public address...");
+      logger.info("[P2P][NAT] Detecting NAT type and public address...");
       this.natInfo = await this.detectNATType();
       this.publicAddress = this.natInfo.publicAddress;
 
-      logger.info("NAT detection complete", {
+      logger.info("[P2P][NAT] Detection complete", {
         type: this.natInfo.type,
-        publicIP: this.publicAddress.address,
-        publicPort: this.publicAddress.port,
+        publicIP: this.publicAddress?.address || "unknown",
+        publicPort: this.publicAddress?.port || "unknown",
         hairpinning: this.natInfo.hairpinning,
+        status: this.natInfo.status || "detected",
       });
 
       this.initialized = true;
       this.emit("initialized", this.natInfo);
       return this.natInfo;
     } catch (error) {
-      logger.error("Failed to initialize hole punching service:", error);
-      throw error;
+      this.natInfo = {
+        type: "Unknown NAT",
+        status: "failed",
+        reason: error.message,
+        localPort: null,
+        hairpinning: false,
+        portPredictable: false,
+        publicAddress: {
+          address: "unknown",
+          port: null,
+        },
+      };
+      this.publicAddress = this.natInfo.publicAddress;
+      this.initialized = true;
+
+      logger.warn("[P2P][NAT] NAT detection failed, continuing with fallback", {
+        error: error.message,
+        fallbackType: this.natInfo.type,
+      });
+
+      this.emit("initialized", this.natInfo);
+      return this.natInfo;
     }
   }
 
@@ -89,6 +111,10 @@ class HolePunchingService extends EventEmitter {
     try {
       await this.bindSocket(socket);
       const localPort = socket.address().port;
+      logger.info("[P2P][NAT] STUN detection started", {
+        localPort,
+        stunServers: this.stunServers.length,
+      });
 
       // Test 1: Get mapped address from primary STUN server
       const stun1 = this.stunServers[0];
@@ -99,7 +125,9 @@ class HolePunchingService extends EventEmitter {
       );
 
       if (!mappedAddr1) {
-        throw new Error("Failed to get mapped address from STUN server");
+        throw new Error(
+          "STUN request completed but no mapped address was returned",
+        );
       }
 
       // Test 2: Request from same server, different port (if server supports it)
@@ -130,8 +158,15 @@ class HolePunchingService extends EventEmitter {
 
       socket.close();
 
+      logger.info("[P2P][NAT] STUN detection finished", {
+        natType,
+        publicAddress: `${mappedAddr1?.address || "unknown"}:${mappedAddr1?.port || "unknown"}`,
+        hairpinning,
+      });
+
       return {
         type: natType,
+        status: "detected",
         publicAddress: mappedAddr1,
         localPort,
         hairpinning,
@@ -143,6 +178,9 @@ class HolePunchingService extends EventEmitter {
       };
     } catch (error) {
       socket.close();
+      logger.warn("[P2P][NAT] STUN detection failed", {
+        error: error.message,
+      });
       throw error;
     }
   }
@@ -473,7 +511,13 @@ class HolePunchingService extends EventEmitter {
    * Perform STUN request
    */
   async stunRequest(socket, stunHost, stunPort) {
-    return new Promise((resolve, reject) => {
+    logger.debug("[P2P][NAT] STUN request start", {
+      host: stunHost,
+      port: stunPort,
+    });
+
+    const makeRequest = () =>
+      new Promise((resolve, reject) => {
       // STUN Binding Request (RFC 5389)
       const transactionId = Buffer.allocUnsafe(12);
       for (let i = 0; i < 12; i++) {
@@ -492,8 +536,12 @@ class HolePunchingService extends EventEmitter {
       transactionId.copy(request, 8);
 
       const timeout = setTimeout(() => {
-        socket.removeAllListeners("message");
-        reject(new Error("STUN request timeout"));
+        socket.removeListener("message", messageHandler);
+        logger.warn("[P2P][NAT] STUN request timeout", {
+          host: stunHost,
+          port: stunPort,
+        });
+        reject(new Error(`STUN request timeout for ${stunHost}:${stunPort}`));
       }, 5000);
 
       const messageHandler = (msg, rinfo) => {
@@ -511,10 +559,31 @@ class HolePunchingService extends EventEmitter {
 
             // Parse XOR-MAPPED-ADDRESS attribute
             const mappedAddress = this.parseSTUNResponse(msg);
+            if (!mappedAddress) {
+              logger.warn("[P2P][NAT] STUN response parse failed", {
+                host: stunHost,
+                port: stunPort,
+                messageLength: msg.length,
+              });
+              return;
+            }
+
+            logger.debug("[P2P][NAT] STUN response received", {
+              host: stunHost,
+              port: stunPort,
+              remoteAddress: rinfo.address,
+              remotePort: rinfo.port,
+              mappedAddress: mappedAddress.address,
+              mappedPort: mappedAddress.port,
+            });
             resolve(mappedAddress);
           }
         } catch (error) {
-          // Continue listening for valid response
+          logger.warn("[P2P][NAT] STUN response handling error", {
+            host: stunHost,
+            port: stunPort,
+            error: error.message,
+          });
         }
       };
 
@@ -524,10 +593,22 @@ class HolePunchingService extends EventEmitter {
         if (err) {
           clearTimeout(timeout);
           socket.removeListener("message", messageHandler);
+          logger.warn("[P2P][NAT] STUN request send failed", {
+            host: stunHost,
+            port: stunPort,
+            error: err.message,
+          });
           reject(err);
         }
       });
-    });
+      });
+
+    return withTimeout(
+      makeRequest,
+      6000,
+      `STUN request timed out for ${stunHost}:${stunPort}`,
+      { host: stunHost, port: stunPort, stage: "stun-request" },
+    );
   }
 
   /**
@@ -658,6 +739,55 @@ class HolePunchingService extends EventEmitter {
     // If all else fails, suggest TURN relay
     throw new Error(
       `Unable to establish P2P connection to ${peerId}. TURN relay required.`,
+    );
+  }
+
+  /**
+   * Backward-compatible method expected by P2PCoordinator
+   */
+  async punchUDP(address, port, options = {}) {
+    return this.punchUDPHole({
+      peerId: options.peerId || `peer-${Date.now()}`,
+      address,
+      port,
+    });
+  }
+
+  /**
+   * Backward-compatible method expected by P2PCoordinator
+   */
+  async punchTCP(address, port, options = {}) {
+    return this.punchTCPHole({
+      peerId: options.peerId || `peer-${Date.now()}`,
+      address,
+      port,
+    });
+  }
+
+  /**
+   * Backward-compatible direct connection helper
+   */
+  async connectDirect(address, port, options = {}) {
+    return this.punchTCP(address, port, options);
+  }
+
+  /**
+   * TURN relay placeholder for compatibility.
+   * This keeps the coordinator flow explicit when TURN is unavailable.
+   */
+  async connectViaTURN(address, port, turnServer, options = {}) {
+    if (!turnServer) {
+      throw new Error("TURN server is required for relay connection");
+    }
+
+    logger.warn("[P2P][TURN] TURN relay path requested but not implemented", {
+      targetAddress: address,
+      targetPort: port,
+      turnUrls: turnServer.urls || "unknown",
+    });
+
+    throw new Error(
+      "TURN relay fallback is not implemented in HolePunchingService. Configure direct/STUN path or add TURN relay implementation.",
     );
   }
 

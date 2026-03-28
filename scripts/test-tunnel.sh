@@ -111,10 +111,10 @@ test_dockerfile_content() {
         return 1
     fi
 
-    if grep -q "node:20" Dockerfile; then
-        print_success "Using Node.js 20"
+    if grep -q "node:22" Dockerfile; then
+        print_success "Using Node.js 22"
     else
-        print_warning "Not using Node.js 20"
+        print_warning "Not using Node.js 22"
     fi
 
     return 0
