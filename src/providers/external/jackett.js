@@ -1,6 +1,7 @@
 import axios from 'axios';
 import logger from '../../utils/logger.js';
 import { config } from '../../config/index.js';
+import { tryExtractInfoHash } from "../../utils/infoHash.js";
 
 class JackettProvider {
     constructor() {
@@ -59,6 +60,7 @@ class JackettProvider {
                 infoHash: this.extractInfoHash(result.MagnetUri),
                 fileIdx: 0,
                 sources: [result.MagnetUri],
+                magnet: result.MagnetUri,
                 seeders: result.Seeders,
                 leechers: result.Peers,
                 size: result.Size,
@@ -72,7 +74,16 @@ class JackettProvider {
             return results;
 
         } catch (error) {
-            logger.error('[Jackett] Search error:', error.message);
+            const status = error?.response?.status || null;
+            const bodySnippet = typeof error?.response?.data === "string"
+                ? error.response.data.slice(0, 180)
+                : JSON.stringify(error?.response?.data || {}).slice(0, 180);
+            logger.error('[Jackett] Search error:', {
+                message: error.message,
+                status,
+                endpoint: `${this.baseUrl}/api/v2.0/indexers/all/results`,
+                bodySnippet
+            });
             return [];
         }
     }
@@ -84,6 +95,7 @@ class JackettProvider {
      */
     getCategory(type) {
         switch (type) {
+            case 'movie':
             case 'movies':
                 return '2000';
             case 'series':
@@ -100,8 +112,7 @@ class JackettProvider {
      */
     extractInfoHash(magnetUri) {
         if (!magnetUri) return null;
-        const match = magnetUri.match(/btih:([a-fA-F0-9]+)/i);
-        return match ? match[1].toLowerCase() : null;
+        return tryExtractInfoHash(magnetUri);
     }
 
     /**

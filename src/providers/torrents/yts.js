@@ -22,7 +22,7 @@ class YTSProvider {
      * @returns {Promise<Array>}
      */
     async search(params) {
-        if (params.type !== 'movies') {
+        if (!["movie", "movies"].includes(params.type)) {
             return [];
         }
 
@@ -71,7 +71,7 @@ class YTSProvider {
                         magnet: magnet,
                         quality: torrent.quality,
                         provider: 'yts',
-                        type: 'movies',
+                        type: 'movie',
                         imdb: movie.imdb_code,
                         year: movie.year,
                         rating: movie.rating,

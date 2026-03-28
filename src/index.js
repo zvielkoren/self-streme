@@ -26,6 +26,7 @@ import magnetToHttpService from "./services/magnetToHttpService.js";
 import downloadSources from "./services/torrentDownloadSources.js";
 import maintenanceMode from "./utils/maintenanceMode.js";
 import maintenanceApiRouter from "./api/maintenanceApi.js";
+import { tryExtractInfoHash } from "./utils/infoHash.js";
 
 // File paths
 const __filename = fileURLToPath(import.meta.url);
@@ -102,6 +103,45 @@ function setCachedStreamValidation(url, result) {
   });
 }
 
+function isPrivateHostname(hostname) {
+  if (!hostname || typeof hostname !== "string") return false;
+  const host = hostname.toLowerCase();
+  if (["localhost", "127.0.0.1", "::1"].includes(host)) return true;
+  if (/^10\./.test(host)) return true;
+  if (/^192\.168\./.test(host)) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(host)) return true;
+  return false;
+}
+
+function getFirstMagnetSource(stream) {
+  if (!stream || typeof stream !== "object") return null;
+  const candidates = [
+    stream.magnet,
+    ...(Array.isArray(stream.sources) ? stream.sources : []),
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && /^magnet:\?/i.test(candidate.trim())) {
+      return candidate.trim();
+    }
+  }
+  return null;
+}
+
+function getFirstHttpSource(stream) {
+  if (!stream || typeof stream !== "object") return null;
+  const candidates = [
+    stream.url,
+    stream.streamUrl,
+    ...(Array.isArray(stream.sources) ? stream.sources : []),
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && /^https?:\/\//i.test(candidate.trim())) {
+      return candidate.trim();
+    }
+  }
+  return null;
+}
+
 async function validateSingleStreamUrl(url) {
   const cached = getCachedStreamValidation(url);
   if (cached) return { ...cached, fromCache: true };
@@ -128,6 +168,12 @@ async function validateSingleStreamUrl(url) {
 
   if (!["http:", "https:"].includes(parsed.protocol)) {
     return { valid: false, reason: "invalid-protocol" };
+  }
+
+  if (parsed.pathname.startsWith("/stream/proxy/") && isPrivateHostname(parsed.hostname)) {
+    const result = { valid: true, reason: "internal-proxy-url", status: 200 };
+    setCachedStreamValidation(trimmedUrl, result);
+    return result;
   }
 
   const timeoutController = new AbortController();
@@ -215,7 +261,7 @@ async function filterAndValidateStreams(streams, context) {
     rejectionCounts.set(reason, (rejectionCounts.get(reason) || 0) + 1);
   }
 
-  const seenUrls = new Set();
+  const seenLocators = new Set();
   const candidates = [];
 
   rawStreams.forEach((stream, index) => {
@@ -224,22 +270,29 @@ async function filterAndValidateStreams(streams, context) {
       return;
     }
 
-    const url = typeof stream.url === "string" ? stream.url.trim() : "";
-    if (!url) {
-      reject("missing-url");
+    const url = getFirstHttpSource(stream);
+    const magnet = getFirstMagnetSource(stream);
+    const infoHash =
+      (typeof stream.infoHash === "string" && stream.infoHash.trim().toLowerCase()) ||
+      tryExtractInfoHash(magnet);
+
+    if (!url && !magnet && !infoHash) {
+      reject("missing-locator");
       return;
     }
 
-    const dedupeKey = url.toLowerCase();
-    if (seenUrls.has(dedupeKey)) {
-      reject("duplicate-url");
+    const dedupeKey = (url || magnet || infoHash || "").toLowerCase();
+    if (seenLocators.has(dedupeKey)) {
+      reject("duplicate-locator");
       return;
     }
 
-    seenUrls.add(dedupeKey);
+    seenLocators.add(dedupeKey);
     candidates.push({
       ...stream,
-      url,
+      url: url || stream.url,
+      magnet: magnet || stream.magnet,
+      infoHash: infoHash || stream.infoHash,
       title: stream.title || stream.name || `Source ${index + 1}`,
       quality: stream.quality || "unknown",
     });
@@ -248,10 +301,32 @@ async function filterAndValidateStreams(streams, context) {
   const validated = await mapWithConcurrency(
     candidates,
     STREAM_VALIDATION_CONCURRENCY,
-    async (stream) => ({
-      stream,
-      validation: await validateSingleStreamUrl(stream.url),
-    }),
+    async (stream) => {
+      const hasTorrentLocator = Boolean(
+        stream.infoHash ||
+          (typeof stream.magnet === "string" && stream.magnet.startsWith("magnet:")),
+      );
+      const hasHttpUrl = typeof stream.url === "string" && stream.url.trim();
+
+      if (!hasHttpUrl && hasTorrentLocator) {
+        return {
+          stream,
+          validation: { valid: true, reason: "torrent-locator" },
+        };
+      }
+
+      if (!hasHttpUrl) {
+        return {
+          stream,
+          validation: { valid: false, reason: "missing-url" },
+        };
+      }
+
+      return {
+        stream,
+        validation: await validateSingleStreamUrl(stream.url),
+      };
+    },
   );
 
   const workingStreams = [];

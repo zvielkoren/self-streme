@@ -12,6 +12,7 @@ import fallbackProvider from "./external/fallbackProvider.js";
 import mockProvider from "./external/mockProvider.js";
 
 import metadataService from "../core/metadataService.js";
+import { tryExtractInfoHash } from "../utils/infoHash.js";
 
 class SearchService {
   constructor() {
@@ -159,19 +160,39 @@ class SearchService {
           ),
         ]);
 
-        const count = Array.isArray(providerResults) ? providerResults.length : 0;
+        const rawCount = Array.isArray(providerResults) ? providerResults.length : 0;
+        const normalizedResults = this.normalizeProviderResults(
+          providerResults,
+          providerName,
+          params,
+        );
+        const count = normalizedResults.length;
         if (count > 0) {
-          results.push(...providerResults);
+          results.push(...normalizedResults);
+        }
+
+        if (rawCount > 0) {
+          const sample = providerResults[0];
+          logger.debug(`[Search] ${providerName} raw sample`, {
+            provider: providerName,
+            source: sourceKind,
+            rawCount,
+            sample: this.toSafeSample(sample),
+          });
         }
 
         providerLogs.push({
           provider: providerName,
           source: sourceKind,
           status: "success",
+          rawCount,
           count,
+          rejected: Math.max(0, rawCount - count),
           durationMs: Date.now() - startedAt,
         });
-        logger.info(`[Search] ${providerName} finished with ${count} results`);
+        logger.info(
+          `[Search] ${providerName} finished with ${count}/${rawCount} normalized results`,
+        );
       } catch (error) {
         const isTimeout = /timeout/i.test(error.message);
         providerLogs.push({
@@ -209,6 +230,91 @@ class SearchService {
       if (bq !== aq) return bq - aq;
       return (b.seeders || 0) - (a.seeders || 0);
     });
+  }
+
+  normalizeProviderResults(providerResults, providerName, params) {
+    if (!Array.isArray(providerResults)) return [];
+
+    const normalized = [];
+    for (const item of providerResults) {
+      if (!item || typeof item !== "object") continue;
+
+      const sources = Array.isArray(item.sources)
+        ? item.sources.filter((entry) => typeof entry === "string" && entry.trim())
+        : [];
+
+      const directUrl =
+        this.pickFirstString([
+          item.url,
+          item.streamUrl,
+          item.link,
+          item.src,
+          item.download,
+          item.file,
+          sources.find((entry) => /^https?:\/\//i.test(entry)),
+        ]) || null;
+
+      const magnet =
+        this.pickFirstString([
+          item.magnet,
+          item.magnetUri,
+          item.magnetURL,
+          sources.find((entry) => /^magnet:\?/i.test(entry)),
+        ]) || null;
+
+      const infoHash =
+        this.pickFirstString([item.infoHash]) ||
+        tryExtractInfoHash(magnet) ||
+        null;
+
+      if (!directUrl && !magnet && !infoHash) {
+        logger.debug("[Search] Dropping malformed provider source", {
+          provider: providerName,
+          title: item.title || item.name || "unknown",
+          reason: "missing-locator",
+        });
+        continue;
+      }
+
+      normalized.push({
+        ...item,
+        infoHash: typeof infoHash === "string" ? infoHash.toLowerCase() : undefined,
+        url: directUrl || undefined,
+        magnet: magnet || undefined,
+        provider: item.provider || providerName,
+        source: item.source || item.provider || providerName,
+        type: item.type || params.type,
+      });
+    }
+
+    return normalized;
+  }
+
+  pickFirstString(values) {
+    for (const value of values) {
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+    }
+    return null;
+  }
+
+  toSafeSample(sample) {
+    if (!sample || typeof sample !== "object") return sample;
+    return {
+      title: sample.title || sample.name || null,
+      quality: sample.quality || null,
+      hasUrl: Boolean(sample.url || sample.streamUrl || sample.link),
+      hasMagnet: Boolean(
+        sample.magnet ||
+          sample.magnetUri ||
+          (Array.isArray(sample.sources) &&
+            sample.sources.some((s) => typeof s === "string" && s.startsWith("magnet:"))),
+      ),
+      hasInfoHash: Boolean(sample.infoHash),
+      provider: sample.provider || sample.source || null,
+      type: sample.type || null,
+    };
   }
 
   clearCache() {

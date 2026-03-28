@@ -94,27 +94,10 @@ class StreamService {
 
           if (!streamsData || streamsData.length === 0) {
             logger.warn(
-              `[StreamService] Returning placeholder stream for ${cacheKey}. Check Search logs for provider/metadata failures.`,
+              `[StreamService] No usable streams for ${cacheKey}. Returning empty list.`,
             );
-            // Return a placeholder stream instead of empty array
-            const placeholderStream = {
-              name: "No Stream Available - Check Self-Streme Addon",
-              title: "No Stream Available - Check Self-Streme Addon",
-              url: "/static/placeholder.mp4",
-              quality: "N/A",
-              size: "0 MB",
-              seeders: 0,
-              source: "placeholder",
-              behaviorHints: {
-                notWebReady: false,
-                bingeGroup: "self-streme-placeholder",
-              },
-            };
-
-            const placeholderResult = [placeholderStream];
-            // Cache placeholder result for a shorter time to retry sooner
-            this.cache.set(cacheKey, placeholderResult, 300); // 5 minutes for placeholder results
-            return placeholderResult;
+            this.cache.set(cacheKey, []);
+            return [];
           }
         }
 
@@ -160,26 +143,13 @@ class StreamService {
         );
       }
 
-      // If no valid streams found after filtering, provide a helpful placeholder
+      // If no valid streams found after filtering, return empty list
       if (streams.length === 0) {
         logger.warn(`No valid streams after filtering for ${cacheKey}`);
         logger.warn(
-          `[StreamService] Returning filtered placeholder for ${cacheKey}. Upstream search diagnostics should indicate root cause.`,
+          `[StreamService] No valid stream survived normalization for ${cacheKey}. Returning empty list.`,
         );
-        const placeholderStream = {
-          name: "No Stream Available - Check Self-Streme Addon",
-          title: "No Stream Available - Check Self-Streme Addon",
-          url: "/static/placeholder.mp4",
-          quality: "N/A",
-          size: "0 MB",
-          seeders: 0,
-          source: "placeholder",
-          behaviorHints: {
-            notWebReady: false,
-            bingeGroup: "self-streme-placeholder",
-          },
-        };
-        return [placeholderStream];
+        return [];
       }
 
       // Don't cache converted streams - we cache raw streams and convert per request
@@ -276,10 +246,12 @@ class StreamService {
     // Try to extract from magnet if no direct infoHash
     else if (
       result.magnet ||
-      (result.sources && result.sources.some((s) => s.startsWith("magnet:")))
+      (Array.isArray(result.sources) &&
+        result.sources.some((s) => typeof s === "string" && s.startsWith("magnet:")))
     ) {
       const magnetLink =
-        result.magnet || result.sources.find((s) => s.startsWith("magnet:"));
+        result.magnet ||
+        result.sources.find((s) => typeof s === "string" && s.startsWith("magnet:"));
       infoHash = this.extractInfoHash(magnetLink);
       if (infoHash) {
         logger.debug(`Extracted infoHash from magnet: ${infoHash}`);
@@ -344,8 +316,15 @@ class StreamService {
     }
 
     // URL ישיר
-    if (result.url) {
-      stream.url = result.url;
+    const fallbackHttpSource =
+      !result.url && Array.isArray(result.sources)
+        ? result.sources.find(
+            (source) => typeof source === "string" && /^https?:\/\//i.test(source),
+          )
+        : null;
+
+    if (result.url || fallbackHttpSource) {
+      stream.url = result.url || fallbackHttpSource;
       // Set appropriate behavior hints for direct URLs
       if (!stream.behaviorHints) {
         stream.behaviorHints = {
