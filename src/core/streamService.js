@@ -93,6 +93,9 @@ class StreamService {
           }
 
           if (!streamsData || streamsData.length === 0) {
+            logger.warn(
+              `[StreamService] Returning placeholder stream for ${cacheKey}. Check Search logs for provider/metadata failures.`,
+            );
             // Return a placeholder stream instead of empty array
             const placeholderStream = {
               name: "No Stream Available - Check Self-Streme Addon",
@@ -160,6 +163,9 @@ class StreamService {
       // If no valid streams found after filtering, provide a helpful placeholder
       if (streams.length === 0) {
         logger.warn(`No valid streams after filtering for ${cacheKey}`);
+        logger.warn(
+          `[StreamService] Returning filtered placeholder for ${cacheKey}. Upstream search diagnostics should indicate root cause.`,
+        );
         const placeholderStream = {
           name: "No Stream Available - Check Self-Streme Addon",
           title: "No Stream Available - Check Self-Streme Addon",
