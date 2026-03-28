@@ -5,6 +5,10 @@ import pump from "pump";
 import logger from "../utils/logger.js";
 import { createHybridStreamService } from "../services/hybridStreamService.js";
 import deduplicator from "../services/requestDeduplicator.js";
+import {
+  normalizeApiStreamResult,
+  pickTorrentFile,
+} from "../utils/streamResultNormalizer.js";
 
 /**
  * Streaming API Router with Deduplication
@@ -16,6 +20,19 @@ export function createStreamingRouter(torrentService, cacheManager) {
   // Store for async link generation
   const linkGenerationCache = new Map();
   const linkGenerationTimeout = 300000; // 5 minutes
+
+  function updateJobState(jobId, patch) {
+    const current = linkGenerationCache.get(jobId) || {};
+    const next = { ...current, ...patch };
+    linkGenerationCache.set(jobId, next);
+    if (next.status) {
+      logger.info(
+        `[API] Job ${jobId} -> ${next.status}${next.message ? ` (${next.message})` : ""}`,
+      );
+    }
+    return next;
+  }
+
 
   /**
    * POST /stream/prepare/:infoHash
@@ -44,7 +61,7 @@ export function createStreamingRouter(torrentService, cacheManager) {
     });
 
     // Start async preparation
-    linkGenerationCache.set(jobId, {
+    updateJobState(jobId, {
       status: "preparing",
       progress: 0,
       infoHash,
@@ -61,8 +78,7 @@ export function createStreamingRouter(torrentService, cacheManager) {
         );
 
         // Update progress
-        linkGenerationCache.set(jobId, {
-          ...linkGenerationCache.get(jobId),
+        updateJobState(jobId, {
           status: "connecting",
           progress: 10,
           message: "Trying P2P connections...",
@@ -73,24 +89,26 @@ export function createStreamingRouter(torrentService, cacheManager) {
           return await hybridService.getStream(infoHash, { fileIndex });
         });
 
+        const normalized = normalizeApiStreamResult(result, { infoHash, fileIndex });
         logger.info(
-          `[API] Background: Stream ready via ${result.method} for ${jobId}`,
+          `[API] Background: Stream ready via ${normalized.method} for ${jobId}`,
         );
 
         // Mark as ready
-        linkGenerationCache.set(jobId, {
+        updateJobState(jobId, {
           status: "ready",
           progress: 100,
           infoHash,
           fileIndex,
-          method: result.method,
-          filePath: result.filePath,
-          fileSize: result.fileSize || fs.statSync(result.filePath).size,
-          fileName: result.fileName || path.basename(result.filePath),
-          torrent: result.torrent,
+          method: normalized.method,
+          filePath: normalized.filePath,
+          fileSize: normalized.fileSize,
+          fileName: normalized.fileName,
+          torrent: normalized.torrent,
+          files: normalized.files,
           readyAt: Date.now(),
           expiresAt: Date.now() + linkGenerationTimeout,
-          message: `Stream ready via ${result.method}`,
+          message: `Stream ready via ${normalized.method}`,
         });
 
         // Auto-cleanup after timeout
@@ -104,7 +122,7 @@ export function createStreamingRouter(torrentService, cacheManager) {
           error,
         );
 
-        linkGenerationCache.set(jobId, {
+        updateJobState(jobId, {
           status: "failed",
           progress: 0,
           infoHash,
@@ -229,27 +247,23 @@ export function createStreamingRouter(torrentService, cacheManager) {
         return await hybridService.getStream(infoHash, { fileIndex });
       });
 
-      logger.info(`[API] Stream method: ${result.method} for ${infoHash}`);
-
-      // All methods result in a local file we can stream
-      const filePath = result.filePath;
-      const fileSize = result.fileSize || fs.statSync(filePath).size;
-      const fileName = result.fileName || path.basename(filePath);
+      const normalized = normalizeApiStreamResult(result, { infoHash, fileIndex });
+      logger.info(`[API] Stream method: ${normalized.method} for ${infoHash}`);
 
       logger.info(
-        `[API] Streaming ${fileName} (${formatBytes(fileSize)}) via ${result.method}`,
+        `[API] Streaming ${normalized.fileName} (${formatBytes(normalized.fileSize)}) via ${normalized.method}`,
       );
 
       // Stream the file with Range support
       return await streamFile(
         req,
         res,
-        filePath,
-        fileSize,
-        fileName,
+        normalized.filePath,
+        normalized.fileSize,
+        normalized.fileName,
         forceDownload,
-        result.torrent,
-        fileIndex,
+        normalized.torrent,
+        normalized.fileIndex,
       );
     } catch (error) {
       logger.error(`[API] Streaming error for ${infoHash}:`, error);
@@ -290,19 +304,20 @@ export function createStreamingRouter(torrentService, cacheManager) {
         return await hybridService.getStream(identifier, { fileIndex: index });
       });
 
-      const filePath = result.filePath;
-      const fileSize = result.fileSize || fs.statSync(filePath).size;
-      const fileName = result.fileName || path.basename(filePath);
+      const normalized = normalizeApiStreamResult(result, {
+        infoHash,
+        fileIndex: index,
+      });
 
       return await streamFile(
         req,
         res,
-        filePath,
-        fileSize,
-        fileName,
+        normalized.filePath,
+        normalized.fileSize,
+        normalized.fileName,
         false,
-        result.torrent,
-        index,
+        normalized.torrent,
+        normalized.fileIndex,
       );
     } catch (error) {
       logger.error(`[API] Compatibility stream error:`, error);
@@ -324,7 +339,25 @@ export function createStreamingRouter(torrentService, cacheManager) {
     fileIndex,
   ) {
     const range = req.headers.range;
-    const mimeType = getMimeType(fileName);
+    const activeTorrentFile = pickTorrentFile(torrent, fileIndex);
+    const hasLocalFile = Boolean(filePath && fs.existsSync(filePath));
+
+    if (!activeTorrentFile && !hasLocalFile) {
+      throw new Error(
+        "No active stream source available. Torrent is not active and local file is missing.",
+      );
+    }
+
+    if (!fileSize && activeTorrentFile?.length) {
+      fileSize = activeTorrentFile.length;
+    }
+
+    if (!fileSize && hasLocalFile) {
+      fileSize = fs.statSync(filePath).size;
+    }
+
+    const safeFileName = fileName || activeTorrentFile?.name || path.basename(filePath || "stream.bin");
+    const mimeType = getMimeType(safeFileName);
 
     // Handle Range Requests (HTTP 206 Partial Content)
     if (range) {
@@ -355,14 +388,13 @@ export function createStreamingRouter(torrentService, cacheManager) {
       });
 
       if (forceDownload) {
-        res.set("Content-Disposition", `attachment; filename="${fileName}"`);
+        res.set("Content-Disposition", `attachment; filename="${safeFileName}"`);
       }
 
       // Stream from torrent or file system
       let stream;
-      if (torrent && !torrent.destroyed) {
-        const file = torrent.files[fileIndex] || torrent.files[0];
-        stream = file.createReadStream({ start, end });
+      if (activeTorrentFile) {
+        stream = activeTorrentFile.createReadStream({ start, end });
       } else {
         stream = fs.createReadStream(filePath, { start, end });
       }
@@ -391,13 +423,12 @@ export function createStreamingRouter(torrentService, cacheManager) {
       });
 
       if (forceDownload) {
-        res.set("Content-Disposition", `attachment; filename="${fileName}"`);
+        res.set("Content-Disposition", `attachment; filename="${safeFileName}"`);
       }
 
       let stream;
-      if (torrent && !torrent.destroyed) {
-        const file = torrent.files[fileIndex] || torrent.files[0];
-        stream = file.createReadStream();
+      if (activeTorrentFile) {
+        stream = activeTorrentFile.createReadStream();
       } else {
         stream = fs.createReadStream(filePath);
       }

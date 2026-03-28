@@ -16,6 +16,7 @@ import { pipeline } from "stream/promises";
 import downloadSources from "./torrentDownloadSources.js";
 import MultipartDownloader from "./multipartDownloader.js";
 import StreamingDownloader from "./streamingDownloader.js";
+import { extractInfoHash } from "../utils/infoHash.js";
 
 class HybridStreamService {
   constructor(torrentService, cacheManager) {
@@ -98,17 +99,22 @@ class HybridStreamService {
     // Check cache first
     if (this.cacheManager?.has(infoHash)) {
       logger.info(`[Hybrid] ✓ Found in cache!`);
-      return this.getFromCache(infoHash);
+      return this.normalizeStreamResult(this.getFromCache(infoHash), infoHash);
     }
 
     // Try P2P
     try {
-      logger.info(`[Hybrid] 🔄 Trying P2P (timeout: ${this.p2pTimeout}ms)...`);
+      logger.info(`[Hybrid] Trying P2P (timeout: ${this.p2pTimeout}ms)...`);
       const p2pResult = await this.tryP2P(magnetOrHash, infoHash, options);
-      logger.info(`[Hybrid] ✓ P2P successful!`);
+      logger.info(
+        `[Hybrid] P2P success for ${infoHash}: file=${p2pResult.fileName || "unknown"}, size=${this.formatBytes(p2pResult.fileSize)}`,
+      );
       return p2pResult;
     } catch (error) {
-      logger.warn(`[Hybrid] ❌ P2P failed: ${error.message}`);
+      const timedOut = error.message === "P2P timeout";
+      logger.warn(
+        `[Hybrid] P2P ${timedOut ? "timeout" : "failed"} for ${infoHash}: ${error.message}`,
+      );
     }
 
     // HTTP Download Fallback
@@ -116,12 +122,16 @@ class HybridStreamService {
       throw new Error("P2P failed and HTTP fallback is disabled");
     }
 
-    logger.info(`[Hybrid] 📥 Falling back to HTTP download...`);
+    logger.info(`[Hybrid] Activating HTTP fallback for ${infoHash}...`);
     return await this.httpDownloadFallback(infoHash);
   }
 
   getFromCache(infoHash) {
     const cached = this.cacheManager.get(infoHash);
+    if (!cached?.filePath) {
+      throw new Error(`Cached entry is invalid for ${infoHash}`);
+    }
+
     const filePath = cached.filePath;
 
     if (!fs.existsSync(filePath)) {
@@ -152,7 +162,16 @@ class HybridStreamService {
         throw new Error("Invalid P2P result");
       }
 
-      return {
+      const selectedFile =
+        result.files?.[options.fileIndex] || result.files?.[0] || null;
+      const fileName = result.fileName || selectedFile?.name || result.name;
+      const fileSize = result.fileSize || selectedFile?.length || null;
+
+      logger.info(
+        `[Hybrid] Selected torrent file: index=${options.fileIndex || 0}, name=${fileName || "unknown"}, size=${this.formatBytes(fileSize)}`,
+      );
+
+      return this.normalizeStreamResult({
         method: "p2p",
         success: true,
         cached: result.cached || false,
@@ -160,7 +179,9 @@ class HybridStreamService {
         torrent: result.torrent,
         filePath: result.filePath,
         files: result.files || [],
-      };
+        fileName,
+        fileSize,
+      }, infoHash);
     });
   }
 
@@ -211,9 +232,9 @@ class HybridStreamService {
       });
     }
 
-    logger.info(`[Hybrid] ✅ Ready to stream!`);
+    logger.info(`[Hybrid] Ready to stream via HTTP fallback`);
 
-    return {
+    return this.normalizeStreamResult({
       method: "http",
       success: true,
       cached: true,
@@ -221,7 +242,7 @@ class HybridStreamService {
       filePath: downloadedPath,
       fileSize: videoFile.length,
       fileName: videoFile.name,
-    };
+    }, infoHash);
   }
 
   /**
@@ -835,11 +856,31 @@ class HybridStreamService {
   }
 
   extractInfoHash(magnetOrHash) {
-    if (magnetOrHash.startsWith("magnet:")) {
-      const match = magnetOrHash.match(/btih:([a-fA-F0-9]{40})/i);
-      return match ? match[1].toLowerCase() : null;
-    }
-    return magnetOrHash.toLowerCase();
+    return extractInfoHash(magnetOrHash);
+  }
+
+  normalizeStreamResult(result, fallbackInfoHash = null) {
+    const files = Array.isArray(result?.files) ? result.files : [];
+    const normalizedInfoHash =
+      result?.infoHash ||
+      fallbackInfoHash ||
+      (result?.torrent?.infoHash ? String(result.torrent.infoHash).toLowerCase() : null);
+
+    const selectedFile = files[0] || null;
+    const fileName = result?.fileName || selectedFile?.name || null;
+    const fileSize = result?.fileSize ?? selectedFile?.length ?? null;
+
+    return {
+      method: result?.method || "unknown",
+      success: result?.success !== false,
+      cached: Boolean(result?.cached),
+      infoHash: normalizedInfoHash,
+      torrent: result?.torrent || null,
+      files,
+      filePath: result?.filePath || null,
+      fileSize,
+      fileName,
+    };
   }
 
   formatBytes(bytes) {

@@ -8,7 +8,8 @@ class YTSProvider {
         this.baseUrls = [
             'https://yts.mx/api/v2',
             'https://yts.lt/api/v2',
-            'https://yts.am/api/v2'
+            'https://yts.am/api/v2',
+            "https://movies-api.accel.li/api/v2/"
         ];
         this.currentUrl = this.baseUrls[0];
         this.lastRequest = 0;

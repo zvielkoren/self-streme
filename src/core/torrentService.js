@@ -6,6 +6,7 @@ import { addTrackersToMagnet, createMagnetUri } from "../config/trackers.js";
 import logger from "../utils/logger.js";
 import diskManager from "../utils/diskManager.js";
 import P2PCoordinator from "../services/p2pCoordinator.js";
+import { extractInfoHash } from "../utils/infoHash.js";
 
 /**
  * Advanced Singleton Torrent Service
@@ -348,9 +349,7 @@ class TorrentService {
   }
 
   extractInfoHash(magnetOrHash) {
-    if (/^[a-f0-9]{40}$/i.test(magnetOrHash)) return magnetOrHash.toLowerCase();
-    const match = magnetOrHash.match(/btih:([a-fA-F0-9]{40})/i);
-    return match ? match[1].toLowerCase() : null;
+    return extractInfoHash(magnetOrHash);
   }
 
   isVideoFile(filename) {

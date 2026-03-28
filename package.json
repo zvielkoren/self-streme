@@ -22,6 +22,8 @@
     "docker:clean": "docker-compose down -v && docker system prune -f",
     "docker:shell": "docker-compose exec self-streme sh",
     "docker:health": "docker inspect --format='{{.State.Health.Status}}' self-streme",
+    "test": "node --test test/infoHash.test.js test/streamResultNormalizer.test.js test/hybridStreamService.test.js",
+    "validate:streaming": "node scripts/validate-streaming-pipeline.js",
     "test:tunnel": "./scripts/test-tunnel.sh",
     "test:health": "curl http://localhost:3000/health",
     "test:torrent": "curl http://localhost:7000/health"
@@ -35,6 +37,7 @@
     "fs": "^0.0.1-security",
     "https-proxy-agent": "^7.0.6",
     "node-cache": "^5.1.2",
+    "parse-torrent": "^11.0.19",
     "pump": "^3.0.0",
     "stremio-addon-sdk": "^1.6.10",
     "subsrt": "^1.1.1",
