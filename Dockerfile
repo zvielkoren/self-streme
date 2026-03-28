@@ -1,5 +1,5 @@
 # Multi-stage Dockerfile for Node.js app with Cloudflare Tunnel support
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 
 # Install necessary system dependencies
 RUN apk add --no-cache \
@@ -24,7 +24,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production && \
+RUN npm ci --omit=dev && \
     npm cache clean --force
 
 # Create non-root user for security

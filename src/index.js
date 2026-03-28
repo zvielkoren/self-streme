@@ -157,6 +157,7 @@ const handleManifest = (req, res) => {
 
 // Explicit manifest endpoints
 app.get("/manifest.json", handleManifest);
+app.get("/configure/:config/manifest.json", handleManifest);
 app.get("/:config/manifest.json", (req, res, next) => {
   if (['api', 'static', 'debug', 'health', 'status', 'configure', 'test-source-selection', 'test-ios-fix', 'test-torrent-streaming', 'test-magnet-converter'].includes(req.params.config)) {
     return next();
@@ -1238,7 +1239,7 @@ function startCloudfareTunnel(token) {
 // Start the server
 async function startServer() {
   try {
-    const port = process.env.PORT || 7000;
+    const port = config.server.port;
     const host = process.env.HOST || "0.0.0.0";
 
     // Start Cloudflare Tunnel if token is provided
@@ -1271,16 +1272,16 @@ async function startServer() {
         `🔧 Trust Proxy: enabled (supports Cloudflare, nginx, Apache, Plesk, etc.)`,
       );
 
-      if (process.env.BASE_URL) {
-        const urlParts = new URL(process.env.BASE_URL);
+      if (config.server.baseUrl) {
+        const urlParts = new URL(config.server.baseUrl);
         logger.info(
-          `🌐 Base URL: ${process.env.BASE_URL} (manually configured)`,
+          `🌐 Base URL: ${config.server.baseUrl} (${config.server.baseUrlSource})`,
         );
         logger.info(
           `📺 Add to Stremio: stremio://${urlParts.host}/manifest.json`,
         );
       } else {
-        logger.info(`🌐 Base URL: Auto-detect mode (will use proxy headers)`);
+        logger.info(`🌐 Base URL: Auto-detect mode (source: ${config.server.baseUrlSource})`);
         logger.info(`   - Localhost: http://localhost:${port}`);
         logger.info(`   - LAN/Network: http://<YOUR_IP>:${port}`);
         if (process.env.RENDER_EXTERNAL_URL) {
@@ -1301,8 +1302,8 @@ async function startServer() {
       logger.info(
         `ℹ️  Works with: Cloudflare, nginx, Apache, Plesk, Render, Heroku, Railway`,
       );
-      if (!process.env.BASE_URL && isProduction) {
-        logger.warn(`⚠️  No BASE_URL set - relying on auto-detection`);
+      if (!config.server.baseUrl && isProduction) {
+        logger.warn(`⚠️  No valid BASE_URL set - relying on auto-detection`);
         logger.warn(
           `   Set BASE_URL=https://your-domain.com for guaranteed consistency`,
         );
@@ -1327,6 +1328,7 @@ logger.info(
 );
 logger.info(`💾 Cache Backend: ${config.cache.backend}`);
 logger.info(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
+logger.info(`Config Summary: ${JSON.stringify(config.runtimeSummary)}`);
 logger.info("=".repeat(60));
 
 // Graceful shutdown handler
@@ -1370,3 +1372,5 @@ setupGracefulShutdown();
 
 // Start servers
 startServer();
+
+

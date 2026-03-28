@@ -1,13 +1,11 @@
-version: "3.8"
-
 # Development Docker Compose Configuration
 # This setup includes hot-reloading and development tools
-# Usage: docker-compose -f docker-compose.dev.yml up
+# Usage: docker compose -f docker/docker-compose.dev.yml up
 
 services:
   self-streme-dev:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile
     container_name: self-streme-dev
     restart: unless-stopped
@@ -46,20 +44,23 @@ services:
       # Logging (verbose for development)
       - LOG_LEVEL=${LOG_LEVEL:-debug}
 
-    # Load from .env file
+    # Load env files from repo root (optional)
     env_file:
-      - .env
+      - path: ../.env
+        required: false
+      - path: ../.env.docker.example
+        required: false
 
     # Volume mounts for hot-reloading
     volumes:
       # Mount source code for live updates
-      - ./src:/app/src:ro
-      - ./package.json:/app/package.json:ro
+      - ../src:/app/src:ro
+      - ../package.json:/app/package.json:ro
 
       # Mount data directories
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./temp:/tmp/self-streme
+      - ../data:/app/data
+      - ../logs:/app/logs
+      - ../temp:/tmp/self-streme
 
       # Exclude node_modules (use container's version)
       - /app/node_modules

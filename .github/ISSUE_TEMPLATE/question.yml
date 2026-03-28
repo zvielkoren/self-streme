@@ -89,7 +89,7 @@ body:
     attributes:
       label: Node.js Version
       description: Output of `node --version` (if applicable)
-      placeholder: v18.0.0
+      placeholder: v22.0.0
 
   - type: dropdown
     id: os
@@ -133,3 +133,4 @@ body:
       label: Additional Information
       description: Any other details that might be helpful
       placeholder: Logs, error messages, screenshots, etc.
+

@@ -6,7 +6,7 @@ Complete Docker deployment solution for Self-Streme with automatic Cloudflare Tu
 
 ## ✨ Features
 
-- 🐳 **Production-ready Docker setup** with Node.js 20 and Alpine Linux
+- 🐳 **Production-ready Docker setup** with Node.js 22 and Alpine Linux
 - 🔒 **Automatic Cloudflare Tunnel integration** - just set `TUNNEL_TOKEN`
 - 🚀 **Zero-configuration startup** - tunnel starts automatically if token is provided
 - 📊 **Color-coded logging** - easy to distinguish between tunnel and app logs
