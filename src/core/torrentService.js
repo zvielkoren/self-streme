@@ -107,31 +107,13 @@ class TorrentService {
       ? addTrackersToMagnet(magnetOrHash) 
       : createMagnetUri(infoHash);
 
-    let torrent = this.client.get(infoHash);
-
-    // Some runtimes may return a pending/non-torrent placeholder from get().
-    if (torrent && !this.isTorrentHandle(torrent)) {
-      logger.warn(`[Torrent] client.get returned non-torrent value for ${infoHash}`, {
-        value: this.describeRuntimeValue(torrent),
-      });
-      torrent = await this.waitForTorrentHandle(infoHash, 1500);
-    }
+    const torrent = await this.acquireTorrentHandle(infoHash, magnetUri);
 
     if (!this.isTorrentHandle(torrent)) {
-      let addResult;
-      try {
-        addResult = this.client.add(magnetUri, { path: this.downloadPath });
-      } catch (error) {
-        logger.warn(`[Torrent] client.add failed for ${infoHash}, retrying via get/wait`, {
-          error: error.message,
-        });
-      }
-      torrent = await this.resolveTorrentHandle(addResult, infoHash, 10000);
-    }
-
-    if (!this.isTorrentHandle(torrent)) {
+      const immediateGet = await this.getTorrentCandidate(infoHash, "client.get.getStream.failure");
       logger.error(`[Torrent] Failed to acquire torrent handle for ${infoHash}`, {
-        immediateGet: this.describeRuntimeValue(this.client.get(infoHash)),
+        immediateGet: this.describeRuntimeValue(immediateGet),
+        isPromiseLike: this.isPromiseLike(immediateGet),
       });
       throw new Error("Failed to acquire torrent handle");
     }
@@ -243,26 +225,9 @@ class TorrentService {
       ? addTrackersToMagnet(magnetOrHash) 
       : createMagnetUri(infoHash);
 
-    let torrent = this.client.get(infoHash);
-
-    if (torrent && !this.isTorrentHandle(torrent)) {
-      logger.warn(`[Torrent] client.get returned non-torrent value for ${infoHash} during addTorrent`, {
-        value: this.describeRuntimeValue(torrent),
-      });
-      torrent = await this.waitForTorrentHandle(infoHash, 1500);
-    }
-
-    if (!this.isTorrentHandle(torrent)) {
-      let addResult;
-      try {
-        addResult = this.client.add(magnetUri, { path: this.downloadPath, ...options });
-      } catch (error) {
-        logger.warn(`[Torrent] client.add failed for ${infoHash} during addTorrent, retrying via get/wait`, {
-          error: error.message,
-        });
-      }
-      torrent = await this.resolveTorrentHandle(addResult, infoHash, 10000);
-    }
+    const torrent = await this.acquireTorrentHandle(infoHash, magnetUri, {
+      ...options,
+    });
 
     if (!this.isTorrentHandle(torrent)) {
       throw new Error(`Failed to add torrent: could not resolve torrent handle for ${infoHash}`);
@@ -414,6 +379,63 @@ class TorrentService {
     };
   }
 
+  isPromiseLike(value) {
+    return (
+      value &&
+      (typeof value === "object" || typeof value === "function") &&
+      typeof value.then === "function"
+    );
+  }
+
+  async resolvePromiseLike(value, timeoutMs = 3000, source = "unknown") {
+    if (!this.isPromiseLike(value)) return value;
+
+    let timeout = null;
+    try {
+      const resolved = await Promise.race([
+        value,
+        new Promise((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error(`Promise resolution timeout (${timeoutMs}ms)`)),
+            timeoutMs,
+          );
+        }),
+      ]);
+      return resolved;
+    } catch (error) {
+      logger.warn(`[Torrent] Failed to resolve promise-like torrent value from ${source}`, {
+        source,
+        error: error.message,
+      });
+      return null;
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  }
+
+  async getTorrentCandidate(infoHash, source = "client.get") {
+    let candidate = null;
+    try {
+      candidate = this.client.get(infoHash);
+    } catch (error) {
+      logger.warn(`[Torrent] ${source} threw for ${infoHash}`, {
+        source,
+        error: error.message,
+      });
+      return null;
+    }
+
+    if (this.isPromiseLike(candidate)) {
+      logger.debug(`[Torrent] ${source} returned promise-like candidate for ${infoHash}`, {
+        source,
+        candidate: this.describeRuntimeValue(candidate),
+      });
+      candidate = await this.resolvePromiseLike(candidate, 3000, source);
+    }
+
+    return candidate;
+  }
+
   isTorrentHandle(candidate) {
     return (
       candidate &&
@@ -427,19 +449,75 @@ class TorrentService {
   async waitForTorrentHandle(infoHash, timeoutMs = 2000) {
     const startedAt = Date.now();
     while (Date.now() - startedAt < timeoutMs) {
-      const existing = this.client.get(infoHash);
+      const existing = await this.getTorrentCandidate(infoHash, "client.get.poll");
       if (this.isTorrentHandle(existing)) return existing;
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     return null;
   }
 
+  async acquireTorrentHandle(infoHash, magnetUri, options = {}) {
+    let torrent = await this.getTorrentCandidate(infoHash, "client.get.initial");
+
+    // Some runtimes may return a pending/non-torrent placeholder from get().
+    if (torrent && !this.isTorrentHandle(torrent)) {
+      logger.warn(`[Torrent] client.get returned non-torrent value for ${infoHash}`, {
+        value: this.describeRuntimeValue(torrent),
+      });
+      torrent = await this.waitForTorrentHandle(infoHash, 1500);
+    }
+
+    if (this.isTorrentHandle(torrent)) {
+      return torrent;
+    }
+
+    try {
+      const addResult = this.client.add(magnetUri, { path: this.downloadPath, ...options });
+      const resolvedAddResult = await this.resolvePromiseLike(
+        addResult,
+        5000,
+        "client.add",
+      );
+
+      if (this.isTorrentHandle(resolvedAddResult)) {
+        logger.debug(`[Torrent] Resolved torrent handle directly from client.add for ${infoHash}`, {
+          source: "client.add",
+          handle: this.describeRuntimeValue(resolvedAddResult),
+        });
+        return resolvedAddResult;
+      }
+
+      if (resolvedAddResult) {
+        logger.debug(`[Torrent] client.add returned non-handle value for ${infoHash}`, {
+          source: "client.add",
+          value: this.describeRuntimeValue(resolvedAddResult),
+        });
+      }
+    } catch (error) {
+      logger.warn(`[Torrent] client.add threw for ${infoHash}; continuing with handle polling`, {
+        error: error.message,
+      });
+    }
+
+    torrent = await this.waitForTorrentHandle(infoHash, 10000);
+    if (this.isTorrentHandle(torrent)) {
+      return torrent;
+    }
+
+    const existing = await this.getTorrentCandidate(infoHash, "client.get.final");
+    logger.warn(`[Torrent] Unable to resolve torrent handle after add/poll for ${infoHash}`, {
+      getResult: this.describeRuntimeValue(existing),
+    });
+
+    return null;
+  }
+
   async resolveTorrentHandle(addResult, infoHash, waitTimeoutMs = 2000) {
     // WebTorrent versions may return a torrent object immediately or a promise-like value.
-    const resolved = await Promise.resolve(addResult);
+    const resolved = await this.resolvePromiseLike(addResult, waitTimeoutMs, "resolveTorrentHandle.addResult");
     if (this.isTorrentHandle(resolved)) return resolved;
 
-    const existing = this.client.get(infoHash);
+    const existing = await this.getTorrentCandidate(infoHash, "resolveTorrentHandle.client.get");
     if (this.isTorrentHandle(existing)) return existing;
 
     logger.warn(`[Torrent] Unexpected torrent add/get result shape for ${infoHash}`, {

@@ -1,6 +1,7 @@
 import axios from "axios";
 import { load } from "cheerio";
 import logger from "../../utils/logger.js";
+import { tryExtractInfoHash } from "../../utils/infoHash.js";
 
 /**
  * 🔎 Scraper ל־YTS (סרטים בלבד)
@@ -76,7 +77,7 @@ async function scrapeWebSearch(query) {
       if (href && href.includes("magnet:?xt=")) {
         results.push({
           title: `WebSearch result [DuckDuckGo]`,
-          infoHash: href.match(/btih:([a-zA-Z0-9]+)/)?.[1] || null,
+          infoHash: tryExtractInfoHash(href),
           sources: [href],
           seeders: null,
           source: "websearch"

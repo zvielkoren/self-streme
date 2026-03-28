@@ -2,6 +2,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import logger from "../../utils/logger.js";
 import { config } from "../../config/index.js";
+import { tryExtractInfoHash } from "../../utils/infoHash.js";
 
 const MIRRORS = [
   "https://1337x.to",
@@ -61,8 +62,7 @@ async function search(metadata) {
                     const magnet = $page("a[href^='magnet:?xt=urn:btih']").attr("href");
 
                     if (magnet) {
-                        const infoHashMatch = magnet.match(/btih:([a-fA-F0-9]+)/);
-                        const infoHash = infoHashMatch ? infoHashMatch[1] : null;
+                        const infoHash = tryExtractInfoHash(magnet);
                         
                         let enhancedMagnet = magnet;
                         if (infoHash) {
