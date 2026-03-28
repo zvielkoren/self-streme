@@ -5,6 +5,7 @@ import streamHandler from "../services/streamHandler.js";
 import subtitleService from "../services/subtitleService.js";
 import { config } from "../config/index.js";
 import { getMaintenanceMode } from "../utils/maintenanceMode.js";
+import { tryExtractInfoHash } from "../utils/infoHash.js";
 
 class StreamService {
   constructor() {
@@ -280,7 +281,7 @@ class StreamService {
     }
 
     // If we have a valid infoHash, set up streaming
-    if (infoHash && (infoHash.length === 40 || infoHash.length === 32)) {
+    if (infoHash && infoHash.length === 40) {
       // Always cache stream info for proxy serving (needed for both iOS and testing)
       this.handler.cacheStream(
         infoHash,
@@ -393,35 +394,15 @@ class StreamService {
    * מוציא infoHash ממגנט URI - Enhanced to handle more formats
    */
   extractInfoHash(magnetUri) {
-    if (!magnetUri || typeof magnetUri !== "string") return null;
-
-    // Try multiple patterns for infoHash extraction
-    const patterns = [
-      /btih:([a-fA-F0-9]{40})/i, // Standard 40-char hex
-      /btih:([a-fA-F0-9]{32})/i, // 32-char hex (base32 converted)
-      /xt=urn:btih:([a-fA-F0-9]{40})/i, // Full urn format 40-char
-      /xt=urn:btih:([a-fA-F0-9]{32})/i, // Full urn format 32-char
-      /hash=([a-fA-F0-9]{40})/i, // Alternative hash parameter
-      /hash=([a-fA-F0-9]{32})/i, // Alternative hash parameter 32-char
-    ];
-
-    for (const pattern of patterns) {
-      const match = magnetUri.match(pattern);
-      if (match && match[1]) {
-        const hash = match[1].toLowerCase();
-        // Validate hash length (32 or 40 characters)
-        if (hash.length === 40 || hash.length === 32) {
-          logger.debug(
-            `Extracted infoHash: ${hash} from magnet: ${magnetUri.substring(0, 50)}...`,
-          );
-          return hash;
-        }
-      }
+    const hash = tryExtractInfoHash(magnetUri);
+    if (hash) {
+      logger.debug(
+        `Extracted infoHash: ${hash} from magnet: ${String(magnetUri).substring(0, 50)}...`,
+      );
+      return hash;
     }
 
-    logger.debug(
-      `Failed to extract infoHash from: ${magnetUri.substring(0, 100)}...`,
-    );
+    logger.debug(`Failed to extract infoHash from: ${String(magnetUri).substring(0, 100)}...`);
     return null;
   }
 

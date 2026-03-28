@@ -34,6 +34,7 @@ class SignalingServer extends EventEmitter {
     this.server = null;
     this.wss = null;
     this.cleanupTimer = null;
+    this.isRunning = false;
 
     this.setupMiddleware();
     this.setupRoutes();
@@ -148,6 +149,7 @@ class SignalingServer extends EventEmitter {
         // Start listening
         this.server.listen(this.port, () => {
           logger.info(`Signaling server started on port ${this.port}`);
+          this.isRunning = true;
 
           // Start cleanup interval
           this.startCleanup();
@@ -160,6 +162,59 @@ class SignalingServer extends EventEmitter {
         reject(error);
       }
     });
+  }
+
+  /**
+   * Register peer info from internal services (non-WebSocket path)
+   * This keeps compatibility with P2PCoordinator expectations.
+   */
+  registerPeerInfo(peerId, peerInfo = {}) {
+    if (!peerId) return null;
+
+    const existing = this.peers.get(peerId);
+    const merged = {
+      peerId,
+      ws: existing?.ws || null,
+      metadata: { ...(existing?.metadata || {}), ...(peerInfo.metadata || {}) },
+      rooms: existing?.rooms || new Set(),
+      joinedAt: existing?.joinedAt || peerInfo.registeredAt || Date.now(),
+      lastSeen: Date.now(),
+      natInfo: peerInfo.natInfo || existing?.natInfo || null,
+      publicEndpoint: peerInfo.publicEndpoint || existing?.publicEndpoint || null,
+    };
+
+    this.peers.set(peerId, merged);
+    this.emit("peerRegistered", { peerId, metadata: merged.metadata });
+    this.emit("peer-registered", { peerId, metadata: merged.metadata });
+    return merged;
+  }
+
+  /**
+   * Compatibility helper expected by P2PCoordinator.
+   */
+  getPeer(peerId) {
+    return this.peers.get(peerId) || null;
+  }
+
+  /**
+   * Compatibility helper expected by P2PCoordinator.
+   */
+  unregisterPeer(peerId) {
+    const peer = this.peers.get(peerId);
+    if (!peer) return false;
+
+    for (const roomId of peer.rooms || []) {
+      this.removePeerFromRoom(peerId, roomId);
+    }
+
+    if (peer.ws) {
+      this.connections.delete(peer.ws);
+    }
+
+    this.peers.delete(peerId);
+    this.emit("peerUnregistered", peerId);
+    this.emit("peer-unregistered", { peerId });
+    return true;
   }
 
   /**
@@ -733,6 +788,7 @@ class SignalingServer extends EventEmitter {
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
     }
+    this.isRunning = false;
 
     // Close all WebSocket connections
     for (const [ws, peerId] of this.connections.entries()) {

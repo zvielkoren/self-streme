@@ -214,13 +214,18 @@ class P2PCoordinator extends EventEmitter {
   logConfiguration() {
     if (!this.options.enableDetailedLogging) return;
 
+    const natType = this.natInfo?.type || "Unknown";
+    const publicIp =
+      this.publicEndpoint?.ip || this.publicEndpoint?.address || "Unknown";
+    const publicPort = this.publicEndpoint?.port || "Unknown";
+
     logger.info("[P2P] Configuration:");
     logger.info(`[P2P]   Signaling Port: ${this.options.signalingPort}`);
     logger.info(`[P2P]   STUN Servers: ${this.options.stunServers.length}`);
     logger.info(`[P2P]   TURN Servers: ${this.options.turnServers.length}`);
-    logger.info(`[P2P]   NAT Type: ${this.natInfo.type}`);
-    logger.info(`[P2P]   Public IP: ${this.publicEndpoint.ip}`);
-    logger.info(`[P2P]   Public Port: ${this.publicEndpoint.port}`);
+    logger.info(`[P2P]   NAT Type: ${natType}`);
+    logger.info(`[P2P]   Public IP: ${publicIp}`);
+    logger.info(`[P2P]   Public Port: ${publicPort}`);
 
     // Connection strategy recommendation
     const strategy = this.getRecommendedStrategy();
@@ -253,8 +258,14 @@ class P2PCoordinator extends EventEmitter {
     this.peers.set(peerId, peerInfo);
     this.stats.registeredPeers = this.peers.size;
 
-    // Register with signaling server
-    this.signalingServer.registerPeerInfo(peerId, peerInfo);
+    // Register with signaling server (if adapter method is available)
+    if (typeof this.signalingServer?.registerPeerInfo === "function") {
+      this.signalingServer.registerPeerInfo(peerId, peerInfo);
+    } else {
+      logger.warn(
+        "[P2P] Signaling server does not expose registerPeerInfo(); skipping registration sync",
+      );
+    }
 
     logger.info(`[P2P] Registered peer: ${peerId}`);
     this.emit("peerRegistered", peerInfo);
@@ -476,7 +487,7 @@ class P2PCoordinator extends EventEmitter {
    * @returns {Array} List of strategies to try
    */
   getAllStrategies(peerInfo) {
-    const localNAT = this.natInfo.type;
+    const localNAT = this.natInfo?.type || "Unknown";
     const remoteNAT = peerInfo.natInfo?.type || "Unknown";
     const hasTurn = this.options.turnServers.length > 0;
 
@@ -551,7 +562,7 @@ class P2PCoordinator extends EventEmitter {
    * @returns {Object} Strategy recommendation
    */
   getRecommendedStrategy() {
-    const natType = this.natInfo.type;
+    const natType = this.natInfo?.type || "Unknown";
 
     switch (natType) {
       case "Open":
