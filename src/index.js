@@ -72,6 +72,18 @@ const STREAM_VALIDATION_CONCURRENCY = Math.min(
     Number.parseInt(process.env.STREAM_VALIDATION_CONCURRENCY || "5", 10) || 5,
   ),
 );
+const STREAM_STARTUP_TOP_CANDIDATES = Math.min(
+  5,
+  Math.max(1, Number.parseInt(process.env.STREAM_STARTUP_TOP_CANDIDATES || "5", 10) || 5),
+);
+const STREAM_STARTUP_RACE_CONCURRENCY = Math.min(
+  3,
+  Math.max(1, Number.parseInt(process.env.STREAM_STARTUP_RACE_CONCURRENCY || "3", 10) || 3),
+);
+const STREAM_STARTUP_TARGET_VALID = Math.min(
+  3,
+  Math.max(1, Number.parseInt(process.env.STREAM_STARTUP_TARGET_VALID || "2", 10) || 2),
+);
 const streamValidationCache = new Map();
 
 function getSafeStreamUrlForLog(url) {
@@ -253,7 +265,102 @@ async function mapWithConcurrency(items, limit, worker) {
   return results;
 }
 
+function qualityScore(quality) {
+  const normalized = String(quality || "").toLowerCase();
+  if (normalized.includes("2160") || normalized.includes("4k")) return 4;
+  if (normalized.includes("1080")) return 3;
+  if (normalized.includes("720")) return 2;
+  return 1;
+}
+
+function providerReliabilityScore(stream) {
+  const provider = String(stream.provider || stream.source || "").toLowerCase();
+  if (provider.includes("torrentio")) return 4;
+  if (provider.includes("jackett")) return 3;
+  if (provider.includes("yts")) return 3;
+  if (provider.includes("tgx") || provider.includes("torrentgalaxy")) return 3;
+  if (provider.includes("tpb") || provider.includes("1337x")) return 2;
+  return 1;
+}
+
+function rankStreamCandidate(stream) {
+  const hasHttp = typeof stream.url === "string" && stream.url.trim();
+  const hasTorrentLocator = Boolean(stream.infoHash || stream.magnet);
+  const isInternal = hasHttp && (stream.url.startsWith("/") || /\/stream\/proxy\//i.test(stream.url));
+  const seeders = Number.isFinite(Number(stream.seeders)) ? Number(stream.seeders) : 0;
+
+  let score = 0;
+  if (isInternal) score += 120;
+  else if (hasHttp) score += 100;
+  if (hasTorrentLocator) score += 70;
+  score += qualityScore(stream.quality) * 10;
+  score += Math.min(30, Math.floor(seeders / 10));
+  score += providerReliabilityScore(stream) * 5;
+  return score;
+}
+
+async function validateStreamCandidate(stream) {
+  const hasTorrentLocator = Boolean(
+    stream.infoHash ||
+      (typeof stream.magnet === "string" && stream.magnet.startsWith("magnet:")),
+  );
+  const hasHttpUrl = typeof stream.url === "string" && stream.url.trim();
+
+  if (!hasHttpUrl && hasTorrentLocator) {
+    return { valid: true, reason: "torrent-locator" };
+  }
+
+  if (!hasHttpUrl) {
+    return { valid: false, reason: "missing-url" };
+  }
+
+  return validateSingleStreamUrl(stream.url);
+}
+
+async function validateCandidatesFast(candidates, context, reject, maxToProcess) {
+  const working = [];
+  let nextIndex = 0;
+  let started = 0;
+  let firstValidAtMs = null;
+
+  async function runWorker() {
+    while (true) {
+      if (working.length >= STREAM_STARTUP_TARGET_VALID) return;
+      const current = nextIndex;
+      nextIndex += 1;
+      if (current >= candidates.length || started >= maxToProcess) return;
+      started += 1;
+
+      const stream = candidates[current];
+      const validation = await validateStreamCandidate(stream);
+      if (!validation.valid) {
+        reject(validation.reason || "validation-failed");
+        logger.debug("[Stream] Source rejected", {
+          request: context,
+          url: getSafeStreamUrlForLog(stream.url),
+          reason: validation.reason || "validation-failed",
+        });
+        continue;
+      }
+
+      if (firstValidAtMs == null) {
+        firstValidAtMs = Date.now();
+      }
+      working.push(stream);
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(STREAM_STARTUP_RACE_CONCURRENCY, Math.max(1, maxToProcess)) },
+    () => runWorker(),
+  );
+  await Promise.all(workers);
+
+  return { working, started, firstValidAtMs };
+}
+
 async function filterAndValidateStreams(streams, context) {
+  const startedAt = Date.now();
   const rawStreams = Array.isArray(streams) ? streams : [];
   const rejectionCounts = new Map();
 
@@ -298,54 +405,49 @@ async function filterAndValidateStreams(streams, context) {
     });
   });
 
-  const validated = await mapWithConcurrency(
-    candidates,
-    STREAM_VALIDATION_CONCURRENCY,
-    async (stream) => {
-      const hasTorrentLocator = Boolean(
-        stream.infoHash ||
-          (typeof stream.magnet === "string" && stream.magnet.startsWith("magnet:")),
-      );
-      const hasHttpUrl = typeof stream.url === "string" && stream.url.trim();
+  const rankedCandidates = [...candidates].sort(
+    (a, b) => rankStreamCandidate(b) - rankStreamCandidate(a),
+  );
+  const startupCandidates = rankedCandidates.slice(0, STREAM_STARTUP_TOP_CANDIDATES);
+  const deferredCandidates = rankedCandidates.slice(STREAM_STARTUP_TOP_CANDIDATES);
 
-      if (!hasHttpUrl && hasTorrentLocator) {
-        return {
-          stream,
-          validation: { valid: true, reason: "torrent-locator" },
-        };
-      }
-
-      if (!hasHttpUrl) {
-        return {
-          stream,
-          validation: { valid: false, reason: "missing-url" },
-        };
-      }
-
-      return {
-        stream,
-        validation: await validateSingleStreamUrl(stream.url),
-      };
-    },
+  const startupValidation = await validateCandidatesFast(
+    startupCandidates,
+    context,
+    reject,
+    startupCandidates.length,
   );
 
-  const workingStreams = [];
-  for (const item of validated) {
-    if (!item.validation.valid) {
-      reject(item.validation.reason || "validation-failed");
-      logger.debug("[Stream] Source rejected", {
-        request: context,
-        url: getSafeStreamUrlForLog(item.stream.url),
-        reason: item.validation.reason || "validation-failed",
-      });
-      continue;
-    }
-
-    workingStreams.push(item.stream);
+  let workingStreams = startupValidation.working;
+  let deferredTried = 0;
+  if (workingStreams.length === 0 && deferredCandidates.length > 0) {
+    // Fail fast on startup set, then probe a tiny fallback set instead of exhaustive scan.
+    const deferredValidation = await validateCandidatesFast(
+      deferredCandidates,
+      context,
+      reject,
+      Math.min(2, deferredCandidates.length),
+    );
+    deferredTried = deferredValidation.started;
+    workingStreams = deferredValidation.working;
   }
 
+  logger.info("[Stream] Startup telemetry", {
+    request: context,
+    fetched: rawStreams.length,
+    normalized: candidates.length,
+    startupCandidates: startupCandidates.length,
+    startupValidated: startupValidation.started,
+    deferredTried,
+    firstUsableMs:
+      startupValidation.firstValidAtMs == null ? null : startupValidation.firstValidAtMs - startedAt,
+    totalMs: Date.now() - startedAt,
+    winner:
+      workingStreams[0]?.source || workingStreams[0]?.provider || workingStreams[0]?.title || null,
+  });
+
   return {
-    streams: workingStreams,
+    streams: workingStreams.slice(0, STREAM_STARTUP_TARGET_VALID),
     total: rawStreams.length,
     candidates: candidates.length,
     valid: workingStreams.length,

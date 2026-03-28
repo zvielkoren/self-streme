@@ -24,6 +24,10 @@ class TorrentService {
     this.activeTorrents = new Map(); // infoHash -> torrent object + metadata
     this.downloadPath = config.paths.temp;
     this.headSize = 20 * 1024 * 1024; // 20MB protected head
+    this.handleAcquireTimeoutMs =
+      parseInt(process.env.TORRENT_HANDLE_ACQUIRE_TIMEOUT_MS, 10) || 5000;
+    this.fastMetadataTimeoutMs =
+      parseInt(process.env.TORRENT_FAST_METADATA_TIMEOUT_MS, 10) || 8000;
 
     // Ensure download directory exists
     try {
@@ -100,6 +104,7 @@ class TorrentService {
    * Get or add a torrent
    */
   async getStream(magnetOrHash, fileIdx = 0, retryCount = 0) {
+    const startedAt = Date.now();
     const infoHash = this.extractInfoHash(magnetOrHash);
     if (!infoHash) throw new Error("Invalid magnet or infoHash");
 
@@ -107,7 +112,9 @@ class TorrentService {
       ? addTrackersToMagnet(magnetOrHash) 
       : createMagnetUri(infoHash);
 
+    const acquireStartedAt = Date.now();
     const torrent = await this.acquireTorrentHandle(infoHash, magnetUri);
+    const acquisitionMs = Date.now() - acquireStartedAt;
 
     if (!this.isTorrentHandle(torrent)) {
       const immediateGet = await this.getTorrentCandidate(infoHash, "client.get.getStream.failure");
@@ -118,37 +125,88 @@ class TorrentService {
       throw new Error("Failed to acquire torrent handle");
     }
 
-    if (torrent.ready) {
+    logger.info(`[Torrent] Handle acquired for ${infoHash}`, {
+      acquisitionMs,
+      peers: torrent.numPeers || 0,
+      progress: Number.isFinite(torrent.progress)
+        ? Number((torrent.progress * 100).toFixed(2))
+        : 0,
+    });
+
+    if (this.canStreamFromTorrent(torrent)) {
+      logger.info(`[Torrent] Startup ready (cached metadata) for ${infoHash}`, {
+        totalStartupMs: Date.now() - startedAt,
+      });
       return this.prepareStreamObject(torrent, fileIdx);
     }
 
     return new Promise((resolve, reject) => {
-      const timeoutDuration = (config.torrent.timeoutProgression && config.torrent.timeoutProgression[retryCount]) || 60000;
+      let settled = false;
+      const configuredTimeout =
+        (config.torrent.timeoutProgression &&
+          config.torrent.timeoutProgression[retryCount]) ||
+        60000;
+      const timeoutDuration =
+        retryCount === 0
+          ? Math.min(configuredTimeout, this.fastMetadataTimeoutMs)
+          : configuredTimeout;
+
+      const resolveStream = (reason) => {
+        if (settled) return;
+        settled = true;
+        logger.info(`[Torrent] Stream source became available for ${infoHash} via ${reason}`, {
+          totalStartupMs: Date.now() - startedAt,
+          peers: torrent.numPeers || 0,
+          progress: Number.isFinite(torrent.progress) ? Number((torrent.progress * 100).toFixed(2)) : 0,
+        });
+        resolve(this.prepareStreamObject(torrent, fileIdx));
+      };
+
+      const rejectStream = (error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+
       const timeout = setTimeout(async () => {
-        if (!torrent.ready) {
-          logger.error(`Torrent timeout for ${infoHash} after ${timeoutDuration}ms`);
+        if (!settled) {
+          if (this.canStreamFromTorrent(torrent)) {
+            logger.warn(`[Torrent] Timeout reached for ${infoHash}, but metadata is available. Proceeding with stream.`, {
+              peers: torrent.numPeers || 0,
+              progress: Number.isFinite(torrent.progress) ? Number((torrent.progress * 100).toFixed(2)) : 0,
+            });
+            resolveStream("timeout-with-metadata");
+            return;
+          }
+          logger.error(`Torrent timeout for ${infoHash} after ${timeoutDuration}ms`, {
+            peers: torrent.numPeers || 0,
+            progress: Number.isFinite(torrent.progress) ? Number((torrent.progress * 100).toFixed(2)) : 0,
+          });
           try {
             await torrent.destroy();
           } catch (err) {
             logger.error(`Error destroying timed out torrent: ${err.message}`);
           }
-          reject(new Error("Torrent discovery timeout"));
+          rejectStream(new Error("Torrent discovery timeout"));
         }
       }, timeoutDuration);
 
-      torrent.on("metadata", () => {
-        logger.info(`Metadata received for ${torrent.name}`);
+      torrent.once("metadata", () => {
+        logger.info(`Metadata received for ${torrent.name || infoHash}`);
         this.applyHeadStrategy(torrent);
+        clearTimeout(timeout);
+        resolveStream("metadata");
       });
 
       torrent.once("ready", () => {
         clearTimeout(timeout);
-        resolve(this.prepareStreamObject(torrent, fileIdx));
+        this.applyHeadStrategy(torrent);
+        resolveStream("ready");
       });
 
       torrent.once("error", (err) => {
         clearTimeout(timeout);
-        reject(err);
+        rejectStream(err);
       });
     });
   }
@@ -233,7 +291,7 @@ class TorrentService {
       throw new Error(`Failed to add torrent: could not resolve torrent handle for ${infoHash}`);
     }
 
-    if (torrent.ready) {
+    if (this.canStreamFromTorrent(torrent)) {
       this.applyHeadStrategy(torrent);
       return {
         infoHash: torrent.infoHash,
@@ -245,19 +303,10 @@ class TorrentService {
     }
 
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(async () => {
-        if (!torrent.ready) {
-          try {
-            await torrent.destroy();
-          } catch (err) {
-            logger.error(`Error destroying timed out torrent: ${err.message}`);
-          }
-          reject(new Error("Timeout waiting for torrent metadata"));
-        }
-      }, 30000);
-
-      torrent.once("ready", () => {
-        clearTimeout(timeout);
+      let settled = false;
+      const finishResolve = () => {
+        if (settled) return;
+        settled = true;
         this.applyHeadStrategy(torrent);
         resolve({
           infoHash: torrent.infoHash,
@@ -266,11 +315,37 @@ class TorrentService {
           torrent: torrent,
           cached: false
         });
+      };
+
+      const timeout = setTimeout(async () => {
+        if (!settled && !this.canStreamFromTorrent(torrent)) {
+          try {
+            await torrent.destroy();
+          } catch (err) {
+            logger.error(`Error destroying timed out torrent: ${err.message}`);
+          }
+          reject(new Error("Timeout waiting for torrent metadata"));
+        } else if (!settled) {
+          finishResolve();
+        }
+      }, 30000);
+
+      torrent.once("metadata", () => {
+        clearTimeout(timeout);
+        finishResolve();
+      });
+
+      torrent.once("ready", () => {
+        clearTimeout(timeout);
+        finishResolve();
       });
 
       torrent.once("error", (err) => {
         clearTimeout(timeout);
-        reject(err);
+        if (!settled) {
+          settled = true;
+          reject(err);
+        }
       });
     });
   }
@@ -499,7 +574,10 @@ class TorrentService {
       });
     }
 
-    torrent = await this.waitForTorrentHandle(infoHash, 10000);
+    torrent = await this.waitForTorrentHandle(
+      infoHash,
+      this.handleAcquireTimeoutMs,
+    );
     if (this.isTorrentHandle(torrent)) {
       return torrent;
     }
@@ -535,6 +613,15 @@ class TorrentService {
 
   getLargestFile(torrent) {
     return torrent.files.reduce((a, b) => a.length > b.length ? a : b);
+  }
+
+  canStreamFromTorrent(torrent) {
+    return Boolean(
+      torrent &&
+      !torrent.destroyed &&
+      Array.isArray(torrent.files) &&
+      torrent.files.length > 0,
+    );
   }
 
   getVideoMimeType(filename) {

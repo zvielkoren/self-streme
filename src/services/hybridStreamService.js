@@ -22,7 +22,12 @@ class HybridStreamService {
   constructor(torrentService, cacheManager) {
     this.torrentService = torrentService;
     this.cacheManager = cacheManager;
-    this.p2pTimeout = parseInt(process.env.P2P_TIMEOUT, 10) || 60000; // Increased to 60s for better P2P success
+    this.p2pTimeout = parseInt(process.env.P2P_TIMEOUT, 10) || 12000;
+    this.p2pStartupTimeout =
+      parseInt(process.env.P2P_STARTUP_TIMEOUT_MS, 10) || 7000;
+    this.httpFallbackDelayMs =
+      parseInt(process.env.HTTP_FALLBACK_DELAY_MS, 10) || 2000;
+    this.enableStartupRace = process.env.ENABLE_STARTUP_RACE !== "false";
     this.enableHttpFallback = process.env.ENABLE_HTTP_FALLBACK !== "false";
     this.downloadPath = path.join(config.paths.temp, "downloads");
     this.maxRetries = parseInt(process.env.HTTP_MAX_RETRIES, 10) || 2; // Retry failed sources
@@ -70,6 +75,9 @@ class HybridStreamService {
 
     logger.info("[Hybrid] Service initialized");
     logger.info(`[Hybrid] P2P timeout: ${this.p2pTimeout}ms`);
+    logger.info(`[Hybrid] P2P startup timeout: ${this.p2pStartupTimeout}ms`);
+    logger.info(`[Hybrid] HTTP fallback delay: ${this.httpFallbackDelayMs}ms`);
+    logger.info(`[Hybrid] Startup race: ${this.enableStartupRace}`);
     logger.info(`[Hybrid] HTTP fallback: ${this.enableHttpFallback}`);
     logger.info(`[Hybrid] Parallel downloads: ${this.parallelDownloads}`);
     logger.info(`[Hybrid] Parallel race mode: ${this.enableParallelRace}`);
@@ -92,6 +100,7 @@ class HybridStreamService {
   }
 
   async getStream(magnetOrHash, options = {}) {
+    const startedAt = Date.now();
     const infoHash = this.extractInfoHash(magnetOrHash);
 
     logger.info(`[Hybrid] 🎬 Getting stream for ${infoHash}`);
@@ -102,12 +111,57 @@ class HybridStreamService {
       return this.normalizeStreamResult(this.getFromCache(infoHash), infoHash);
     }
 
+    if (this.enableStartupRace && this.enableHttpFallback) {
+      let winner = null;
+      const p2pPromise = this.tryP2P(
+        magnetOrHash,
+        infoHash,
+        options,
+        this.p2pStartupTimeout,
+      )
+        .then((result) => {
+          winner = winner || "p2p";
+          return result;
+        })
+        .catch((error) => {
+          logger.warn(`[Hybrid] P2P startup attempt failed for ${infoHash}: ${error.message}`);
+          throw error;
+        });
+
+      const httpFallbackPromise = (async () => {
+        await this.delay(this.httpFallbackDelayMs);
+        if (winner) {
+          throw new Error("startup-race-cancelled");
+        }
+        const result = await this.httpDownloadFallback(infoHash);
+        winner = winner || "http";
+        return result;
+      })();
+
+      try {
+        const raceResult = await Promise.any([p2pPromise, httpFallbackPromise]);
+        logger.info(
+          `[Hybrid] Startup race winner=${winner || raceResult.method} for ${infoHash} in ${Date.now() - startedAt}ms`,
+        );
+        return raceResult;
+      } catch (raceError) {
+        logger.warn(
+          `[Hybrid] Startup race failed for ${infoHash}, falling back to sequential strategy: ${raceError.message}`,
+        );
+      }
+    }
+
     // Try P2P
     try {
       logger.info(`[Hybrid] Trying P2P (timeout: ${this.p2pTimeout}ms)...`);
-      const p2pResult = await this.tryP2P(magnetOrHash, infoHash, options);
+      const p2pResult = await this.tryP2P(
+        magnetOrHash,
+        infoHash,
+        options,
+        this.p2pTimeout,
+      );
       logger.info(
-        `[Hybrid] P2P success for ${infoHash}: file=${p2pResult.fileName || "unknown"}, size=${this.formatBytes(p2pResult.fileSize)}`,
+        `[Hybrid] P2P success for ${infoHash}: file=${p2pResult.fileName || "unknown"}, size=${this.formatBytes(p2pResult.fileSize)}, startup=${Date.now() - startedAt}ms`,
       );
       return p2pResult;
     } catch (error) {
@@ -123,7 +177,11 @@ class HybridStreamService {
     }
 
     logger.info(`[Hybrid] Activating HTTP fallback for ${infoHash}...`);
-    return await this.httpDownloadFallback(infoHash);
+    const fallbackResult = await this.httpDownloadFallback(infoHash);
+    logger.info(
+      `[Hybrid] HTTP fallback ready for ${infoHash} in ${Date.now() - startedAt}ms`,
+    );
+    return fallbackResult;
   }
 
   getFromCache(infoHash) {
@@ -151,11 +209,12 @@ class HybridStreamService {
     };
   }
 
-  async tryP2P(magnetOrHash, infoHash, options = {}) {
+  async tryP2P(magnetOrHash, infoHash, options = {}, timeoutMs = this.p2pTimeout) {
+    const startedAt = Date.now();
     return Promise.race([
       this.torrentService.addTorrent(magnetOrHash, options),
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("P2P timeout")), this.p2pTimeout),
+        setTimeout(() => reject(new Error("P2P timeout")), timeoutMs),
       ),
     ]).then((result) => {
       if (!result || (!result.torrent && !result.cached)) {
@@ -168,7 +227,7 @@ class HybridStreamService {
       const fileSize = result.fileSize || selectedFile?.length || null;
 
       logger.info(
-        `[Hybrid] Selected torrent file: index=${options.fileIndex || 0}, name=${fileName || "unknown"}, size=${this.formatBytes(fileSize)}`,
+        `[Hybrid] Selected torrent file: index=${options.fileIndex || 0}, name=${fileName || "unknown"}, size=${this.formatBytes(fileSize)}, p2pMs=${Date.now() - startedAt}`,
       );
 
       return this.normalizeStreamResult({
@@ -889,6 +948,10 @@ class HybridStreamService {
     const sizes = ["B", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
+  }
+
+  delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
 
