@@ -218,10 +218,12 @@ class TorrentService {
     torrent.files.forEach(file => {
       if (this.isVideoFile(file.name)) {
         const protectSize = Math.min(this.headSize, file.length * 0.05);
-        logger.info(`Applying Head Strategy to ${file.name}: protecting first ${Math.round(protectSize / 1024 / 1024)}MB`);
+        const endPiece = Math.ceil(protectSize / torrent.pieceLength);
+        logger.info(`Applying Head Strategy to ${file.name}: protecting first ${Math.round(protectSize / 1024 / 1024)}MB (pieces 0-${endPiece})`);
         
-        // Select the head pieces with high priority
-        file.select(0, Math.ceil(protectSize / torrent.pieceLength), 10);
+        // Select the head pieces with high priority using torrent.select()
+        // start=0, end=endPiece, priority=10
+        torrent.select(0, endPiece, 10);
       }
     });
   }
@@ -246,7 +248,9 @@ class TorrentService {
     const now = Date.now();
     const TTL = config.torrent.cleanupInterval || 1800000; // 30 mins
 
-    for (const torrent of this.client.torrents) {
+    // Create a copy of the torrents array to avoid concurrent modification issues
+    const torrents = [...this.client.torrents];
+    for (const torrent of torrents) {
       const lastAccessed = torrent.lastAccessed || 0;
       if (now - lastAccessed > TTL) {
         logger.info(`Cleaning up inactive torrent: ${torrent.name}`);
@@ -263,7 +267,11 @@ class TorrentService {
         torrent.pause();
         // If really old, destroy
         if (now - lastAccessed > TTL * 4) {
-          await torrent.destroy().catch(err => logger.error(`Error destroying old torrent: ${err.message}`));
+          try {
+            torrent.destroy();
+          } catch (err) {
+            logger.error(`Error destroying old torrent: ${err.message}`);
+          }
         }
       }
     }

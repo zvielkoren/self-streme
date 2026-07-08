@@ -12,7 +12,7 @@
 	// "forwardPorts": [],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": "git config --global commit.gpgsign false"
+	"postCreateCommand": "npm i && git config --global commit.gpgsign false"
 
 	// Configure tool-specific properties.
 	// "customizations": {},

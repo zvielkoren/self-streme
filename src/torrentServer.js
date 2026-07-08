@@ -556,9 +556,7 @@ class TorrentServer {
 
 // Start server if running directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const server = new TorrentStreamingServer({
-    port: process.env.PORT || 7000,
-  });
+  const server = new TorrentServer();
 
   server.start().catch((err) => {
     logger.error('Failed to start server:', err);
@@ -566,4 +564,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   });
 }
 
-export default TorrentStreamingServer;
+export default TorrentServer;
